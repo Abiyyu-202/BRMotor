@@ -113,8 +113,7 @@ export const initialVehicles: Vehicle[] = [
     licensePlate: "B 1234 BKM",
     brand: "Honda",
     model: "CBR650R",
-    year: 2022,
-    engineNumber: "RC83E-12093"
+    year: 2022
   },
   {
     id: "v-2",
@@ -123,8 +122,7 @@ export const initialVehicles: Vehicle[] = [
     licensePlate: "D 5555 YTR",
     brand: "Yamaha",
     model: "NMAX 155",
-    year: 2021,
-    engineNumber: "G3J4E-048201"
+    year: 2021
   },
   {
     id: "v-3",
@@ -133,8 +131,7 @@ export const initialVehicles: Vehicle[] = [
     licensePlate: "DK 8888 IRN",
     brand: "Ducati",
     model: "Panigale V4 S",
-    year: 2023,
-    engineNumber: "ZDM1409-994"
+    year: 2023
   },
   {
     id: "v-4",
@@ -143,8 +140,7 @@ export const initialVehicles: Vehicle[] = [
     licensePlate: "N 7777 ZZZ",
     brand: "Vespa",
     model: "Primavera 150",
-    year: 2020,
-    engineNumber: "M811M-102930"
+    year: 2020
   },
   {
     id: "v-5",
@@ -153,8 +149,7 @@ export const initialVehicles: Vehicle[] = [
     licensePlate: "AB 2323 DBK",
     brand: "Triumph",
     model: "Bonneville T120",
-    year: 2019,
-    engineNumber: "T120E-90412"
+    year: 2019
   }
 ];
 

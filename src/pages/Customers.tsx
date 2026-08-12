@@ -59,7 +59,6 @@ export const Customers: React.FC = () => {
   const [vModel, setVModel] = useState('');
   const [vPlate, setVPlate] = useState('');
   const [vYear, setVYear] = useState(2022);
-  const [vEngine, setVEngine] = useState('');
 
   // 3. Actions
   const handleOpenAddModal = () => {
@@ -116,7 +115,7 @@ export const Customers: React.FC = () => {
     e.preventDefault();
     if (!selectedCustomer) return;
 
-    if (!vBrand.trim() || !vModel.trim() || !vPlate.trim() || !vEngine.trim()) {
+    if (!vBrand.trim() || !vModel.trim() || !vPlate.trim()) {
       showToast('Please fill all vehicle specifications', 'error');
       return;
     }
@@ -126,8 +125,7 @@ export const Customers: React.FC = () => {
       brand: vBrand,
       model: vModel,
       licensePlate: vPlate.toUpperCase(),
-      year: vYear,
-      engineNumber: vEngine.toUpperCase()
+      year: vYear
     });
 
     // Reset fields
@@ -135,7 +133,6 @@ export const Customers: React.FC = () => {
     setVModel('');
     setVPlate('');
     setVYear(2022);
-    setVEngine('');
     setIsVehicleModalOpen(false);
   };
 
@@ -194,41 +191,43 @@ export const Customers: React.FC = () => {
             />
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[550px] overflow-y-auto shadow-sm">
-            <div className="bg-slate-900 p-3 text-[10px] text-slate-200 font-mono tracking-wider font-bold">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[550px] shadow-sm">
+            <div className="bg-slate-900 p-3 text-[10px] text-slate-200 font-mono tracking-wider font-bold shrink-0">
               DAFTAR PELANGGAN ({filteredCustomers.length})
             </div>
-            {filteredCustomers.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs">
-                Tidak ada pelanggan yang sesuai
-              </div>
-            ) : (
-              filteredCustomers.map((c) => {
-                const isActive = selectedCustomer?.id === c.id;
-                const vCount = vehicles.filter((v) => v.customerId === c.id).length;
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {filteredCustomers.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  Tidak ada pelanggan yang sesuai
+                </div>
+              ) : (
+                filteredCustomers.map((c) => {
+                  const isActive = selectedCustomer?.id === c.id;
+                  const vCount = vehicles.filter((v) => v.customerId === c.id).length;
 
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => setSelectedCustomer(c)}
-                    className={`p-4 border-b border-slate-100 cursor-pointer transition-all flex items-center justify-between ${
-                      isActive ? 'bg-slate-100 border-l-4 border-l-slate-900' : 'bg-white hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 truncate">{c.name}</p>
-                      <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1 font-medium">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
-                        {c.phone}
-                      </p>
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedCustomer(c)}
+                      className={`p-4 cursor-pointer transition-all flex items-center justify-between ${
+                        isActive ? 'bg-slate-100 border-l-4 border-l-slate-900' : 'bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{c.name}</p>
+                        <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1 font-medium">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          {c.phone}
+                        </p>
+                      </div>
+                      <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md">
+                        {vCount} Motor
+                      </span>
                     </div>
-                    <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md">
-                      {vCount} Motor
-                    </span>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
 

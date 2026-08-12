@@ -15,9 +15,12 @@ import {
   AlertTriangle,
   HelpCircle,
   CheckSquare,
-  Trash2
+  Trash2,
+  Sparkles,
+  MessageCircle
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { QuickCheckInModal } from '../components/QuickCheckInModal';
 
 interface WorkOrdersProps {
   prefilledBooking: any;
@@ -38,10 +41,13 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
     deleteWorkOrder,
     formatRupiah,
     showToast,
+    shopInfo,
     currentRole,
     language,
     t
   } = useWorkshop();
+
+  const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
 
   // 1. Kanban Column definitions
   const columns: { status: WorkOrderStatus; label: string; color: string; desc: string }[] = [
@@ -368,6 +374,29 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
     }
   };
 
+  const handleSendWhatsAppUpdate = (wo: WorkOrder) => {
+    const customer = customers.find(c => String(c.id) === String(wo.customerId));
+    const rawPhone = customer?.phone || '';
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '62' + cleanPhone.slice(1);
+    } else if (!cleanPhone.startsWith('62') && cleanPhone) {
+      cleanPhone = '62' + cleanPhone;
+    }
+
+    const serviceList = wo.services.map(s => `• ${s.name}: ${formatRupiah(s.price)}`).join('\n');
+    const partList = wo.sparePartsUsed.map(p => `• ${p.name} (x${p.quantity}): ${formatRupiah(p.totalPrice)}`).join('\n');
+
+    let detailsText = '';
+    if (serviceList) detailsText += `\n*Jasa Servis:*\n${serviceList}`;
+    if (partList) detailsText += `\n*Suku Cadang/Oli:*\n${partList}`;
+
+    const message = `*${shopInfo.name.toUpperCase()} - NOTIFIKASI SERVIS SELESAI* 🛵\n━━━━━━━━━━━━━━━━━━━━\nHalo Bpk/Ibu *${wo.customerName}*,\nMotor *${wo.vehicleModel}* (${wo.licensePlate}) Anda telah *SELESAI DISERVIS* dan siap diambil!\n\n*Keluhan/Pengerjaan:* ${wo.complaint || 'Servis berkala'}${detailsText}\n\n*Total Biaya:* ${formatRupiah(wo.costs.total)}\nMekanik PJ: *${wo.assignedMechanicName.split(' ')[0]}*\n━━━━━━━━━━━━━━━━━━━━\nSilakan datang ke bengkel kami untuk serah terima dan pembayaran. Terima kasih! 🙏`;
+
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
       {/* Header Panel */}
@@ -383,17 +412,29 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
               : 'Dispatch diagnostic tasks, assign technicians, and track active mechanical repair workflows.'}
           </p>
         </div>
-        {/* Only allow authorized roles to initialize new orders */}
-        {['owner', 'admin', 'cashier'].includes(currentRole) && (
-          <button
-            type="button"
-            onClick={handleOpenCreateModal}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
-          >
-            <Plus className="w-4 h-4 text-inherit" />
-            {t.workOrders.createWorkOrder}
-          </button>
-        )}
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {['owner', 'admin', 'cashier', 'mechanic'].includes(currentRole) && (
+            <button
+              type="button"
+              onClick={() => setIsQuickCheckInOpen(true)}
+              className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-slate-950 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border border-amber-300"
+            >
+              <Sparkles className="w-4 h-4" />
+              + Catat Motor Masuk
+            </button>
+          )}
+          {['owner', 'admin', 'cashier'].includes(currentRole) && (
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+            >
+              <Plus className="w-4 h-4 text-inherit" />
+              {t.workOrders.createWorkOrder}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Visual Kanban Board Pipeline */}
@@ -466,7 +507,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
                       {/* Card Action Controls - 2-row spacious layout */}
                       <div className="space-y-2 border-t border-slate-100 pt-3 mt-3">
                         {/* Primary Progression Button */}
-                        {wo.status !== 'completed' && (
+                        {wo.status !== 'completed' ? (
                           <button
                             type="button"
                             onClick={() => promptNextStatus(wo.id, wo.status)}
@@ -474,6 +515,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
                           >
                             <span>Lanjut Tahap</span>
                             <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSendWhatsAppUpdate(wo)}
+                            className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>Kabari via WhatsApp</span>
                           </button>
                         )}
 
@@ -1027,6 +1077,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
         onConfirm={confirmDeleteWO}
         onClose={() => setWoToDelete(null)}
       />
+
+      {/* Quick Check-In Walk-in Modal */}
+      <QuickCheckInModal isOpen={isQuickCheckInOpen} onClose={() => setIsQuickCheckInOpen(false)} />
     </div>
   );
 };

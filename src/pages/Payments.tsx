@@ -11,15 +11,18 @@ import {
   CheckCircle,
   Printer,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  MessageCircle
 } from 'lucide-react';
 
 export const Payments: React.FC = () => {
   const {
     workOrders,
+    customers,
     checkoutWorkOrder,
     shopInfo,
     showToast,
+    formatRupiah,
     language
   } = useWorkshop();
 
@@ -82,6 +85,33 @@ export const Payments: React.FC = () => {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSendWhatsAppInvoice = () => {
+    if (!selectedWO) return;
+    const customer = customers.find(c => String(c.id) === String(selectedWO.customerId));
+    const rawPhone = customer?.phone || '';
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '62' + cleanPhone.slice(1);
+    } else if (!cleanPhone.startsWith('62') && cleanPhone) {
+      cleanPhone = '62' + cleanPhone;
+    }
+
+    const serviceList = selectedWO.services.map(s => `• ${s.name}: ${formatRupiah(s.price)}`).join('\n');
+    const partList = selectedWO.sparePartsUsed.map(p => `• ${p.name} (x${p.quantity}): ${formatRupiah(p.totalPrice)}`).join('\n');
+
+    let details = '';
+    if (serviceList) details += `\n*JASA & SERVIS:*\n${serviceList}`;
+    if (partList) details += `\n\n*SUKU CADANG / OLI:*\n${partList}`;
+
+    const paidTotal = selectedWO.paymentStatus === 'paid' ? selectedWO.costs.total : grandTotal;
+    const paymentInfo = selectedWO.paymentStatus === 'paid' ? `*LUNAS* (${(selectedWO.paymentMethod || 'Tunai').toUpperCase()})` : '*BELUM LUNAS*';
+
+    const message = `*${shopInfo.name.toUpperCase()} - NOTA PEMBAYARAN RESMI* 🛵\n━━━━━━━━━━━━━━━━━━━━\nNo. Nota: *${selectedWO.id}*\nTanggal: ${new Date().toLocaleDateString('id-ID')}\nPelanggan: *${selectedWO.customerName}*\nMotor: *${selectedWO.vehicleModel}* (${selectedWO.licensePlate})\nMekanik: *${selectedWO.assignedMechanicName.split(' ')[0]}*\n━━━━━━━━━━━━━━━━━━━━${details}\n\n*TOTAL TAGIHAN: ${formatRupiah(paidTotal)}*\nStatus Pembayaran: ${paymentInfo}\n━━━━━━━━━━━━━━━━━━━━\nTerima kasih telah mempercayakan perawatan motor Anda di *${shopInfo.name}*! 🙏\n_Garansi servis 1 minggu pasca perbaikan._`;
+
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
   };
 
   return (
@@ -337,13 +367,24 @@ export const Payments: React.FC = () => {
                   <p className="text-[11px] text-slate-500 font-medium">
                     Tagihan ini telah dilunasi via <span className="font-bold uppercase text-slate-800">{selectedWO.paymentMethod || 'Tunai'}</span>.
                   </p>
-                  <button
-                    onClick={handlePrint}
-                    className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-xl cursor-pointer transition-all shadow-sm"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    Cetak Nota / Struk Pembayaran
-                  </button>
+                  <div className="flex items-center justify-center gap-2 flex-wrap mt-2">
+                    <button
+                      type="button"
+                      onClick={handlePrint}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] rounded-xl cursor-pointer transition-all shadow-sm"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Cetak Nota Struk
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendWhatsAppInvoice}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-xl cursor-pointer transition-all shadow-sm"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      Kirim Nota via WA
+                    </button>
+                  </div>
                 </div>
               )}
 

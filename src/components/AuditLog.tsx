@@ -35,79 +35,58 @@ const formatTimestamp = (isoString: string) => {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHrs = Math.floor(diffMins / 60);
 
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHrs < 24) return `${diffHrs}h ago`;
+    if (diffMins < 1) return 'Baru saja';
+    if (diffMins < 60) return `${diffMins} mnt lalu`;
+    if (diffHrs < 24) return `${diffHrs} jam lalu`;
 
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
+    return date.toLocaleDateString('id-ID', {
       day: 'numeric',
+      month: 'short',
       hour: '2-digit',
       minute: '2-digit'
     });
-  } catch (e) {
+  } catch {
     return isoString;
   }
 };
 
-const categoryConfig: Record<AuditLogCategory, { icon: React.ComponentType<any>; bg: string; text: string; border: string; label: string }> = {
+const categoryConfig: Record<AuditLogCategory, { icon: React.ComponentType<any>; label: string }> = {
   work_order: {
     icon: Wrench,
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-400',
-    border: 'border-blue-500/20',
-    label: 'Work Orders'
+    label: 'Servis (SPK)'
   },
   payment: {
     icon: CreditCard,
-    bg: 'bg-emerald-500/10',
-    text: 'text-emerald-400',
-    border: 'border-emerald-500/20',
-    label: 'Payments'
+    label: 'Kasir & Bayar'
   },
   booking: {
     icon: Calendar,
-    bg: 'bg-amber-500/10',
-    text: 'text-amber-400',
-    border: 'border-amber-500/20',
-    label: 'Bookings'
+    label: 'Booking'
   },
   customer: {
     icon: Users,
-    bg: 'bg-indigo-500/10',
-    text: 'text-indigo-400',
-    border: 'border-indigo-500/20',
-    label: 'Customers'
+    label: 'Pelanggan'
   },
   inventory: {
     icon: Box,
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-400',
-    border: 'border-purple-500/20',
-    label: 'Inventory'
+    label: 'Suku Cadang'
   },
   staff: {
     icon: UserCheck,
-    bg: 'bg-pink-500/10',
-    text: 'text-pink-400',
-    border: 'border-pink-500/20',
-    label: 'Staff'
+    label: 'Staf & Mekanik'
   },
   shop_settings: {
     icon: Sliders,
-    bg: 'bg-slate-500/10',
-    text: 'text-slate-400',
-    border: 'border-slate-500/20',
-    label: 'Settings'
+    label: 'Pengaturan'
   }
 };
 
-const roleConfig: Record<UserRole, { text: string; bg: string; border: string; label: string }> = {
-  owner: { text: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20', label: 'Owner' },
-  admin: { text: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20', label: 'Admin' },
-  mechanic: { text: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20', label: 'Mechanic' },
-  cashier: { text: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-400/20', label: 'Cashier' },
-  user: { text: 'text-slate-800 bg-slate-200', bg: 'bg-slate-200/50', border: 'border-slate-300', label: 'Client' }
+const roleLabels: Record<UserRole, string> = {
+  owner: 'Pemilik',
+  admin: 'Admin',
+  mechanic: 'Mekanik',
+  cashier: 'Kasir',
+  user: 'Pelanggan'
 };
 
 export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
@@ -131,120 +110,136 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop Overlay */}
+          {/* Backdrop Overlay with blur */}
           <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.5 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black z-40"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
           />
 
-          {/* Drawer Panel */}
+          {/* Drawer Panel - Monochrome Frosted Glass */}
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 h-full w-full max-w-lg bg-slate-900 border-l border-slate-800 text-slate-100 z-50 flex flex-col shadow-2xl"
+            transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+            className="fixed top-0 right-0 h-full w-full max-w-lg bg-zinc-950/85 backdrop-blur-2xl border-l border-white/10 text-zinc-100 z-50 flex flex-col shadow-2xl"
           >
             {/* Header */}
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl">
+            <div className="p-5 border-b border-white/10 bg-zinc-900/40 backdrop-blur-md flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/10 text-white rounded-xl border border-white/15 shadow-sm">
                   <History className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold tracking-tight text-white">Action Audit Log</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">Real-time workshop activity registry</p>
+                  <h2 className="text-sm font-extrabold tracking-wider uppercase text-white">
+                    Catatan Audit Aktivitas
+                  </h2>
+                  <p className="text-[11px] text-zinc-400 mt-0.5 font-medium">
+                    Rekam jejak operasional bengkel secara real-time
+                  </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={onClose}
-                className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all cursor-pointer"
+                className="p-2 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-all cursor-pointer border border-transparent hover:border-white/10"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Filter Section */}
-            <div className="p-5 border-b border-slate-800/80 space-y-4 bg-slate-900/65">
+            <div className="p-5 border-b border-white/10 space-y-4 bg-zinc-900/30 backdrop-blur-md">
               {/* Search Bar */}
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-zinc-500">
                   <Search className="w-4 h-4" />
                 </span>
                 <input
                   type="text"
-                  placeholder="Search actions, messages, details..."
+                  placeholder="Cari aksi, rincian, atau kata kunci..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl text-sm placeholder-slate-500 text-slate-200 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2 bg-zinc-900/80 border border-white/10 focus:border-white/30 rounded-xl text-xs placeholder-zinc-500 text-zinc-100 outline-none transition-all font-medium"
                 />
               </div>
 
               {/* Category Pills */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2 flex items-center gap-1">
-                  <Filter className="w-3 h-3" /> Filter by Category
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                  <Filter className="w-3 h-3 text-zinc-400" /> Filter Kategori
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   <button
+                    type="button"
                     onClick={() => setSelectedCategory('all')}
-                    className={`px-3 py-1 text-xs rounded-lg border font-medium transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 text-xs rounded-xl border font-bold transition-all cursor-pointer ${
                       selectedCategory === 'all'
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-                        : 'bg-slate-950 text-slate-400 border-slate-800/80 hover:bg-slate-800 hover:text-slate-200'
+                        ? 'bg-white text-zinc-950 border-white shadow-md'
+                        : 'bg-zinc-900/60 text-zinc-400 border-white/10 hover:border-white/20 hover:text-zinc-200'
                     }`}
                   >
-                    All
+                    Semua
                   </button>
-                  {Object.entries(categoryConfig).map(([key, config]) => (
-                    <button
-                      key={key}
-                      onClick={() => setSelectedCategory(key as AuditLogCategory)}
-                      className={`px-3 py-1 text-xs rounded-lg border font-medium transition-all flex items-center gap-1 cursor-pointer ${
-                        selectedCategory === key
-                          ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-                          : 'bg-slate-950 text-slate-400 border-slate-800/80 hover:bg-slate-800 hover:text-slate-200'
-                      }`}
-                    >
-                      {React.createElement(config.icon, { className: 'w-3 h-3' })}
-                      {config.label}
-                    </button>
-                  ))}
+                  {Object.entries(categoryConfig).map(([key, config]) => {
+                    const isSelected = selectedCategory === key;
+                    const Icon = config.icon;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSelectedCategory(key as AuditLogCategory)}
+                        className={`px-3 py-1.5 text-xs rounded-xl border font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isSelected
+                            ? 'bg-white text-zinc-950 border-white shadow-md'
+                            : 'bg-zinc-900/60 text-zinc-400 border-white/10 hover:border-white/20 hover:text-zinc-200'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {config.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Role Filtering */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                  Simulation User Role
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
+                  Peran Pengguna
                 </label>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                   <button
+                    type="button"
                     onClick={() => setSelectedRole('all')}
-                    className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 text-xs rounded-xl border font-bold transition-all cursor-pointer ${
                       selectedRole === 'all'
-                        ? 'bg-slate-700 text-white border-slate-600'
-                        : 'bg-slate-950 text-slate-400 border-slate-800/80 hover:bg-slate-800 hover:text-slate-200'
+                        ? 'bg-zinc-200 text-zinc-950 border-zinc-200 shadow-sm'
+                        : 'bg-zinc-900/60 text-zinc-400 border-white/10 hover:border-white/20 hover:text-zinc-200'
                     }`}
                   >
-                    All Roles
+                    Semua Peran
                   </button>
-                  {Object.entries(roleConfig).map(([key, config]) => (
-                    <button
-                      key={key}
-                      onClick={() => setSelectedRole(key as UserRole)}
-                      className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition-all cursor-pointer ${
-                        selectedRole === key
-                          ? `${config.bg} ${config.text} ${config.border}`
-                          : 'bg-slate-950 text-slate-400 border-slate-800/80 hover:bg-slate-800 hover:text-slate-200'
-                      }`}
-                    >
-                      {config.label}
-                    </button>
-                  ))}
+                  {(['owner', 'admin', 'mechanic', 'cashier', 'user'] as UserRole[]).map((r) => {
+                    const isSelected = selectedRole === r;
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setSelectedRole(r)}
+                        className={`px-2.5 py-1 text-xs rounded-xl border font-semibold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-zinc-200 text-zinc-950 border-zinc-200 shadow-sm'
+                            : 'bg-zinc-900/60 text-zinc-400 border-white/10 hover:border-white/20 hover:text-zinc-200'
+                        }`}
+                      >
+                        {roleLabels[r]}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -252,16 +247,19 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
             {/* List Section */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {filteredLogs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-slate-500 text-center">
-                  <CheckCircle2 className="w-10 h-10 text-slate-700 mb-2.5" />
-                  <p className="text-sm font-semibold">No audit logs match criteria</p>
-                  <p className="text-xs text-slate-600 mt-1">Try refining search terms or filters.</p>
+                <div className="flex flex-col items-center justify-center py-14 text-zinc-500 text-center">
+                  <CheckCircle2 className="w-10 h-10 text-zinc-700 mb-2.5" />
+                  <p className="text-xs font-bold text-zinc-300">Tidak ada catatan audit yang cocok</p>
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Coba sesuaikan kata kunci pencarian atau filter kategori.
+                  </p>
                 </div>
               ) : (
-                <div className="relative border-l border-slate-800 ml-4 space-y-6">
+                <div className="relative border-l border-white/15 ml-4 space-y-5">
                   {filteredLogs.map((log) => {
                     const config = categoryConfig[log.category] || categoryConfig.work_order;
-                    const role = roleConfig[log.userRole];
+                    const Icon = config.icon;
+                    const roleName = roleLabels[log.userRole] || log.userRole;
 
                     return (
                       <motion.div
@@ -272,39 +270,37 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
                       >
                         {/* Timeline Bullet Node with Category Icon */}
                         <div
-                          className={`absolute -left-[14px] top-0 w-7 h-7 rounded-full border flex items-center justify-center transition-all bg-slate-950 ${config.border} group-hover:scale-110`}
+                          className="absolute -left-[15px] top-0 w-7 h-7 rounded-full border border-white/20 bg-zinc-950 text-zinc-300 flex items-center justify-center transition-all group-hover:scale-110 group-hover:border-white group-hover:text-white shadow-sm"
                         >
-                          {React.createElement(config.icon, { className: `w-3.5 h-3.5 ${config.text}` })}
+                          <Icon className="w-3.5 h-3.5" />
                         </div>
 
-                        {/* Card Container */}
-                        <div className="p-3.5 bg-slate-900/40 rounded-xl border border-slate-800/80 hover:border-slate-700/60 hover:bg-slate-950/20 transition-all">
+                        {/* Card Container - Frosted Glass Monochrome */}
+                        <div className="p-4 bg-white/[0.04] backdrop-blur-md rounded-2xl border border-white/10 hover:border-white/25 hover:bg-white/[0.07] transition-all shadow-sm">
                           <div className="flex items-start justify-between gap-2">
-                            <h4 className="text-xs font-bold text-slate-100">{log.action}</h4>
-                            <span className="text-[10px] font-mono text-slate-500 shrink-0 mt-0.5">
+                            <h4 className="text-xs font-bold text-white tracking-tight">
+                              {log.action}
+                            </h4>
+                            <span className="text-[10px] font-mono text-zinc-400 shrink-0 mt-0.5">
                               {formatTimestamp(log.timestamp)}
                             </span>
                           </div>
 
-                          <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                          <p className="text-xs text-zinc-300 mt-1.5 leading-relaxed font-normal">
                             {log.details}
                           </p>
 
                           {/* Footer Info */}
-                          <div className="mt-3 flex items-center justify-between">
-                            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest bg-slate-950/50 px-2 py-0.5 rounded-md border border-slate-800/40">
-                              {log.id}
+                          <div className="mt-3.5 flex items-center justify-between border-t border-white/5 pt-2.5">
+                            <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-widest bg-white/[0.05] px-2 py-0.5 rounded-md border border-white/10">
+                              #{log.id}
                             </span>
-                            {role && (
-                              <div className="flex items-center gap-1 text-[10px]">
-                                <span className="text-slate-500 text-[9px]">Logged by:</span>
-                                <span
-                                  className={`px-1.5 py-0.5 text-[9px] rounded-md font-semibold border ${role.bg} ${role.text} ${role.border}`}
-                                >
-                                  {role.label}
-                                </span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              <span className="text-zinc-400 text-[10px]">Oleh:</span>
+                              <span className="px-2 py-0.5 text-[9px] rounded-md font-bold bg-white/10 text-white border border-white/15 uppercase tracking-wider">
+                                {roleName}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </motion.div>
@@ -315,15 +311,16 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Footer Total */}
-            <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-between items-center">
-              <span className="text-xs font-mono text-slate-500">
-                Showing {filteredLogs.length} of {auditLogs.length} entries
+            <div className="p-4 border-t border-white/10 bg-zinc-900/50 backdrop-blur-md flex justify-between items-center">
+              <span className="text-xs font-mono text-zinc-400">
+                Menampilkan {filteredLogs.length} dari {auditLogs.length} catatan
               </span>
               <button
+                type="button"
                 onClick={onClose}
-                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-all cursor-pointer"
+                className="px-4 py-1.5 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-sm uppercase tracking-wider"
               >
-                Dismiss
+                Tutup
               </button>
             </div>
           </motion.div>

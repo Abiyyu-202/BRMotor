@@ -157,12 +157,14 @@ function AppContent() {
       {/* 1. SIDEBAR NAVIGATION - DESKTOP */}
       <aside className="hidden lg:flex flex-col w-64 h-screen sticky top-0 bg-white border-r border-slate-200 shrink-0 no-print">
         {/* Brand Header */}
-        <div className="h-16 px-6 border-b border-slate-200 flex items-center gap-3 shrink-0">
-          <div className="w-9 h-9 bg-slate-900 flex items-center justify-center text-white font-black shrink-0 rounded-xl text-sm">
-            BR
-          </div>
-          <div>
-            <h2 className="font-extrabold tracking-tight text-slate-900 text-sm leading-tight">{shopInfo.name}</h2>
+        <div className="h-16 px-5 border-b border-slate-200 flex items-center gap-3 shrink-0">
+          <img
+            src="/BR-Motor_Logo.png"
+            alt="BR Motor Logo"
+            className="w-10 h-10 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-sm shrink-0"
+          />
+          <div className="min-w-0">
+            <h2 className="font-extrabold tracking-tight text-slate-900 text-sm leading-tight truncate">{shopInfo.name}</h2>
             <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider mt-0.5">{t.console}</p>
           </div>
         </div>
@@ -213,9 +215,11 @@ function AppContent() {
               {/* Brand Header */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-slate-900 text-white flex items-center justify-center shrink-0 font-bold rounded-lg text-xs">
-                    BR
-                  </div>
+                  <img
+                    src="/BR-Motor_Logo.png"
+                    alt="BR Motor Logo"
+                    className="w-9 h-9 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-sm shrink-0"
+                  />
                   <span className="font-bold text-sm">{shopInfo.name}</span>
                 </div>
                 <button

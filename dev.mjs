@@ -20,7 +20,7 @@ console.log('Cleaning up ports 3000 and 4000...');
 freePort(3000);
 freePort(4000);
 
-const api = spawn(process.execPath, [fileURLToPath(new URL('./node_modules/tsx/dist/cli.mjs', import.meta.url)), 'server.ts'], { stdio: 'inherit' });
+const api = spawn(process.execPath, [fileURLToPath(new URL('./node_modules/tsx/dist/cli.mjs', import.meta.url)), 'watch', 'server.ts'], { stdio: 'inherit' });
 const web = spawn(process.execPath, [fileURLToPath(new URL('./node_modules/vite/bin/vite.js', import.meta.url)), '--port=3000', '--host=0.0.0.0', '--strictPort'], { stdio: 'inherit' });
 
 const killProcess = (proc) => {

@@ -17,12 +17,20 @@ import {
   Package,
   CheckCircle2,
   Calendar,
-  History
+  History,
+  MapPin,
+  X,
+  Sparkles
 } from 'lucide-react';
 import { AuditLog } from '../components/AuditLog';
+import { QuickCheckInModal } from '../components/QuickCheckInModal';
 
 export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveTab }) => {
   const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+  const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [inputAddress, setInputAddress] = useState('');
+
   const {
     workOrders,
     customers,
@@ -36,6 +44,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
     currentUserName,
     currentUserId,
     restockSparePart,
+    updateCustomer,
+    addCustomer,
+    showToast,
     language,
     t
   } = useWorkshop();
@@ -46,6 +57,10 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
       (currentUserId && String(c.userId) === String(currentUserId)) ||
       (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
     );
+    const activeCustomer = userCustomers[0];
+    const displayName = activeCustomer?.name || currentUserName;
+    const isAddressEmpty = !activeCustomer?.address || activeCustomer.address.trim() === '' || activeCustomer.address === 'Akun pelanggan terdaftar';
+
     const userCustomerIds = userCustomers.map(c => String(c.id));
     const clientVehicles = vehicles.filter((v) => userCustomerIds.includes(String(v.customerId)));
     const userVehicleIds = clientVehicles.map(v => v.id);
@@ -91,6 +106,37 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
 
     return (
       <div className="space-y-8 animate-fade-in text-slate-900">
+        {/* Address Warning Banner if empty */}
+        {isAddressEmpty && (
+          <div className="p-5 bg-amber-50 border-2 border-amber-300 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-100 text-amber-800 rounded-2xl shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                  {language === 'id' ? 'Alamat Kosong, segeralah mengisi' : 'Address is empty, please complete it'}
+                </h4>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  {language === 'id'
+                    ? 'Alamat tempat tinggal Anda belum tercatat. Lengkapi alamat untuk kemudahan servis dan reservasi.'
+                    : 'Your address is not registered yet. Please complete your address for easy service handling.'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setInputAddress(activeCustomer?.address === 'Akun pelanggan terdaftar' ? '' : activeCustomer?.address || '');
+                setIsAddressModalOpen(true);
+              }}
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer shrink-0"
+            >
+              {language === 'id' ? 'Isi Alamat Sekarang' : 'Fill Address Now'}
+            </button>
+          </div>
+        )}
+
         {/* Customer Banner */}
         <div className="p-8 bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
@@ -99,7 +145,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               {language === 'id' ? 'Sesi Pelanggan Aktif' : 'Connected client session'}
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
-              {language === 'id' ? `Selamat Datang, ${currentUserName}` : `Welcome Back, ${currentUserName}`}
+              {language === 'id' ? `Selamat Datang, ${displayName}` : `Welcome Back, ${displayName}`}
             </h1>
             <p className="text-xs text-slate-600 max-w-xl">
               {language === 'id'
@@ -212,7 +258,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                     <div>
                       <p className="text-xs font-bold text-slate-900">{v.brand} {v.model}</p>
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        {language === 'id' ? 'No. Mesin:' : 'Engine No:'} {v.engineNumber || 'N/A'}
+                        {language === 'id' ? 'Tahun Pembuatan:' : 'Model Year:'} {v.year}
                       </p>
                     </div>
                     <div className="text-right">
@@ -289,6 +335,87 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
 
         </div>
+
+        {/* Quick Address Modal */}
+        {isAddressModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+              <div className="flex items-center justify-between">
+                <h3 className="font-extrabold text-base text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-amber-500" />
+                  {language === 'id' ? 'Lengkapi Alamat Pelanggan' : 'Complete Client Address'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsAddressModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {language === 'id'
+                  ? 'Masukkan alamat lengkap tempat tinggal Anda agar terdata dengan baik di sistem BR Motor.'
+                  : 'Enter your full residential address to keep your records updated in the BR Motor system.'}
+              </p>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!inputAddress.trim()) {
+                    showToast(language === 'id' ? 'Alamat tidak boleh kosong' : 'Address cannot be empty', 'warning');
+                    return;
+                  }
+                  if (activeCustomer) {
+                    updateCustomer(activeCustomer.id, {
+                      name: activeCustomer.name,
+                      phone: activeCustomer.phone,
+                      address: inputAddress.trim()
+                    });
+                  } else {
+                    addCustomer({
+                      name: currentUserName,
+                      phone: '08123456789',
+                      address: inputAddress.trim(),
+                      userId: currentUserId || undefined
+                    });
+                  }
+                  setIsAddressModalOpen(false);
+                  showToast(language === 'id' ? 'Alamat berhasil diperbarui!' : 'Address updated successfully!', 'success');
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    {language === 'id' ? 'Alamat Lengkap' : 'Full Address'}
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={inputAddress}
+                    onChange={(e) => setInputAddress(e.target.value)}
+                    placeholder={language === 'id' ? 'Contoh: Perumahan Grand Harmoni Blok C No. 12, Kebumen' : 'e.g. 123 Main Street, Suite 4B'}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:border-slate-400 resize-none font-medium"
+                  />
+                </div>
+                <div className="flex gap-3 justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddressModalOpen(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer transition-all"
+                  >
+                    {language === 'id' ? 'Batal' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-sm cursor-pointer transition-all"
+                  >
+                    {language === 'id' ? 'Simpan Alamat' : 'Save Address'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -346,6 +473,14 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsQuickCheckInOpen(true)}
+            className="px-4 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer border border-amber-300 animate-pulse hover:animate-none"
+          >
+            <Sparkles className="w-4 h-4" />
+            + Catat Motor Masuk
+          </button>
           <button
             type="button"
             onClick={() => setIsAuditLogOpen(true)}
@@ -708,6 +843,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
 
       {/* Slide-over Audit Log */}
       <AuditLog isOpen={isAuditLogOpen} onClose={() => setIsAuditLogOpen(false)} />
+
+      {/* Quick Walk-In Check-In Modal */}
+      <QuickCheckInModal isOpen={isQuickCheckInOpen} onClose={() => setIsQuickCheckInOpen(false)} />
     </div>
   );
 };

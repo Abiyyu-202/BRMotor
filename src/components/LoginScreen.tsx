@@ -8,7 +8,7 @@ import { useWorkshop } from '../context/WorkshopContext';
 import { Shield, Key, UserPlus, CheckCircle, ArrowRight, User } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
-  const { setIsAuthenticated, setCurrentRole, setCurrentUserName, setCurrentUserId, showToast, shopInfo, language, setLanguage, t } = useWorkshop();
+  const { setIsAuthenticated, setCurrentRole, setCurrentUserName, setCurrentUserId, showToast, shopInfo, language, t } = useWorkshop();
   const [activeMode, setActiveMode] = useState<'signin' | 'register'>('signin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -94,27 +94,15 @@ export const LoginScreen: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
-                <span className="font-mono font-extrabold tracking-wider text-xl uppercase">{shopInfo.name}</span>
-              </div>
-
-              {/* Language Switcher on Login Screen */}
-              <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-xl border border-slate-700">
-                <button
-                  onClick={() => setLanguage('id')}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                    language === 'id' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🇮🇩 ID
-                </button>
-                <button
-                  onClick={() => setLanguage('en')}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                    language === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🇬🇧 EN
-                </button>
+                <img
+                  src="/BR-Motor_Logo.png"
+                  alt="BR Motor Logo"
+                  className="w-12 h-12 object-contain rounded-2xl bg-white border border-white/20 p-1 shadow-md shrink-0"
+                />
+                <div>
+                  <span className="font-mono font-extrabold tracking-wider text-xl uppercase block leading-none">{shopInfo.name}</span>
+                  <span className="text-[10px] text-slate-400 font-mono tracking-widest uppercase mt-1 block">{t.console}</span>
+                </div>
               </div>
             </div>
 

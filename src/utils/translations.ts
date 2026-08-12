@@ -21,14 +21,14 @@ export const translations = {
     // Navigation Tabs
     nav: {
       Dashboard: "Dashboard",
-      Customers: "Pelanggan",
-      Vehicles: "Kendaraan",
-      Bookings: "Booking Servis",
-      "Work Orders": "Pengerjaan",
-      Mechanics: "List Mekanik",
-      Inventory: "Suku Cadang",
-      Payments: "Pembayaran",
-      Reports: "Laporan & Omset",
+      Customers: "Data Pelanggan",
+      Vehicles: "Data Motor",
+      Bookings: "Jadwal Booking",
+      "Work Orders": "Daftar Servis (SPK)",
+      Mechanics: "Data Mekanik",
+      Inventory: "Stok Sparepart & Oli",
+      Payments: "Kasir & Nota",
+      Reports: "Laporan Omzet",
       Settings: "Pengaturan Bengkel",
     },
 

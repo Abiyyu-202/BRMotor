@@ -70,6 +70,20 @@ interface WorkshopContextType {
   deleteBooking: (id: string) => void;
 
   // Work Orders
+  quickCheckIn: (payload: {
+    plateNumber: string;
+    customerName: string;
+    phone: string;
+    brand: string;
+    model: string;
+    year?: number;
+    complaint: string;
+    mechanicId: string;
+    services?: { serviceId: string; price: number }[];
+    spareParts?: { partId: string; quantity: number; pricePerUnit: number }[];
+    estimatedCompletionTime?: string;
+    notes?: string;
+  }) => Promise<{ id: string }>;
   createWorkOrder: (wo: Omit<WorkOrder, 'id' | 'status' | 'paymentStatus' | 'createdAt' | 'costs'>) => WorkOrder;
   updateWorkOrderStatus: (id: string, status: WorkOrderStatus) => void;
   updateWorkOrder: (id: string, updated: Partial<WorkOrder>) => void;
@@ -180,10 +194,16 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setBookings(data.bookings); setWorkOrders(data.workOrders); setSpareParts(data.spareParts);
     setMechanics(data.mechanics); setServiceItems(data.serviceItems); setSalesHistory(data.salesHistory); setAuditLogs(data.auditLogs);
 
-    // Auto-detect and sync currentUserId if missing in storage
+    // Auto-detect and sync currentUserId and currentUserName
     const storedUserId = localStorage.getItem('br_motor_userid');
     const storedUsername = localStorage.getItem('br_motor_username');
-    if (!storedUserId && storedUsername) {
+    if (storedUserId) {
+      const match = data.customers.find(c => String(c.userId) === String(storedUserId));
+      if (match && match.name && match.name !== storedUsername) {
+        setCurrentUserNameState(match.name);
+        localStorage.setItem('br_motor_username', match.name);
+      }
+    } else if (storedUsername) {
       const match = data.customers.find(c => c.name.toLowerCase() === storedUsername.toLowerCase() && c.userId);
       if (match?.userId) {
         setCurrentUserIdState(match.userId);
@@ -254,6 +274,12 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateCustomer = (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => {
+    const targetCust = customers.find(c => c.id === id);
+    if (targetCust?.userId && (String(targetCust.userId) === String(currentUserId) || String(targetCust.userId) === localStorage.getItem('br_motor_userid'))) {
+      setCurrentUserNameState(updated.name);
+      localStorage.setItem('br_motor_username', updated.name);
+    }
+
     setCustomers((prev) =>
       prev.map((c) => (c.id === id ? { ...c, ...updated } : c))
     );
@@ -392,6 +418,35 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   // --- WORK ORDER PROCESS ENGINE ---
+  const quickCheckIn = async (payload: {
+    plateNumber: string;
+    customerName: string;
+    phone: string;
+    brand: string;
+    model: string;
+    year?: number;
+    complaint: string;
+    mechanicId: string;
+    services?: { serviceId: string; price: number }[];
+    spareParts?: { partId: string; quantity: number; pricePerUnit: number }[];
+    estimatedCompletionTime?: string;
+    notes?: string;
+  }) => {
+    try {
+      const res = await api<{ id: string }>('/api/quick-checkin', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      await refreshDatabase();
+      showToast(`Motor ${payload.plateNumber.toUpperCase()} berhasil didaftarkan ke antrean servis!`, 'success');
+      addAuditLog("Quick Check-in", `Servis cepat untuk ${payload.plateNumber.toUpperCase()} (${payload.customerName || 'Walk-in'})`, 'work_order');
+      return res;
+    } catch (err: any) {
+      showToast(err.message || 'Gagal mendaftarkan servis', 'error');
+      throw err;
+    }
+  };
+
   const createWorkOrder = (wo: Omit<WorkOrder, 'id' | 'status' | 'paymentStatus' | 'createdAt' | 'costs'>) => {
     // Generate order ID
     const newId = `wo-${1000 + workOrders.length + 1}`;
@@ -795,6 +850,7 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addBooking,
         updateBookingStatus,
         deleteBooking,
+        quickCheckIn,
         createWorkOrder,
         updateWorkOrderStatus,
         updateWorkOrder,

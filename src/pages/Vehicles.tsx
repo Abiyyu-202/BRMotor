@@ -274,50 +274,52 @@ export const Vehicles: React.FC = () => {
             />
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[550px] overflow-y-auto shadow-sm">
-            <div className="bg-slate-900 p-3 text-[10px] text-slate-200 font-mono tracking-wider font-bold">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[550px] shadow-sm">
+            <div className="bg-slate-900 p-3 text-[10px] text-slate-200 font-mono tracking-wider font-bold shrink-0">
               DAFTAR MOTOR TERDAFTAR ({filteredVehicles.length})
             </div>
-            {filteredVehicles.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs font-medium">
-                Tidak ada data motor yang sesuai
-              </div>
-            ) : (
-              filteredVehicles.map((v) => {
-                const isActive = selectedVehicle?.id === v.id;
-                return (
-                  <div
-                    key={v.id}
-                    onClick={() => setSelectedVehicle(v)}
-                    className={`p-4 border-b border-slate-100 cursor-pointer transition-all flex items-center justify-between w-full ${
-                      isActive ? 'bg-slate-100 border-l-4 border-l-slate-900' : 'hover:bg-slate-50 bg-white'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-mono font-bold bg-slate-900 text-white px-2 py-0.5 rounded-md">
-                          {v.licensePlate}
-                        </span>
-                        <p className="text-xs font-bold text-slate-900 truncate">{v.brand} {v.model}</p>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1 font-medium">
-                        <User className="w-3.5 h-3.5 text-slate-400" />
-                        Pemilik: {v.customerName}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleDelete(v.id, e)}
-                      className="p-1.5 ml-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
-                      title="Hapus Kendaraan"
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {filteredVehicles.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs font-medium">
+                  Tidak ada data motor yang sesuai
+                </div>
+              ) : (
+                filteredVehicles.map((v) => {
+                  const isActive = selectedVehicle?.id === v.id;
+                  return (
+                    <div
+                      key={v.id}
+                      onClick={() => setSelectedVehicle(v)}
+                      className={`p-4 cursor-pointer transition-all flex items-center justify-between w-full ${
+                        isActive ? 'bg-slate-100 border-l-4 border-l-slate-900' : 'hover:bg-slate-50 bg-white'
+                      }`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })
-            )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-mono font-bold bg-slate-900 text-white px-2 py-0.5 rounded-md">
+                            {v.licensePlate}
+                          </span>
+                          <p className="text-xs font-bold text-slate-900 truncate">{v.brand} {v.model}</p>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1 font-medium">
+                          <User className="w-3.5 h-3.5 text-slate-400" />
+                          Pemilik: {v.customerName}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleDelete(v.id, e)}
+                        className="p-1.5 ml-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                        title="Hapus Kendaraan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
 
