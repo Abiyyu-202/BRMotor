@@ -1,0 +1,6 @@
+{
+  "name": "BR Motor Workshop Management System",
+  "description": "Comprehensive digital workflow management system for BR Motor workshop, featuring service queue, vehicle records, spare parts inventory, technician task assignments, billing, and reports with English & Indonesian language support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
