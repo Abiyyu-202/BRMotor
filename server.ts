@@ -14,6 +14,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   decimalNumbers: true,
+  dateStrings: true,
 });
 
 // Vehicle photos are currently stored as data URLs, so the request can be
@@ -109,9 +110,9 @@ async function bootstrap() {
   const settings: any = settingsRows[0] || { name: 'BR Motor', address: '', phone: '', email: '', tax_rate: 0, currency: 'IDR' };
   return {
     shopInfo: { name: settings.name, address: settings.address, phone: settings.phone, email: settings.email, taxRate: Number(settings.tax_rate), currency: 'Rp' },
-    customers: customers.map((row: any) => ({ id: id(row.id), name: row.name, phone: row.phone, address: row.address || '', createdAt: row.created_at })),
+    customers: customers.map((row: any) => ({ id: id(row.id), userId: row.user_id ? id(row.user_id) : undefined, name: row.name, phone: row.phone, address: row.address || '', createdAt: row.created_at })),
     vehicles: vehicles.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), customerName: row.customer_name, licensePlate: row.plate_number, brand: row.brand, model: row.model, year: Number(row.year), engineNumber: row.engine_number || undefined, imageUrl: row.image_url || undefined })),
-    bookings: bookings.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), vehicleId: id(row.vehicle_id), customerName: row.customer_name, licensePlate: row.plate_number, vehicleModel: `${row.brand} ${row.model}`, type: 'scheduled', date: row.scheduled_date, time: String(row.scheduled_time).slice(0, 5), queueNumber: row.queue_number || row.booking_code, status: row.status === 'confirmed' ? 'checked-in' : row.status, notes: row.complaint, estimatedDurationMinutes: row.estimated_duration_minutes, createdAt: row.created_at })),
+    bookings: bookings.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), vehicleId: id(row.vehicle_id), customerName: row.customer_name, licensePlate: row.plate_number, vehicleModel: `${row.brand} ${row.model}`, type: 'scheduled', date: String(row.scheduled_date || '').slice(0, 10), time: String(row.scheduled_time).slice(0, 5), queueNumber: row.queue_number || row.booking_code, status: row.status === 'confirmed' ? 'checked-in' : row.status, notes: row.complaint, estimatedDurationMinutes: row.estimated_duration_minutes, createdAt: row.created_at })),
     mechanics: mechanics.map((row: any) => ({ id: id(row.id), name: row.name, position: row.specialization || 'Mekanik', phone: row.phone, status: mechanicStatus(row.status), assignedJobsCount: Number(row.assigned_jobs_count), completedJobsCount: Number(row.completed_jobs_count), rating: 5 })),
     serviceItems: services.map((row: any) => ({ id: id(row.id), name: row.name, price: Number(row.price), estimatedMinutes: Number(row.estimated_duration) })),
     spareParts: parts.map((row: any) => ({ id: id(row.id), name: row.name, sku: row.sku, category: 'Umum', purchasePrice: Number(row.purchase_price), sellingPrice: Number(row.sell_price), currentStock: Number(row.stock), minimumStock: Number(row.min_stock), supplier: row.supplier_name || '-' })),
@@ -150,7 +151,7 @@ app.post('/api/auth/register', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post('/api/customers', async (req, res, next) => { try { const r = await query<ResultSetHeader>('INSERT INTO customers (name,phone,address,created_at,updated_at) VALUES (?,?,?,NOW(),NOW())', [req.body.name, req.body.phone, req.body.address || '']); await log('Pelanggan dibuat', req.body.name, 'customer'); res.json({ id: id(r.insertId) }); } catch (e) { next(e); } });
+app.post('/api/customers', async (req, res, next) => { try { const r = await query<ResultSetHeader>('INSERT INTO customers (user_id,name,phone,address,created_at,updated_at) VALUES (?,?,?,?,NOW(),NOW())', [req.body.userId || null, req.body.name, req.body.phone, req.body.address || '']); await log('Pelanggan dibuat', req.body.name, 'customer'); res.json({ id: id(r.insertId) }); } catch (e) { next(e); } });
 app.put('/api/customers/:id', async (req, res, next) => { try { await query('UPDATE customers SET name=?, phone=?, address=?, updated_at=NOW() WHERE id=?', [req.body.name, req.body.phone, req.body.address || '', req.params.id]); res.sendStatus(204); } catch (e) { next(e); } });
 app.delete('/api/customers/:id', async (req, res, next) => { try { await query('DELETE FROM customers WHERE id=?', [req.params.id]); res.sendStatus(204); } catch (e) { next(e); } });
 

@@ -29,12 +29,21 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
     updateBookingStatus,
     deleteBooking,
     currentRole,
+    currentUserId,
     currentUserName,
     showToast
   } = useWorkshop();
 
+  const getTodayLocalDate = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // 1. Filter State
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  const [dateFilter, setDateFilter] = useState(getTodayLocalDate());
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'pending' | 'checked-in' | 'cancelled' | 'all'>('pending');
 
@@ -45,17 +54,26 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [bookingType, setBookingType] = useState<BookingType>('walk-in');
-  const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [scheduleDate, setScheduleDate] = useState(getTodayLocalDate());
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [notes, setNotes] = useState('');
   const [bookingToDelete, setBookingToDelete] = useState<{ id: string; queueNumber: string } | null>(null);
 
-  // Find user's customer record
-  const userCustomer = customers.find(c => c.name.toLowerCase() === currentUserName.toLowerCase());
+  // Find user's customer records (reliable via userId or fallback by name)
+  const userCustomers = customers.filter(c => 
+    (currentUserId && String(c.userId) === String(currentUserId)) ||
+    (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
+  );
+  const userCustomer = userCustomers[0];
+  const userCustomerIds = userCustomers.map(c => String(c.id));
 
   // Filter list of bookings based on role
+  // For 'user' role: show bookings matching user's vehicles or user's customer IDs
+  const userVehicleIds = vehicles
+    .filter(v => userCustomerIds.includes(String(v.customerId)))
+    .map(v => v.id);
   const allowedBookings = currentRole === 'user'
-    ? bookings.filter((b) => b.customerName.toLowerCase() === currentUserName.toLowerCase())
+    ? bookings.filter((b) => userVehicleIds.includes(b.vehicleId) || userCustomerIds.includes(String(b.customerId)))
     : bookings;
 
   // Check if chosen time slot is already booked on the selected date
@@ -65,7 +83,9 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
 
   // 3. Dynamic Vehicle dropdown matching selected customer
   const activeCustomerId = currentRole === 'user' ? (userCustomer?.id || '') : selectedCustomerId;
-  const customerVehicles = vehicles.filter((v) => v.customerId === activeCustomerId);
+  const customerVehicles = currentRole === 'user'
+    ? vehicles.filter((v) => userCustomerIds.includes(String(v.customerId)))
+    : vehicles.filter((v) => v.customerId === selectedCustomerId);
 
   // 4. Actions
   const handleOpenAddModal = () => {
@@ -82,7 +102,7 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
       setBookingType('walk-in');
     }
 
-    setScheduleDate(new Date().toISOString().split('T')[0]);
+    setScheduleDate(getTodayLocalDate());
     setScheduleTime('09:00');
     setNotes('');
     setIsBookingModalOpen(true);
@@ -124,9 +144,23 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
   };
 
   // 5. Filter application
+  const normalizeDate = (d: string) => {
+    if (!d) return '';
+    if (d.includes('T')) {
+      const dt = new Date(d);
+      if (!isNaN(dt.getTime())) {
+        const year = dt.getFullYear();
+        const month = String(dt.getMonth() + 1).padStart(2, '0');
+        const day = String(dt.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+    return d.slice(0, 10);
+  };
+
   const filteredBookings = allowedBookings.filter((b) => {
-    // For normal staff, we enforce the date filter. For user roles, show all their bookings by default
-    const matchesDate = currentRole === 'user' ? true : b.date === dateFilter;
+    // For normal staff, we enforce the date filter if set. For user roles, show all their bookings by default
+    const matchesDate = currentRole === 'user' || !dateFilter ? true : normalizeDate(b.date) === normalizeDate(dateFilter);
     const matchesSearch =
       b.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -135,10 +169,12 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
     return matchesDate && matchesSearch && matchesStatus;
   });
 
-  const totalCount = allowedBookings.filter((b) => currentRole === 'user' ? true : b.date === dateFilter).length;
-  const checkedInCount = allowedBookings.filter((b) => (currentRole === 'user' ? true : b.date === dateFilter) && b.status === 'checked-in').length;
-  const pendingCount = allowedBookings.filter((b) => (currentRole === 'user' ? true : b.date === dateFilter) && b.status === 'pending').length;
-  const cancelledCount = allowedBookings.filter((b) => (currentRole === 'user' ? true : b.date === dateFilter) && b.status === 'cancelled').length;
+  const isMatchingDate = (bDate: string) => currentRole === 'user' || !dateFilter ? true : normalizeDate(bDate) === normalizeDate(dateFilter);
+
+  const totalCount = allowedBookings.filter((b) => isMatchingDate(b.date)).length;
+  const checkedInCount = allowedBookings.filter((b) => isMatchingDate(b.date) && b.status === 'checked-in').length;
+  const pendingCount = allowedBookings.filter((b) => isMatchingDate(b.date) && b.status === 'pending').length;
+  const cancelledCount = allowedBookings.filter((b) => isMatchingDate(b.date) && b.status === 'cancelled').length;
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
@@ -267,14 +303,26 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
                 {/* Quick Shortcuts for Date */}
                 <button
                   type="button"
-                  onClick={() => setDateFilter(new Date().toISOString().split('T')[0])}
+                  onClick={() => setDateFilter(getTodayLocalDate())}
                   className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                    dateFilter === new Date().toISOString().split('T')[0]
-                      ? 'bg-slate-900 text-white border-slate-900'
+                    dateFilter === getTodayLocalDate()
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
                   Hari Ini
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDateFilter('')}
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                    !dateFilter
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Semua Tanggal
                 </button>
               </>
             )}
@@ -369,7 +417,7 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
                       {b.time}
                     </span>
                     <span>•</span>
-                    <span>{b.date}</span>
+                    <span>{normalizeDate(b.date)}</span>
                     <span className="bg-slate-900 text-white px-1.5 py-0.5 rounded-md uppercase text-[8px] font-bold">
                       {b.type === 'walk-in' ? 'Walk-In' : 'Terjadwal'}
                     </span>
@@ -470,7 +518,7 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
                   <input
                     type="text"
                     disabled
-                    value={currentUserName}
+                    value={userCustomer?.name ?? ''}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-600 font-bold focus:outline-none"
                   />
                 </div>

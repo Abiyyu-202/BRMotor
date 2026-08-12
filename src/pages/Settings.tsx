@@ -27,6 +27,7 @@ export const Settings: React.FC = () => {
   const {
     shopInfo,
     setShopInfo,
+    currentUserId,
     currentRole,
     setCurrentRole,
     currentUserName,
@@ -58,7 +59,7 @@ export const Settings: React.FC = () => {
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
   // 2. User Profile Form States
-  const matchedCustomer = customers.find(c => c.name.toLowerCase() === currentUserName.toLowerCase()) || customers[0];
+  const matchedCustomer = customers.find(c => String(c.userId) === String(currentUserId)) || customers[0];
   const [userFullName, setUserFullName] = useState(currentUserName);
   const [userPhone, setUserPhone] = useState(matchedCustomer?.phone || '081234567890');
   const [userAddress, setUserAddress] = useState(matchedCustomer?.address || 'Jl. Raya Darmo No. 45, Surabaya');

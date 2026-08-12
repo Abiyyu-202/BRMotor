@@ -89,11 +89,13 @@ export const Customers: React.FC = () => {
       updateCustomer(customerToEdit.id, { name, phone, address });
       // Update selected profile focus
       setSelectedCustomer({ ...customerToEdit, name, phone, address });
+      setIsCustomerModalOpen(false);
     } else {
-      const added = addCustomer({ name, phone, address });
-      setSelectedCustomer(added);
+      addCustomer({ name, phone, address }).then((added) => {
+        setSelectedCustomer(added);
+        setIsCustomerModalOpen(false);
+      });
     }
-    setIsCustomerModalOpen(false);
   };
 
   const handleDelete = (id: string) => {

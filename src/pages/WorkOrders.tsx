@@ -52,28 +52,28 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
       desc: language === 'id' ? 'Dalam antrean area diagnosa' : 'Queued for service bay'
     },
     {
-      status: 'in_progress',
-      label: t.workOrders.inProgress,
-      color: 'bg-amber-50 text-amber-900 border-amber-200',
-      desc: language === 'id' ? 'Sedang dikerjakan mekanik' : 'Active mechanic wrenching'
-    },
-    {
       status: 'waiting_parts',
       label: language === 'id' ? 'Menunggu Part' : 'Waiting Parts',
       color: 'bg-orange-50 text-orange-900 border-orange-200',
       desc: language === 'id' ? 'Menunggu suku cadang' : 'Awaiting stock delivery'
     },
     {
+      status: 'in_progress',
+      label: t.workOrders.inProgress,
+      color: 'bg-amber-50 text-amber-900 border-amber-200',
+      desc: language === 'id' ? 'Sedang dikerjakan mekanik' : 'Active mechanic wrenching'
+    },
+    {
       status: 'quality_control',
       label: t.workOrders.testing,
       color: 'bg-indigo-50 text-indigo-900 border-indigo-200',
-      desc: language === 'id' ? 'Pengujian akhir & pengecekan' : 'Final audit & safety checks'
+      desc: language === 'id' ? 'Pengujian akhir & QC' : 'Final audit & safety checks'
     },
     {
       status: 'completed',
       label: t.workOrders.done,
       color: 'bg-emerald-50 text-emerald-900 border-emerald-200',
-      desc: language === 'id' ? 'Selesai & siap diambil' : 'Ready for customer pickup'
+      desc: language === 'id' ? 'Selesai & siap bayar' : 'Ready for payment & pickup'
     }
   ];
 
@@ -298,12 +298,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
 
     let nextLabel = '';
     if (currentStatus === 'waiting') {
-      nextLabel = hasParts ? 'Dalam Pengerjaan' : 'Menunggu Suku Cadang';
+      nextLabel = 'Dalam Pengerjaan';
     } else if (currentStatus === 'waiting_parts') {
-      if (!hasParts) {
-        showToast('Suku cadang belum dipilih! Silakan klik "Detail" / Edit SPK dan tambahkan suku cadang/oli terlebih dahulu untuk melanjutkan pengerjaan.', 'warning');
-        return;
-      }
       nextLabel = 'Dalam Pengerjaan';
     } else if (currentStatus === 'in_progress') {
       nextLabel = 'Quality Control (Uji Coba)';
@@ -324,18 +320,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
     if (!advancingWO) return;
     const { id, status } = advancingWO;
 
-    const wo = workOrders.find((w) => w.id === id);
-    const hasParts = Boolean(wo && wo.sparePartsUsed && wo.sparePartsUsed.length > 0);
-
     let next: WorkOrderStatus | undefined;
     if (status === 'waiting') {
-      next = hasParts ? 'in_progress' : 'waiting_parts';
+      next = 'in_progress';
     } else if (status === 'waiting_parts') {
-      if (!hasParts) {
-        showToast('Suku cadang belum dipilih! Silakan tambahkan suku cadang/oli terlebih dahulu.', 'warning');
-        setAdvancingWO(null);
-        return;
-      }
       next = 'in_progress';
     } else if (status === 'in_progress') {
       next = 'quality_control';
@@ -409,12 +397,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
       </div>
 
       {/* Visual Kanban Board Pipeline */}
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 overflow-x-auto pb-4 items-start select-none">
+      <div className="flex lg:grid lg:grid-cols-5 gap-3.5 items-start select-none overflow-x-auto lg:overflow-x-visible pb-4">
         {columns.map((col) => {
           const colWOrders = workOrders.filter((wo) => wo.status === col.status);
 
           return (
-            <div key={col.status} className="flex flex-col rounded-2xl bg-white border border-slate-200 p-4 h-[600px] shrink-0 min-w-[240px] shadow-sm">
+            <div key={col.status} className="flex flex-col rounded-2xl bg-white border border-slate-200 p-3.5 h-[620px] w-full min-w-[250px] lg:min-w-0 shrink-0 lg:shrink shadow-sm">
               {/* Column Title */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                 <div>
@@ -458,7 +446,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
                         {/* Spare Parts Badge Indicator */}
                         {wo.sparePartsUsed && wo.sparePartsUsed.length > 0 ? (
                           <span className="inline-block mt-1.5 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                            ✓ {wo.sparePartsUsed.length} Part/Oli
+                            ✓ {wo.sparePartsUsed.length} Part
                           </span>
                         ) : (
                           <span className="inline-block mt-1.5 text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
@@ -475,48 +463,51 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
                         </div>
                       </div>
 
-                      {/* Card Action Controls - Fixed layout to prevent offside/overflow */}
-                      <div className="flex items-center gap-1.5 border-t border-slate-100 pt-3 mt-3">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(wo)}
-                          className="px-2 py-1 bg-slate-100 border border-slate-200 text-[10px] text-slate-700 rounded-lg font-bold hover:bg-slate-200 cursor-pointer transition-colors shrink-0"
-                        >
-                          Detail
-                        </button>
-
-                        {/* Status Progression buttons */}
+                      {/* Card Action Controls - 2-row spacious layout */}
+                      <div className="space-y-2 border-t border-slate-100 pt-3 mt-3">
+                        {/* Primary Progression Button */}
                         {wo.status !== 'completed' && (
                           <button
                             type="button"
                             onClick={() => promptNextStatus(wo.id, wo.status)}
-                            className="flex-1 min-w-0 px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white border border-slate-900 font-bold text-[9px] rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer uppercase tracking-wider shadow-sm truncate"
+                            className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm"
                           >
-                            <span className="truncate">Lanjut</span>
-                            <ArrowRight className="w-3 h-3 shrink-0" />
+                            <span>Lanjut Tahap</span>
+                            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                           </button>
                         )}
 
-                        {/* Let mechanic request a parts hold if they are stuck */}
-                        {wo.status === 'in_progress' && (
+                        {/* Secondary Action Controls Row */}
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleHoldForParts(wo.id)}
-                            className="p-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-amber-700 cursor-pointer shrink-0"
-                            title="Menunggu Suku Cadang"
+                            onClick={() => handleOpenEditModal(wo)}
+                            className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded-xl font-bold cursor-pointer transition-colors text-center"
                           >
-                            <AlertTriangle className="w-3.5 h-3.5" />
+                            Detail
                           </button>
-                        )}
 
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteWorkOrder(wo.id, e)}
-                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg cursor-pointer transition-colors shrink-0"
-                          title="Hapus SPK"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {/* Let mechanic request a parts hold if they are waiting for stock */}
+                          {(wo.status === 'waiting' || wo.status === 'in_progress') && (
+                            <button
+                              type="button"
+                              onClick={() => handleHoldForParts(wo.id)}
+                              className="p-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-amber-700 cursor-pointer transition-colors shrink-0 flex items-center justify-center"
+                              title="Tahan: Menunggu Suku Cadang"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteWorkOrder(wo.id, e)}
+                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl cursor-pointer transition-colors shrink-0 flex items-center justify-center"
+                            title="Hapus SPK"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))

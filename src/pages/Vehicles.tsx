@@ -30,6 +30,7 @@ export const Vehicles: React.FC = () => {
     updateVehicle,
     deleteVehicle,
     currentRole,
+    currentUserId,
     currentUserName,
     showToast,
     language
@@ -71,12 +72,17 @@ export const Vehicles: React.FC = () => {
     }
   };
 
-  // Find user's customer record if they are logged in as a customer ('user' role)
-  const userCustomer = customers.find(c => c.name.toLowerCase() === currentUserName.toLowerCase());
+  // Find all user's customer records (reliable via userId or fallback by name)
+  const userCustomers = customers.filter(c => 
+    (currentUserId && String(c.userId) === String(currentUserId)) ||
+    (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
+  );
+  const userCustomer = userCustomers[0];
+  const userVehicleCustomerIds = userCustomers.map(c => String(c.id));
 
   // Filter vehicles by user role (regular user only accesses their own vehicles)
   const allowedVehicles = currentRole === 'user'
-    ? vehicles.filter((v) => v.customerName.toLowerCase() === currentUserName.toLowerCase())
+    ? vehicles.filter((v) => userVehicleCustomerIds.includes(String(v.customerId)))
     : vehicles;
 
   // Search filter
@@ -142,21 +148,27 @@ export const Vehicles: React.FC = () => {
     setIsVehicleModalOpen(true);
   };
 
-  const handleSaveVehicle = (e: React.FormEvent) => {
+  const handleSaveVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
     let finalCustomerId = customerId;
 
     if (currentRole === 'user') {
-      const cust = customers.find(c => c.name.toLowerCase() === currentUserName.toLowerCase());
-      if (cust) {
-        finalCustomerId = cust.id;
+      // Use existing customer record linked by user ID (most reliable)
+      if (userCustomer) {
+        finalCustomerId = userCustomer.id;
       } else {
-        const newCust = addCustomer({
-          name: currentUserName,
-          phone: '+62 812-3456-7890',
-          address: 'Pelanggan Terdaftar Mandiri'
-        });
-        finalCustomerId = newCust.id;
+        // Fallback: create a new customer record linked to current user
+        try {
+          const newCust = await addCustomer({
+            userId: currentUserId || undefined,
+            name: currentUserName,
+            phone: '+62 812-3456-7890',
+            address: 'Pelanggan Terdaftar Mandiri'
+          });
+          finalCustomerId = newCust.id;
+        } catch (err) {
+          return; // addCustomer already toasts error
+        }
       }
     }
 

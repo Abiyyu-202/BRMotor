@@ -8,7 +8,7 @@ import { useWorkshop } from '../context/WorkshopContext';
 import { Shield, Key, UserPlus, CheckCircle, ArrowRight, User } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
-  const { setIsAuthenticated, setCurrentRole, setCurrentUserName, showToast, shopInfo, language, setLanguage, t } = useWorkshop();
+  const { setIsAuthenticated, setCurrentRole, setCurrentUserName, setCurrentUserId, showToast, shopInfo, language, setLanguage, t } = useWorkshop();
   const [activeMode, setActiveMode] = useState<'signin' | 'register'>('signin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -44,7 +44,7 @@ export const LoginScreen: React.FC = () => {
       const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: cleanUser, password }) });
       const user = await response.json();
       if (!response.ok) throw new Error(user.message);
-      setCurrentRole(user.role); setCurrentUserName(user.name); setIsAuthenticated(true);
+      setCurrentRole(user.role); setCurrentUserName(user.name); setCurrentUserId(String(user.id)); setIsAuthenticated(true);
       showToast(`Selamat datang, ${user.name}!`, 'success');
     } catch (error: any) {
       const errMsg = error.message || 'Login gagal.';
@@ -66,7 +66,7 @@ export const LoginScreen: React.FC = () => {
       const response = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: cleanUser, password, fullName: fullName.trim(), phone: phone.trim() }) });
       const user = await response.json();
       if (!response.ok) throw new Error(user.message);
-      setCurrentRole(user.role); setCurrentUserName(user.name); setIsAuthenticated(true);
+      setCurrentRole(user.role); setCurrentUserName(user.name); setCurrentUserId(String(user.id)); setIsAuthenticated(true);
       showToast(`Akun ${user.name} berhasil dibuat.`, 'success');
     } catch (error: any) {
       const message = error.message || 'Pendaftaran gagal.';

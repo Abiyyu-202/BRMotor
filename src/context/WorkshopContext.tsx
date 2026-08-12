@@ -33,6 +33,8 @@ interface WorkshopContextType {
   setCurrentRole: (role: UserRole) => void;
   currentUserName: string;
   setCurrentUserName: (name: string) => void;
+  currentUserId: string;
+  setCurrentUserId: (id: string) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (val: boolean) => void;
   customers: Customer[];
@@ -53,7 +55,7 @@ interface WorkshopContextType {
   dismissToast: (id: string) => void;
 
   // Customers
-  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Customer;
+  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Promise<Customer>;
   updateCustomer: (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => void;
   deleteCustomer: (id: string) => void;
 
@@ -127,6 +129,9 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [currentUserName, setCurrentUserNameState] = useState<string>(() => {
     return localStorage.getItem('br_motor_username') || '';
   });
+  const [currentUserId, setCurrentUserIdState] = useState<string>(() => {
+    return localStorage.getItem('br_motor_userid') || '';
+  });
 
   const setIsAuthenticated = (val: boolean) => {
     setIsAuthenticatedState(val);
@@ -135,6 +140,7 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       localStorage.removeItem('br_motor_auth');
       localStorage.removeItem('br_motor_role');
       localStorage.removeItem('br_motor_username');
+      localStorage.removeItem('br_motor_userid');
     }
   };
 
@@ -147,6 +153,11 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const setCurrentUserName = (name: string) => {
     setCurrentUserNameState(name);
     localStorage.setItem('br_motor_username', name);
+  };
+
+  const setCurrentUserId = (id: string) => {
+    setCurrentUserIdState(id);
+    localStorage.setItem('br_motor_userid', id);
   };
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -168,6 +179,17 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setShopInfoState(data.shopInfo); setCustomers(data.customers); setVehicles(data.vehicles);
     setBookings(data.bookings); setWorkOrders(data.workOrders); setSpareParts(data.spareParts);
     setMechanics(data.mechanics); setServiceItems(data.serviceItems); setSalesHistory(data.salesHistory); setAuditLogs(data.auditLogs);
+
+    // Auto-detect and sync currentUserId if missing in storage
+    const storedUserId = localStorage.getItem('br_motor_userid');
+    const storedUsername = localStorage.getItem('br_motor_username');
+    if (!storedUserId && storedUsername) {
+      const match = data.customers.find(c => c.name.toLowerCase() === storedUsername.toLowerCase() && c.userId);
+      if (match?.userId) {
+        setCurrentUserIdState(match.userId);
+        localStorage.setItem('br_motor_userid', match.userId);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -212,19 +234,23 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 
   // --- CUSTOMER CRUD ---
-  const addCustomer = (customer: Omit<Customer, 'id' | 'createdAt'>) => {
-    const newCustomer: Customer = {
-      ...customer,
-      id: `c-${Math.random().toString(36).substring(2, 7)}`,
-      createdAt: new Date().toISOString()
-    };
-    setCustomers((prev) => [newCustomer, ...prev]);
-    void api('/api/customers', { method: 'POST', body: JSON.stringify(customer) })
-      .then(refreshDatabase)
-      .catch((error) => showToast(error.message, 'error'));
-    showToast(`Customer "${customer.name}" registered successfully`, 'success');
-    addAuditLog("Customer Registered", `Registered customer "${newCustomer.name}" (${newCustomer.phone})`, 'customer');
-    return newCustomer;
+  const addCustomer = async (customer: Omit<Customer, 'id' | 'createdAt'>): Promise<Customer> => {
+    try {
+      const result = await api<{ id: string }>('/api/customers', { method: 'POST', body: JSON.stringify(customer) });
+      const newCustomer: Customer = {
+        ...customer,
+        id: result.id,
+        createdAt: new Date().toISOString()
+      };
+      setCustomers((prev) => [newCustomer, ...prev]);
+      await refreshDatabase();
+      showToast(`Customer "${customer.name}" registered successfully`, 'success');
+      addAuditLog("Customer Registered", `Registered customer "${newCustomer.name}" (${newCustomer.phone})`, 'customer');
+      return newCustomer;
+    } catch (error: any) {
+      showToast(error.message, 'error');
+      throw error;
+    }
   };
 
   const updateCustomer = (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => {
@@ -742,6 +768,8 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setCurrentRole,
         currentUserName,
         setCurrentUserName,
+        currentUserId,
+        setCurrentUserId,
         isAuthenticated,
         setIsAuthenticated,
         customers,

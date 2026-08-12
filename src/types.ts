@@ -7,6 +7,7 @@ export type UserRole = 'owner' | 'admin' | 'mechanic' | 'cashier' | 'user';
 
 export interface Customer {
   id: string;
+  userId?: string;  // links to users.id for role-based filtering
   name: string;
   phone: string;
   address: string;

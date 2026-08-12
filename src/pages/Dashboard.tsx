@@ -34,6 +34,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
     shopInfo,
     currentRole,
     currentUserName,
+    currentUserId,
     restockSparePart,
     language,
     t
@@ -41,15 +42,15 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
 
   // If role is a regular client, show a tailored simplified client-portal layout
   if (currentRole === 'user') {
-    const clientBookings = bookings.filter(
-      (b) => b.customerName.toLowerCase() === currentUserName.toLowerCase()
+    const userCustomers = customers.filter(c => 
+      (currentUserId && String(c.userId) === String(currentUserId)) ||
+      (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
     );
-    const clientVehicles = vehicles.filter(
-      (v) => v.customerName.toLowerCase() === currentUserName.toLowerCase()
-    );
-    const clientWorkOrders = workOrders.filter(
-      (w) => w.customerName.toLowerCase() === currentUserName.toLowerCase()
-    );
+    const userCustomerIds = userCustomers.map(c => String(c.id));
+    const clientVehicles = vehicles.filter((v) => userCustomerIds.includes(String(v.customerId)));
+    const userVehicleIds = clientVehicles.map(v => v.id);
+    const clientBookings = bookings.filter((b) => userVehicleIds.includes(b.vehicleId) || userCustomerIds.includes(String(b.customerId)));
+    const clientWorkOrders = workOrders.filter((w) => userCustomerIds.includes(String(w.customerId)));
 
     const getFriendlyStatus = (status: string) => {
       if (language === 'id') {
