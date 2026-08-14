@@ -20,14 +20,17 @@ import {
   History,
   MapPin,
   X,
-  Sparkles
+  Sparkles,
+  Bell
 } from 'lucide-react';
 import { AuditLog } from '../components/AuditLog';
 import { QuickCheckInModal } from '../components/QuickCheckInModal';
+import { ServiceReminderModal } from '../components/ServiceReminderModal';
 
 export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveTab }) => {
   const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
+  const [isReminderOpen, setIsReminderOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [inputAddress, setInputAddress] = useState('');
 
@@ -483,6 +486,14 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </button>
           <button
             type="button"
+            onClick={() => setIsReminderOpen(true)}
+            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+          >
+            <Bell className="w-4 h-4 text-amber-500" />
+            Pengingat Servis WA
+          </button>
+          <button
+            type="button"
             onClick={() => setIsAuditLogOpen(true)}
             className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-2 cursor-pointer transition-all shadow-sm"
           >
@@ -846,6 +857,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
 
       {/* Quick Walk-In Check-In Modal */}
       <QuickCheckInModal isOpen={isQuickCheckInOpen} onClose={() => setIsQuickCheckInOpen(false)} />
+
+      {/* Service Reminder Modal */}
+      <ServiceReminderModal isOpen={isReminderOpen} onClose={() => setIsReminderOpen(false)} />
     </div>
   );
 };

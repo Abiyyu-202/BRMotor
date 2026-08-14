@@ -19,9 +19,11 @@ import {
   User,
   History,
   CheckCircle,
-  FilePlus2
+  FilePlus2,
+  Bell
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { ServiceReminderModal } from '../components/ServiceReminderModal';
 
 export const Customers: React.FC = () => {
   const {
@@ -38,6 +40,8 @@ export const Customers: React.FC = () => {
     currentRole,
     formatRupiah
   } = useWorkshop();
+
+  const [isReminderOpen, setIsReminderOpen] = useState(false);
 
   // 1. Search State
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,13 +171,24 @@ export const Customers: React.FC = () => {
               : 'Manage customer records, vehicles, and billing accounts.'}
           </p>
         </div>
-        <button
-          onClick={handleOpenAddModal}
-          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          {t.customers.addCustomer}
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsReminderOpen(true)}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+          >
+            <Bell className="w-4 h-4" />
+            Pengingat Servis WA
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenAddModal}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            {t.customers.addCustomer}
+          </button>
+        </div>
       </div>
 
       {/* Main Split Layout */}
@@ -535,6 +550,9 @@ export const Customers: React.FC = () => {
         onConfirm={confirmDeleteCustomer}
         onClose={() => setCustomerToDelete(null)}
       />
+
+      {/* Service Reminder Modal */}
+      <ServiceReminderModal isOpen={isReminderOpen} onClose={() => setIsReminderOpen(false)} />
     </div>
   );
 };

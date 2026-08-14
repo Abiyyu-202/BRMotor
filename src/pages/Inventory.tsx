@@ -38,9 +38,21 @@ export const Inventory: React.FC = () => {
   // 1. Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [onlyLowStock, setOnlyLowStock] = useState(false);
 
-  // Categories list derived dynamically
-  const categories: string[] = ['all', ...spareParts.map((p) => p.category).filter((val, idx, self) => self.indexOf(val) === idx)];
+  // Common quick categories in motorcycle workshops
+  const quickCategories = [
+    { id: 'all', label: 'Semua Kategori' },
+    { id: 'Oli & Pelumas', label: '🛢️ Oli & Pelumas' },
+    { id: 'Ban & Velg', label: '🛞 Ban & Velg' },
+    { id: 'Pengereman', label: '🛑 Kampas & Rem' },
+    { id: 'CVT & Transmisi', label: '⚙️ CVT & Roller' },
+    { id: 'Kelistrikan & Aki', label: '🔋 Aki & Lampu' },
+    { id: 'Suku Cadang Mesin', label: '🔧 Mesin & Busi' },
+  ];
+
+  // Dynamic categories from existing spare parts
+  const existingCategories = spareParts.map((p) => p.category).filter((val, idx, self) => self.indexOf(val) === idx);
 
   // 2. Modals State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,7 +74,7 @@ export const Inventory: React.FC = () => {
     setEditingPart(null);
     setName('');
     setSku('');
-    setCategory('General Parts');
+    setCategory('Oli & Pelumas');
     setPurchasePrice(0);
     setSellingPrice(0);
     setCurrentStock(10);
@@ -87,7 +99,7 @@ export const Inventory: React.FC = () => {
   const handleSavePart = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !sku.trim() || !category.trim() || !supplier.trim()) {
-      showToast('All descriptive fields are required to log spare parts', 'error');
+      showToast('Semua field wajib diisi untuk menyimpan suku cadang', 'error');
       return;
     }
 
@@ -99,10 +111,10 @@ export const Inventory: React.FC = () => {
       name,
       sku: sku.toUpperCase(),
       category,
-      purchasePrice,
-      sellingPrice,
-      currentStock,
-      minimumStock,
+      purchasePrice: Number(purchasePrice),
+      sellingPrice: Number(sellingPrice),
+      currentStock: Number(currentStock),
+      minimumStock: Number(minimumStock),
       supplier
     };
 
@@ -132,8 +144,15 @@ export const Inventory: React.FC = () => {
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.supplier.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    
+    const matchesCategory = 
+      categoryFilter === 'all' || 
+      p.category.toLowerCase().includes(categoryFilter.toLowerCase()) ||
+      categoryFilter.toLowerCase().includes(p.category.toLowerCase());
+
+    const matchesLowStock = onlyLowStock ? p.currentStock <= p.minimumStock : true;
+
+    return matchesSearch && matchesCategory && matchesLowStock;
   });
 
   // Calculate stats
@@ -167,22 +186,37 @@ export const Inventory: React.FC = () => {
 
       {/* Stats overview boxes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm">
+        <div 
+          onClick={() => { setCategoryFilter('all'); setOnlyLowStock(false); }}
+          className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm cursor-pointer hover:border-slate-300 transition-all"
+        >
           <div>
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Jenis Barang (SKU)</p>
             <h4 className="text-xl font-bold text-slate-900 mt-1 leading-none">{totalSkuCount} item</h4>
           </div>
           <Database className="w-8 h-8 text-slate-300 shrink-0" />
         </div>
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm">
+
+        <div 
+          onClick={() => setOnlyLowStock(!onlyLowStock)}
+          className={`p-4 rounded-2xl border flex items-center justify-between shadow-sm cursor-pointer transition-all ${
+            onlyLowStock 
+              ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-400/20' 
+              : 'bg-white border-slate-200 hover:border-slate-300'
+          }`}
+        >
           <div>
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Stok Menipis / Habis</p>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Stok Menipis / Kritis</p>
             <h4 className={`text-xl font-bold mt-1 leading-none ${lowStockCount > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
-              {lowStockCount} item perlu reorder
+              {lowStockCount} item perlu restock
             </h4>
+            <span className="text-[9px] font-bold text-slate-400 mt-1 block">
+              {onlyLowStock ? '✓ Filter aktif (Klik untuk reset)' : 'Klik untuk filter hanya stok kritis'}
+            </span>
           </div>
           <AlertTriangle className={`w-8 h-8 shrink-0 ${lowStockCount > 0 ? 'text-rose-500' : 'text-slate-300'}`} />
         </div>
+
         <div className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm">
           <div>
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Nilai Aset Stok</p>
@@ -195,30 +229,47 @@ export const Inventory: React.FC = () => {
       </div>
 
       {/* Filter and query bar */}
-      <div className="p-4 bg-white rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400 mr-1 shrink-0" />
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                categoryFilter === cat
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              {cat === 'all' ? 'Semua' : cat.replace('&', '/')}
-            </button>
-          ))}
+      <div className="p-4 bg-white rounded-2xl border border-slate-200 flex flex-col gap-3 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Quick Category Pills */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Filter className="w-4 h-4 text-slate-400 mr-1 shrink-0" />
+            {quickCategories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setCategoryFilter(cat.id)}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer border ${
+                  categoryFilter === cat.id
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Low Stock Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setOnlyLowStock(!onlyLowStock)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border shrink-0 ${
+              onlyLowStock
+                ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Stok Kritis ({lowStockCount})</span>
+          </button>
         </div>
 
         {/* Text Filter Input */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex items-center gap-2 max-w-xs w-full text-xs shrink-0 font-medium">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex items-center gap-2 text-xs font-medium">
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             type="text"
-            placeholder="Cari berdasarkan nama atau SKU..."
+            placeholder="Cari suku cadang berdasarkan nama, kode part, atau supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="bg-transparent text-slate-900 placeholder-slate-400 focus:outline-none w-full font-medium"

@@ -33,7 +33,8 @@ export const Vehicles: React.FC = () => {
     currentUserId,
     currentUserName,
     showToast,
-    language
+    language,
+    formatRupiah
   } = useWorkshop();
 
   // 1. Search & Filter State
@@ -411,66 +412,120 @@ export const Vehicles: React.FC = () => {
                 )}
               </div>
 
-              {/* Service Logs specific to this motorcycle */}
-              <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 mb-4">
-                  <History className="w-4 h-4 text-slate-700" />
-                  Riwayat Servis Motor Ini
-                </h3>
+              {/* BUKU SERVIS DIGITAL (Digital Service Passport) */}
+              <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                      <History className="w-4 h-4 text-slate-900" />
+                      Buku Servis Digital Motor
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                      Catatan riwayat perbaikan, diagnosa teknisi, pergantian oli & suku cadang
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-bold bg-slate-100 text-slate-800 px-3 py-1 rounded-lg border border-slate-200 self-start sm:self-auto font-mono">
+                    Total: {selectedVehicleHistory.length} Riwayat Servis
+                  </span>
+                </div>
 
                 {selectedVehicleHistory.length === 0 ? (
                   <div className="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200 font-medium">
-                    Belum ada catatan servis untuk motor ini.
+                    Belum ada catatan servis resmi untuk motor ini.
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {selectedVehicleHistory.map((wo) => (
-                      <div
-                        key={wo.id}
-                        className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-slate-900">{wo.id}</span>
-                            <span
-                              className="px-2 py-0.5 border border-slate-200 rounded-md text-[9px] font-bold bg-slate-900 text-white"
-                            >
-                              {wo.status.toUpperCase().replace('_', ' ')}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            {new Date(wo.createdAt).toLocaleDateString('id-ID')}
-                          </span>
-                        </div>
+                  <div className="relative pl-4 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200">
+                    {selectedVehicleHistory.map((wo, idx) => {
+                      const totalParts = wo.sparePartsUsed.reduce((sum, p) => sum + p.totalPrice, 0);
+                      const totalServices = wo.services.reduce((sum, s) => sum + s.price, 0);
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-slate-700 border-t border-slate-200 pt-3">
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Keluhan</p>
-                            <p className="mt-1 font-medium">{wo.complaint}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Diagnosa</p>
-                            <p className="mt-1 font-medium text-slate-900">{wo.diagnosis || "Belum ada catatan diagnosa."}</p>
-                          </div>
-                        </div>
+                      return (
+                        <div key={wo.id} className="relative group">
+                          {/* Timeline dot */}
+                          <div className="absolute -left-[21px] top-1 w-3.5 h-3.5 rounded-full bg-slate-900 border-2 border-white ring-2 ring-slate-300 group-hover:scale-110 transition-transform" />
 
-                        {/* Cost & Services list tag row */}
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                          {wo.services.map((s) => (
-                            <span key={s.serviceId} className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[9px] text-slate-800 font-medium">
-                              {s.name}
-                            </span>
-                          ))}
+                          <div className="p-4 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 text-xs space-y-3 transition-colors">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-slate-900 text-xs">{wo.id}</span>
+                                <span className="px-2 py-0.5 border border-slate-200 rounded-md text-[9px] font-bold bg-slate-900 text-white uppercase">
+                                  {wo.status.replace('_', ' ')}
+                                </span>
+                                {wo.paymentStatus === 'paid' && (
+                                  <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    Lunas
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                {new Date(wo.createdAt).toLocaleDateString('id-ID', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700 bg-white p-3 rounded-xl border border-slate-200/60">
+                              <div>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Keluhan Awal</p>
+                                <p className="mt-0.5 font-medium text-slate-800">{wo.complaint}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Diagnosa / Catatan Mekanik</p>
+                                <p className="mt-0.5 font-medium text-slate-800">{wo.diagnosis || 'Pemeriksaan rutin sesuai SOP'}</p>
+                              </div>
+                            </div>
+
+                            {/* Services rendered & Parts replaced */}
+                            <div className="space-y-2">
+                              {wo.services.length > 0 && (
+                                <div>
+                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Jasa Pengerjaan:</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {wo.services.map((s) => (
+                                      <span key={s.serviceId} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-800 font-semibold shadow-2xs">
+                                        🔧 {s.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {wo.sparePartsUsed.length > 0 && (
+                                <div>
+                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Suku Cadang Diganti:</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {wo.sparePartsUsed.map((p) => (
+                                      <span key={p.partId} className="px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900 font-semibold shadow-2xs">
+                                        📦 {p.name} ({p.quantity}x)
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Total bill & assigned mechanic */}
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/80 text-[11px]">
+                              <span className="text-slate-500 font-medium">
+                                Teknisi: <strong className="text-slate-800">{wo.assignedMechanicName || 'Mekanik BR Motor'}</strong>
+                              </span>
+                              <span className="font-mono font-black text-slate-900 text-xs">
+                                Total: {formatRupiah(wo.costs?.total || (totalServices + totalParts))}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
           ) : (
             <div className="h-full flex items-center justify-center p-8 text-center text-slate-400 border border-dashed border-slate-200 bg-white rounded-2xl font-medium text-xs min-h-[300px]">
-              Select a motorcycle from the catalog listing to display detailed mechanical specs and historical operations logs.
+              Pilih kendaraan motor dari daftar di samping untuk melihat buku riwayat servis digital dan spesifikasi teknis.
             </div>
           )}
         </div>
