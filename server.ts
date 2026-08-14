@@ -151,6 +151,75 @@ app.post('/api/auth/register', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+async function syncGoogleUser(email: string, name: string, phone = '081234567890') {
+  const cleanEmail = email.trim().toLowerCase();
+  const users = await query(`SELECT u.*, r.name AS role FROM users u JOIN roles r ON r.id=u.role_id
+    WHERE LOWER(u.email)=? OR LOWER(SUBSTRING_INDEX(u.email, '@', 1))=? LIMIT 1`, [cleanEmail, cleanEmail]);
+
+  if (users.length > 0) {
+    const user: any = users[0];
+    await log('Login Akun Google', `User ${user.name} (${cleanEmail}) berhasil masuk.`, 'auth', roleFromDb(user.role), user.id);
+    return { id: id(user.id), name: user.name, role: roleFromDb(user.role), email: user.email };
+  }
+
+  // Create new user in users table (default role 5: customer)
+  const randomPass = Math.random().toString(36).slice(-8) + Date.now();
+  const hash = await bcrypt.hash(randomPass, 10);
+  const displayName = name.trim() || cleanEmail.split('@')[0];
+  const result = await query<ResultSetHeader>(
+    'INSERT INTO users (role_id, name, email, password, phone, created_at, updated_at) VALUES (5, ?, ?, ?, ?, NOW(), NOW())',
+    [displayName, cleanEmail, hash, phone]
+  );
+  const userId = result.insertId;
+
+  // Create customer entry
+  await query<ResultSetHeader>(
+    'INSERT INTO customers (user_id, name, phone, address, created_at, updated_at) VALUES (?, ?, ?, \'\', NOW(), NOW())',
+    [userId, displayName, phone]
+  );
+
+  await log('Pelanggan Google Terdaftar', `Akun baru ${displayName} (${cleanEmail}) terdaftar via Google.`, 'customer', 'user', userId);
+  return { id: id(userId), name: displayName, role: 'user', email: cleanEmail };
+}
+
+app.post('/api/auth/google', async (req, res, next) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ message: 'Token credential Google tidak ditemukan.' });
+    }
+
+    // Verify token with Google's tokeninfo API
+    const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+    if (!verifyRes.ok) {
+      return res.status(401).json({ message: 'Verifikasi token Google gagal atau token telah kadaluarsa.' });
+    }
+
+    const payload = (await verifyRes.json()) as { email?: string; name?: string };
+    if (!payload.email) {
+      return res.status(400).json({ message: 'Email tidak ditemukan dari akun Google.' });
+    }
+
+    const user = await syncGoogleUser(payload.email, payload.name || payload.email.split('@')[0]);
+    res.json(user);
+  } catch (error) { next(error); }
+});
+
+app.post('/api/auth/google-demo', async (req, res, next) => {
+  try {
+    const { email, name, phone } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Email akun Google wajib diisi.' });
+    }
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanName = String(name || cleanEmail.split('@')[0]).trim();
+    const cleanPhone = String(phone || '081234567890').trim();
+
+    const user = await syncGoogleUser(cleanEmail, cleanName, cleanPhone);
+    res.json(user);
+  } catch (error) { next(error); }
+});
+
 app.post('/api/customers', async (req, res, next) => { try { const r = await query<ResultSetHeader>('INSERT INTO customers (user_id,name,phone,address,created_at,updated_at) VALUES (?,?,?,?,NOW(),NOW())', [req.body.userId || null, req.body.name, req.body.phone, req.body.address || '']); await log('Pelanggan dibuat', req.body.name, 'customer'); res.json({ id: id(r.insertId) }); } catch (e) { next(e); } });
 app.put('/api/customers/:id', async (req, res, next) => {
   try {
