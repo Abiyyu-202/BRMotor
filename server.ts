@@ -93,7 +93,7 @@ async function readWorkOrders() {
 async function bootstrap() {
   const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders] = await Promise.all([
     query('SELECT * FROM shop_settings WHERE id = 1'),
-    query('SELECT id, name, phone, address, created_at FROM customers ORDER BY name'),
+    query('SELECT id, name, phone, address, email, username, created_at FROM customers ORDER BY name'),
     query('SELECT v.*, c.name AS customer_name FROM vehicles v JOIN customers c ON c.id = v.customer_id ORDER BY v.id DESC'),
     query(`SELECT b.*, c.id AS customer_id, c.name AS customer_name, v.plate_number, v.brand, v.model
            FROM bookings b JOIN vehicles v ON v.id=b.vehicle_id JOIN customers c ON c.id=v.customer_id ORDER BY b.scheduled_date DESC, b.scheduled_time DESC`),
@@ -110,7 +110,15 @@ async function bootstrap() {
   const settings: any = settingsRows[0] || { name: 'BR Motor', address: '', phone: '', email: '', tax_rate: 0, currency: 'IDR' };
   return {
     shopInfo: { name: settings.name, address: settings.address, phone: settings.phone, email: settings.email, taxRate: Number(settings.tax_rate), currency: 'Rp' },
-    customers: customers.map((row: any) => ({ id: id(row.id), userId: row.user_id ? id(row.user_id) : undefined, name: row.name, phone: row.phone, address: row.address || '', createdAt: row.created_at })),
+    customers: customers.map((row: any) => ({
+      id: id(row.id),
+      name: row.name,
+      phone: row.phone,
+      address: row.address || '',
+      email: row.email || '',
+      username: row.username || undefined,
+      createdAt: row.created_at
+    })),
     vehicles: vehicles.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), customerName: row.customer_name, licensePlate: row.plate_number, brand: row.brand, model: row.model, year: Number(row.year), imageUrl: row.image_url || undefined })),
     bookings: bookings.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), vehicleId: id(row.vehicle_id), customerName: row.customer_name, licensePlate: row.plate_number, vehicleModel: `${row.brand} ${row.model}`, type: 'scheduled', date: String(row.scheduled_date || '').slice(0, 10), time: String(row.scheduled_time).slice(0, 5), queueNumber: row.queue_number || row.booking_code, status: row.status === 'confirmed' ? 'checked-in' : row.status, notes: row.complaint, estimatedDurationMinutes: row.estimated_duration_minutes, createdAt: row.created_at })),
     mechanics: mechanics.map((row: any) => ({ id: id(row.id), name: row.name, position: row.specialization || 'Mekanik', phone: row.phone, status: mechanicStatus(row.status), assignedJobsCount: Number(row.assigned_jobs_count), completedJobsCount: Number(row.completed_jobs_count), rating: 5 })),
@@ -127,59 +135,110 @@ app.get('/api/bootstrap', async (_req, res, next) => { try { res.json(await boot
 
 app.post('/api/auth/login', async (req, res, next) => {
   try {
-    const username = String(req.body.username || '').trim().toLowerCase();
+    const loginInput = String(req.body.username || '').trim().toLowerCase();
     const password = String(req.body.password || '');
-    const users = await query(`SELECT u.*, r.name AS role FROM users u JOIN roles r ON r.id=u.role_id
-      WHERE LOWER(SUBSTRING_INDEX(u.email, '@', 1))=? OR LOWER(u.email)=? LIMIT 1`, [username, username]);
-    const user: any = users[0];
-    if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ message: 'Username atau password salah.' });
-    res.json({ id: id(user.id), name: user.name, role: roleFromDb(user.role) });
+
+    if (!loginInput || !password) {
+      return res.status(400).json({ message: 'Username dan password wajib diisi.' });
+    }
+
+    // 1. Check in staff table (Internal Employees: Owner, Admin, Mechanic, Cashier)
+    const staffRows = await query(
+      'SELECT * FROM staff WHERE LOWER(username) = ? OR LOWER(email) = ? LIMIT 1',
+      [loginInput, loginInput]
+    );
+    if (staffRows.length > 0) {
+      const staff: any = staffRows[0];
+      const valid = await bcrypt.compare(password, staff.password);
+      if (valid) {
+        await log('Login Staf Sukses', `Staf ${staff.name} (${staff.role}) berhasil masuk.`, 'auth', staff.role, staff.id);
+        return res.json({ id: id(staff.id), name: staff.name, role: staff.role });
+      }
+      return res.status(401).json({ message: 'Password salah untuk akun staf.' });
+    }
+
+    // 2. Check in customers table (Clients / Customers)
+    const custRows = await query(
+      'SELECT * FROM customers WHERE (LOWER(username) = ? OR LOWER(email) = ? OR phone = ?) AND password IS NOT NULL LIMIT 1',
+      [loginInput, loginInput, loginInput]
+    );
+    if (custRows.length > 0) {
+      const cust: any = custRows[0];
+      const valid = await bcrypt.compare(password, cust.password);
+      if (valid) {
+        await log('Login Pelanggan Sukses', `Pelanggan ${cust.name} berhasil masuk.`, 'auth', 'user', cust.id);
+        return res.json({ id: id(cust.id), name: cust.name, role: 'user' });
+      }
+      return res.status(401).json({ message: 'Password salah untuk akun pelanggan.' });
+    }
+
+    return res.status(401).json({ message: 'Username atau password tidak ditemukan.' });
   } catch (error) { next(error); }
 });
 
 app.post('/api/auth/register', async (req, res, next) => {
   try {
     const { username, password, fullName, phone, address = '' } = req.body;
-    const email = `${String(username).trim().toLowerCase()}@brmotor.local`;
-    const exists = await query('SELECT id FROM users WHERE email=?', [email]);
-    if (exists.length) return res.status(409).json({ message: 'Username sudah digunakan.' });
+    const cleanUsername = String(username).trim().toLowerCase();
+    const cleanEmail = `${cleanUsername}@brmotor.local`;
+
+    // Check uniqueness across staff and customer usernames
+    const existsStaff = await query('SELECT id FROM staff WHERE LOWER(username) = ?', [cleanUsername]);
+    const existsCust = await query('SELECT id FROM customers WHERE LOWER(username) = ? OR phone = ?', [cleanUsername, phone]);
+    if (existsStaff.length > 0 || existsCust.length > 0) {
+      return res.status(409).json({ message: 'Username atau nomor telepon sudah terdaftar.' });
+    }
+
     const hash = await bcrypt.hash(String(password), 12);
-    const result = await query<ResultSetHeader>('INSERT INTO users (role_id,name,email,password,phone,created_at,updated_at) VALUES (5,?,?,?,?,NOW(),NOW())', [fullName, email, hash, phone]);
-    await query<ResultSetHeader>('INSERT INTO customers (user_id,name,phone,address,created_at,updated_at) VALUES (?,?,?,?,NOW(),NOW())', [result.insertId, fullName, phone, address]);
-    await log('Pelanggan terdaftar', `Akun ${fullName} dibuat.`, 'customer', 'user', result.insertId);
+    const result = await query<ResultSetHeader>(
+      'INSERT INTO customers (name, phone, email, username, password, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      [fullName, phone, cleanEmail, cleanUsername, hash, address]
+    );
+
+    await log('Pelanggan Baru Terdaftar', `Akun pelanggan ${fullName} berhasil dibuat.`, 'customer', 'user', result.insertId);
     res.status(201).json({ id: id(result.insertId), name: fullName, role: 'user' });
   } catch (error) { next(error); }
 });
 
 async function syncGoogleUser(email: string, name: string, phone = '081234567890') {
   const cleanEmail = email.trim().toLowerCase();
-  const users = await query(`SELECT u.*, r.name AS role FROM users u JOIN roles r ON r.id=u.role_id
-    WHERE LOWER(u.email)=? OR LOWER(SUBSTRING_INDEX(u.email, '@', 1))=? LIMIT 1`, [cleanEmail, cleanEmail]);
+  const cleanUsername = cleanEmail.split('@')[0];
 
-  if (users.length > 0) {
-    const user: any = users[0];
-    await log('Login Akun Google', `User ${user.name} (${cleanEmail}) berhasil masuk.`, 'auth', roleFromDb(user.role), user.id);
-    return { id: id(user.id), name: user.name, role: roleFromDb(user.role), email: user.email };
+  // 1. Check in staff table first
+  const staff = await query(
+    'SELECT * FROM staff WHERE LOWER(email) = ? OR LOWER(username) = ? LIMIT 1',
+    [cleanEmail, cleanUsername]
+  );
+  if (staff.length > 0) {
+    const s: any = staff[0];
+    await log('Login Akun Google Staf', `Staf ${s.name} (${cleanEmail}) masuk via Google.`, 'auth', s.role, s.id);
+    return { id: id(s.id), name: s.name, role: s.role, email: s.email };
   }
 
-  // Create new user in users table (default role 5: customer)
+  // 2. Check in customers table
+  const cust = await query(
+    'SELECT * FROM customers WHERE LOWER(email) = ? OR LOWER(username) = ? LIMIT 1',
+    [cleanEmail, cleanUsername]
+  );
+  if (cust.length > 0) {
+    const c: any = cust[0];
+    await log('Login Akun Google Pelanggan', `Pelanggan ${c.name} (${cleanEmail}) masuk via Google.`, 'auth', 'user', c.id);
+    return { id: id(c.id), name: c.name, role: 'user', email: c.email };
+  }
+
+  // 3. Create new customer entry directly
   const randomPass = Math.random().toString(36).slice(-8) + Date.now();
   const hash = await bcrypt.hash(randomPass, 10);
-  const displayName = name.trim() || cleanEmail.split('@')[0];
+  const displayName = name.trim() || cleanUsername;
+
   const result = await query<ResultSetHeader>(
-    'INSERT INTO users (role_id, name, email, password, phone, created_at, updated_at) VALUES (5, ?, ?, ?, ?, NOW(), NOW())',
-    [displayName, cleanEmail, hash, phone]
+    'INSERT INTO customers (name, phone, email, username, password, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, \'\', NOW(), NOW())',
+    [displayName, phone, cleanEmail, cleanUsername, hash]
   );
-  const userId = result.insertId;
+  const customerId = result.insertId;
 
-  // Create customer entry
-  await query<ResultSetHeader>(
-    'INSERT INTO customers (user_id, name, phone, address, created_at, updated_at) VALUES (?, ?, ?, \'\', NOW(), NOW())',
-    [userId, displayName, phone]
-  );
-
-  await log('Pelanggan Google Terdaftar', `Akun baru ${displayName} (${cleanEmail}) terdaftar via Google.`, 'customer', 'user', userId);
-  return { id: id(userId), name: displayName, role: 'user', email: cleanEmail };
+  await log('Pelanggan Google Terdaftar', `Akun baru ${displayName} (${cleanEmail}) terdaftar via Google.`, 'customer', 'user', customerId);
+  return { id: id(customerId), name: displayName, role: 'user', email: cleanEmail };
 }
 
 app.post('/api/auth/google', async (req, res, next) => {
@@ -220,15 +279,39 @@ app.post('/api/auth/google-demo', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post('/api/customers', async (req, res, next) => { try { const r = await query<ResultSetHeader>('INSERT INTO customers (user_id,name,phone,address,created_at,updated_at) VALUES (?,?,?,?,NOW(),NOW())', [req.body.userId || null, req.body.name, req.body.phone, req.body.address || '']); await log('Pelanggan dibuat', req.body.name, 'customer'); res.json({ id: id(r.insertId) }); } catch (e) { next(e); } });
+app.post('/api/customers', async (req, res, next) => {
+  try {
+    const { name, phone, address = '', email = '', username = null, password = null } = req.body;
+    let hash = null;
+    if (password) {
+      hash = await bcrypt.hash(String(password), 10);
+    }
+    const r = await query<ResultSetHeader>(
+      'INSERT INTO customers (name, phone, address, email, username, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      [name, phone, address, email, username, hash]
+    );
+    await log('Pelanggan dibuat', req.body.name, 'customer');
+    res.json({ id: id(r.insertId) });
+  } catch (e) { next(e); }
+});
+
 app.put('/api/customers/:id', async (req, res, next) => {
   try {
-    await query('UPDATE customers SET name=?, phone=?, address=?, updated_at=NOW() WHERE id=?', [req.body.name, req.body.phone, req.body.address || '', req.params.id]);
-    await query('UPDATE users u JOIN customers c ON c.user_id=u.id SET u.name=?, u.phone=?, u.updated_at=NOW() WHERE c.id=?', [req.body.name, req.body.phone, req.params.id]);
+    const { name, phone, address = '', email = '' } = req.body;
+    await query(
+      'UPDATE customers SET name=?, phone=?, address=?, email=?, updated_at=NOW() WHERE id=?',
+      [name, phone, address, email, req.params.id]
+    );
     res.sendStatus(204);
   } catch (e) { next(e); }
 });
-app.delete('/api/customers/:id', async (req, res, next) => { try { await query('DELETE FROM customers WHERE id=?', [req.params.id]); res.sendStatus(204); } catch (e) { next(e); } });
+
+app.delete('/api/customers/:id', async (req, res, next) => {
+  try {
+    await query('DELETE FROM customers WHERE id=?', [req.params.id]);
+    res.sendStatus(204);
+  } catch (e) { next(e); }
+});
 
 app.post('/api/vehicles', async (req, res, next) => { try { const v=req.body; const r=await query<ResultSetHeader>('INSERT INTO vehicles (customer_id,plate_number,brand,model,year,image_url,created_at,updated_at) VALUES (?,?,?,?,?,?,NOW(),NOW())',[v.customerId,v.licensePlate,v.brand,v.model,v.year,v.imageUrl||null]); res.json({id:id(r.insertId)}); } catch(e){next(e);} });
 app.put('/api/vehicles/:id', async (req, res, next) => { try { const v=req.body; await query('UPDATE vehicles SET plate_number=?,brand=?,model=?,year=?,image_url=?,updated_at=NOW() WHERE id=?',[v.licensePlate,v.brand,v.model,v.year,v.imageUrl||null,req.params.id]);res.sendStatus(204);}catch(e){next(e);} });

@@ -59,9 +59,9 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
   const [notes, setNotes] = useState('');
   const [bookingToDelete, setBookingToDelete] = useState<{ id: string; queueNumber: string } | null>(null);
 
-  // Find user's customer records (reliable via userId or fallback by name)
+  // Find user's customer records (reliable via customer id or fallback by name)
   const userCustomers = customers.filter(c => 
-    (currentUserId && String(c.userId) === String(currentUserId)) ||
+    (currentUserId && String(c.id) === String(currentUserId)) ||
     (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
   );
   const userCustomer = userCustomers[0];

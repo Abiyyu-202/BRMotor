@@ -198,16 +198,16 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const storedUserId = localStorage.getItem('br_motor_userid');
     const storedUsername = localStorage.getItem('br_motor_username');
     if (storedUserId) {
-      const match = data.customers.find(c => String(c.userId) === String(storedUserId));
+      const match = data.customers.find(c => String(c.id) === String(storedUserId));
       if (match && match.name && match.name !== storedUsername) {
         setCurrentUserNameState(match.name);
         localStorage.setItem('br_motor_username', match.name);
       }
     } else if (storedUsername) {
-      const match = data.customers.find(c => c.name.toLowerCase() === storedUsername.toLowerCase() && c.userId);
-      if (match?.userId) {
-        setCurrentUserIdState(match.userId);
-        localStorage.setItem('br_motor_userid', match.userId);
+      const match = data.customers.find(c => c.name.toLowerCase() === storedUsername.toLowerCase());
+      if (match?.id) {
+        setCurrentUserIdState(match.id);
+        localStorage.setItem('br_motor_userid', match.id);
       }
     }
   }, []);
@@ -218,11 +218,8 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Show Toast Alert Helper
   const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
     setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      dismissToast(id);
-    }, 4000);
   };
 
   const dismissToast = (id: string) => {
@@ -274,8 +271,7 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateCustomer = (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => {
-    const targetCust = customers.find(c => c.id === id);
-    if (targetCust?.userId && (String(targetCust.userId) === String(currentUserId) || String(targetCust.userId) === localStorage.getItem('br_motor_userid'))) {
+    if (String(id) === String(currentUserId) || String(id) === localStorage.getItem('br_motor_userid')) {
       setCurrentUserNameState(updated.name);
       localStorage.setItem('br_motor_username', updated.name);
     }

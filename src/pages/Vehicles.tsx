@@ -73,9 +73,9 @@ export const Vehicles: React.FC = () => {
     }
   };
 
-  // Find all user's customer records (reliable via userId or fallback by name)
+  // Find all user's customer records (reliable via customer id or fallback by name)
   const userCustomers = customers.filter(c => 
-    (currentUserId && String(c.userId) === String(currentUserId)) ||
+    (currentUserId && String(c.id) === String(currentUserId)) ||
     (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
   );
   const userCustomer = userCustomers[0];
@@ -158,15 +158,14 @@ export const Vehicles: React.FC = () => {
       if (userCustomer) {
         finalCustomerId = userCustomer.id;
       } else {
-        // Fallback: create a new customer record linked to current user
+        // Fallback: create a new customer record
         try {
-          const newCust = await addCustomer({
-            userId: currentUserId || undefined,
+          const newCustId = await addCustomer({
             name: currentUserName,
             phone: '+62 812-3456-7890',
             address: 'Pelanggan Terdaftar Mandiri'
           });
-          finalCustomerId = newCust.id;
+          finalCustomerId = newCustId;
         } catch (err) {
           return; // addCustomer already toasts error
         }

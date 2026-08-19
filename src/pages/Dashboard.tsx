@@ -57,7 +57,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
   // If role is a regular client, show a tailored simplified client-portal layout
   if (currentRole === 'user') {
     const userCustomers = customers.filter(c => 
-      (currentUserId && String(c.userId) === String(currentUserId)) ||
+      (currentUserId && String(c.id) === String(currentUserId)) ||
       (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
     );
     const activeCustomer = userCustomers[0];
@@ -378,8 +378,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                     addCustomer({
                       name: currentUserName,
                       phone: '08123456789',
-                      address: inputAddress.trim(),
-                      userId: currentUserId || undefined
+                      address: inputAddress.trim()
                     });
                   }
                   setIsAddressModalOpen(false);
