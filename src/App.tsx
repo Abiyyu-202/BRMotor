@@ -21,6 +21,7 @@ import { Payments } from './pages/Payments';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { CustomerProfileModal } from './components/CustomerProfileModal';
+import { NotificationHistoryModal } from './components/NotificationHistoryModal';
 
 // Icons
 import {
@@ -56,6 +57,8 @@ function AppContent() {
     language,
     setLanguage,
     t,
+    notificationHistory,
+    markNotificationsAsRead,
     updateBookingStatus
   } = useWorkshop();
 
@@ -65,6 +68,7 @@ function AppContent() {
   // Mobile sidebar visibility
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
 
   // Prefill slot for direct Checked-In from Bookings -> Work Orders Form
   const [prefilledBooking, setPrefilledBooking] = useState<Booking | null>(null);
@@ -340,6 +344,24 @@ function AppContent() {
               </button>
             )}
 
+            {/* Notification History Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsNotifModalOpen(true);
+                markNotificationsAsRead();
+              }}
+              title={language === 'id' ? 'Histori Notifikasi Sistem' : 'System Notification History'}
+              className="relative p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 hover:text-slate-900 transition-all cursor-pointer shadow-2xs active:scale-95"
+            >
+              <Bell className="w-4 h-4 text-slate-600" />
+              {notificationHistory.filter((n) => !n.read).length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white font-black text-[9px] rounded-full flex items-center justify-center border-2 border-white">
+                  {notificationHistory.filter((n) => !n.read).length}
+                </span>
+              )}
+            </button>
+
             {/* Clock Widget */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-mono text-[11px]">
               <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
@@ -351,7 +373,7 @@ function AppContent() {
         </header>
 
         {/* Dynamic Inner Page viewport */}
-        <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto pb-16">
+        <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto pb-16 no-scrollbar">
           {renderActivePage()}
         </main>
       </div>
@@ -361,6 +383,12 @@ function AppContent() {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         customer={activeCustomer}
+      />
+
+      {/* Notification History Modal Portal */}
+      <NotificationHistoryModal
+        isOpen={isNotifModalOpen}
+        onClose={() => setIsNotifModalOpen(false)}
       />
 
       {/* Global Toast portal rendering */}

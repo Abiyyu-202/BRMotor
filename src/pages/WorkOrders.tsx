@@ -17,7 +17,10 @@ import {
   CheckSquare,
   Trash2,
   Sparkles,
-  MessageCircle
+  MessageCircle,
+  Printer,
+  Search,
+  Users
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { QuickCheckInModal } from '../components/QuickCheckInModal';
@@ -48,6 +51,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
   } = useWorkshop();
 
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
+  const [selectedMechanicFilter, setSelectedMechanicFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [printWO, setPrintWO] = useState<WorkOrder | null>(null);
 
   // 1. Kanban Column definitions
   const columns: { status: WorkOrderStatus; label: string; color: string; desc: string }[] = [
@@ -374,6 +380,13 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
     }
   };
 
+  const handlePrintJobSheet = (wo: WorkOrder) => {
+    setPrintWO(wo);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
   const handleSendWhatsAppUpdate = (wo: WorkOrder) => {
     const customer = customers.find(c => String(c.id) === String(wo.customerId));
     const rawPhone = customer?.phone || '';
@@ -397,10 +410,26 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
     window.open(url, '_blank');
   };
 
+  // Filter work orders based on search and mechanic
+  const filteredWorkOrders = workOrders.filter((wo) => {
+    if (selectedMechanicFilter !== 'all' && String(wo.assignedMechanicId) !== String(selectedMechanicFilter)) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchId = wo.id.toLowerCase().includes(q);
+      const matchPlate = wo.licensePlate.toLowerCase().includes(q);
+      const matchCust = wo.customerName.toLowerCase().includes(q);
+      const matchModel = wo.vehicleModel.toLowerCase().includes(q);
+      if (!matchId && !matchPlate && !matchCust && !matchModel) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
       {/* Header Panel */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2 tracking-tight">
             <Wrench className="w-5 h-5 text-slate-800" />
@@ -437,10 +466,62 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
         </div>
       </div>
 
+      {/* Quick Search & Mechanic Filter Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-white border border-slate-200 rounded-2xl shadow-2xs no-print">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Cari Plat Motor, No. SPK, Pelanggan..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-slate-800 transition-colors"
+          />
+        </div>
+
+        {/* Mechanic filter pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => setSelectedMechanicFilter('all')}
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer shrink-0 border ${
+              selectedMechanicFilter === 'all'
+                ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            Semua ({workOrders.length})
+          </button>
+          {mechanics.map((m) => {
+            const count = workOrders.filter((wo) => String(wo.assignedMechanicId) === String(m.id)).length;
+            const isMe = currentRole === 'mechanic' && m.name.toLowerCase().includes('mekanik');
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setSelectedMechanicFilter(m.id)}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer shrink-0 border flex items-center gap-1.5 ${
+                  selectedMechanicFilter === m.id
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <span>{m.name.split(' ')[0]}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                  selectedMechanicFilter === m.id ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Visual Kanban Board Pipeline */}
-      <div className="flex lg:grid lg:grid-cols-5 gap-3.5 items-start select-none overflow-x-auto lg:overflow-x-visible pb-4">
+      <div className="flex lg:grid lg:grid-cols-5 gap-3.5 items-start select-none overflow-x-auto lg:overflow-x-visible pb-4 no-print">
         {columns.map((col) => {
-          const colWOrders = workOrders.filter((wo) => wo.status === col.status);
+          const colWOrders = filteredWorkOrders.filter((wo) => wo.status === col.status);
 
           return (
             <div key={col.status} className="flex flex-col rounded-2xl bg-white border border-slate-200 p-3.5 h-[620px] w-full min-w-[250px] lg:min-w-0 shrink-0 lg:shrink shadow-sm">
@@ -511,9 +592,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
                           <button
                             type="button"
                             onClick={() => promptNextStatus(wo.id, wo.status)}
-                            className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm"
+                            className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm active:scale-98"
                           >
-                            <span>Lanjut Tahap</span>
+                            <span>
+                              {wo.status === 'waiting'
+                                ? 'Mulai Dikerjakan'
+                                : wo.status === 'waiting_parts'
+                                ? 'Lanjut Pengerjaan'
+                                : wo.status === 'in_progress'
+                                ? 'Uji Kelaikan (QC)'
+                                : 'Selesai & Siap Ambil'}
+                            </span>
                             <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                           </button>
                         ) : (
@@ -532,9 +621,19 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
                           <button
                             type="button"
                             onClick={() => handleOpenEditModal(wo)}
-                            className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded-xl font-bold cursor-pointer transition-colors text-center"
+                            className="flex-1 py-2 px-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded-xl font-bold cursor-pointer transition-colors text-center"
                           >
                             Detail
+                          </button>
+
+                          {/* Print Physical Handlebar SPK Slip */}
+                          <button
+                            type="button"
+                            onClick={() => handlePrintJobSheet(wo)}
+                            className="p-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-slate-800 cursor-pointer transition-colors shrink-0 flex items-center justify-center"
+                            title="Cetak Lembar SPK Stang Motor"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Let mechanic request a parts hold if they are waiting for stock */}
@@ -1080,6 +1179,146 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
 
       {/* Quick Check-In Walk-in Modal */}
       <QuickCheckInModal isOpen={isQuickCheckInOpen} onClose={() => setIsQuickCheckInOpen(false)} />
+
+      {/* --- PRINT ONLY PHYSICAL WORK ORDER / JOB SHEET (Gantungan Stang Motor) --- */}
+      {printWO && (
+        <div className="print-only hidden p-6 bg-white text-black font-mono text-xs max-w-2xl mx-auto space-y-4 border-2 border-black">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b-2 border-black pb-3">
+            <div>
+              <h1 className="font-black text-lg uppercase tracking-tight">{shopInfo.name}</h1>
+              <p className="text-[10px] text-gray-700">{shopInfo.address}</p>
+              <p className="text-[10px] text-gray-700">WA/Telp: {shopInfo.phone}</p>
+            </div>
+            <div className="text-right">
+              <span className="inline-block px-2.5 py-1 bg-black text-white font-bold text-xs uppercase tracking-wider rounded">
+                LEMBAR KERJA MEKANIK
+              </span>
+              <p className="text-xs font-bold mt-1">SPK: {printWO.id}</p>
+              <p className="text-[10px]">Tgl: {new Date(printWO.createdAt).toLocaleDateString('id-ID')}</p>
+            </div>
+          </div>
+
+          {/* Big License Plate & Motorcycle Banner */}
+          <div className="p-3 bg-gray-100 border-2 border-black rounded-lg flex items-center justify-between">
+            <div>
+              <p className="text-[10px] uppercase font-bold text-gray-600">Nomor Polisi (Plat):</p>
+              <h2 className="text-2xl font-black tracking-wider uppercase">{printWO.licensePlate}</h2>
+              <p className="text-xs font-bold text-gray-800">{printWO.vehicleModel}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] uppercase font-bold text-gray-600">Target Selesai:</p>
+              <p className="text-lg font-black text-black font-mono">
+                {printWO.estimatedCompletionTime || '14:30'} WIB
+              </p>
+              <p className="text-xs font-semibold">Mekanik: {printWO.assignedMechanicName}</p>
+            </div>
+          </div>
+
+          {/* Customer & Complaint Info */}
+          <div className="grid grid-cols-2 gap-4 text-xs border border-black p-3 rounded">
+            <div>
+              <p className="font-bold text-[10px] uppercase text-gray-600">Nama Pelanggan:</p>
+              <p className="font-bold">{printWO.customerName}</p>
+            </div>
+            <div>
+              <p className="font-bold text-[10px] uppercase text-gray-600">Keluhan Pelanggan:</p>
+              <p className="font-bold">{printWO.complaint || 'Servis Berkala'}</p>
+            </div>
+            {printWO.diagnosis && (
+              <div className="col-span-2 pt-1 border-t border-dashed border-gray-400">
+                <p className="font-bold text-[10px] uppercase text-gray-600">Diagnosa Mekanik Awal:</p>
+                <p>{printWO.diagnosis}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Checklist Services & Parts */}
+          <div className="space-y-3">
+            <div>
+              <h3 className="font-bold text-xs uppercase border-b border-black pb-1 mb-2">
+                Checklist Jasa & Pengerjaan Servis:
+              </h3>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-300 text-left text-[10px] uppercase text-gray-600">
+                    <th className="py-1 w-8">Check</th>
+                    <th className="py-1">Nama Jasa / Tindakan</th>
+                    <th className="py-1 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {printWO.services.map((s, idx) => (
+                    <tr key={s.serviceId || idx} className="border-b border-gray-200">
+                      <td className="py-1 font-bold">[  ]</td>
+                      <td className="py-1 font-semibold">{s.name}</td>
+                      <td className="py-1 text-right text-[10px]">Belum / Selesai</td>
+                    </tr>
+                  ))}
+                  {printWO.services.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="py-1 text-gray-500 italic">Pemeriksaan umum</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {printWO.sparePartsUsed.length > 0 && (
+              <div>
+                <h3 className="font-bold text-xs uppercase border-b border-black pb-1 mb-2">
+                  Checklist Suku Cadang & Oli yang Diganti:
+                </h3>
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-300 text-left text-[10px] uppercase text-gray-600">
+                      <th className="py-1 w-8">Check</th>
+                      <th className="py-1">Nama Part / Oli</th>
+                      <th className="py-1 text-center w-16">Jumlah</th>
+                      <th className="py-1 text-right">Fisik Bekas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printWO.sparePartsUsed.map((p, idx) => (
+                      <tr key={p.partId || idx} className="border-b border-gray-200">
+                        <td className="py-1 font-bold">[  ]</td>
+                        <td className="py-1 font-semibold">{p.name}</td>
+                        <td className="py-1 text-center font-bold">x{p.quantity}</td>
+                        <td className="py-1 text-right text-[10px]">Diserahkan / Dibuang</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {printWO.notes && (
+            <div className="p-2 border border-dashed border-gray-400 rounded text-[10px]">
+              <span className="font-bold uppercase">Catatan Khusus:</span> {printWO.notes}
+            </div>
+          )}
+
+          {/* Signature Boxes */}
+          <div className="grid grid-cols-3 gap-4 pt-4 border-t-2 border-black text-center text-xs">
+            <div>
+              <p className="text-[10px] uppercase font-bold text-gray-600">Penerima / Front Desk</p>
+              <div className="h-12" />
+              <p className="border-t border-black pt-1 font-bold">( ............................. )</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase font-bold text-gray-600">Mekanik Pelaksana</p>
+              <div className="h-12" />
+              <p className="border-t border-black pt-1 font-bold">{printWO.assignedMechanicName}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase font-bold text-gray-600">Quality Control (QC)</p>
+              <div className="h-12" />
+              <p className="border-t border-black pt-1 font-bold">( ............................. )</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

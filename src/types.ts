@@ -166,3 +166,11 @@ export interface AuditLog {
   category: AuditLogCategory;
 }
 
+export interface NotificationHistoryItem {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  timestamp: string;
+  read: boolean;
+}
+

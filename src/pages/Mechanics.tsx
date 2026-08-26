@@ -182,14 +182,14 @@ export const Mechanics: React.FC = () => {
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Tersedia (Ready)</p>
             <h4 className="text-xl font-bold text-slate-900 mt-1 leading-none">{availableStaff} siap kerja</h4>
           </div>
-          <span className="w-3 h-3 bg-emerald-500 rounded-full animate-ping shrink-0" />
+          <span className="w-3 h-3 bg-emerald-500 rounded-full shrink-0 ring-4 ring-emerald-100" />
         </div>
         <div className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm">
           <div>
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Omzet Jasa Servis</p>
             <h4 className="text-xl font-bold text-slate-900 mt-1 leading-none">{formatRupiah(totalAllLabor)}</h4>
           </div>
-          <DollarSign className="w-8 h-8 text-emerald-500/30 shrink-0" />
+          <span className="font-extrabold text-2xl text-emerald-600/40 shrink-0 font-mono tracking-tighter select-none">Rp</span>
         </div>
         <div className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm">
           <div>

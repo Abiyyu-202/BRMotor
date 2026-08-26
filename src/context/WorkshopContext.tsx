@@ -19,7 +19,8 @@ import {
   WorkOrderSparePart,
   WorkOrderService,
   AuditLog,
-  AuditLogCategory
+  AuditLogCategory,
+  NotificationHistoryItem
 } from '../types';
 import { Language, translations } from '../utils/translations';
 
@@ -46,6 +47,9 @@ interface WorkshopContextType {
   serviceItems: ServiceItem[];
   salesHistory: { id: string; date: string; amount: number; count: number }[];
   toasts: ToastMessage[];
+  notificationHistory: NotificationHistoryItem[];
+  clearNotificationHistory: () => void;
+  markNotificationsAsRead: () => void;
   auditLogs: AuditLog[];
   addAuditLog: (action: string, details: string, category: AuditLogCategory) => void;
   formatRupiah: (amount: number) => string;
@@ -216,10 +220,57 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     refreshDatabase().catch((error) => showToast(error.message, 'error'));
   }, [refreshDatabase]);
 
-  // Show Toast Alert Helper
+  // Notification History
+  const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('br_motor_notif_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const clearNotificationHistory = () => {
+    setNotificationHistory([]);
+    try {
+      localStorage.removeItem('br_motor_notif_history');
+    } catch {}
+  };
+
+  const markNotificationsAsRead = () => {
+    setNotificationHistory((prev) => {
+      const updated = prev.map((n) => ({ ...n, read: true }));
+      try {
+        localStorage.setItem('br_motor_notif_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Show Toast Alert Helper with auto-dismiss after 3.5s & history recording
   const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info') => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev.slice(-2), { id, message, type }]);
+
+    const historyItem: NotificationHistoryItem = {
+      id,
+      message,
+      type,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+
+    setNotificationHistory((prev) => {
+      const updated = [historyItem, ...prev].slice(0, 50);
+      try {
+        localStorage.setItem('br_motor_notif_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
   };
 
   const dismissToast = (id: string) => {
@@ -832,6 +883,9 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         serviceItems,
         salesHistory,
         toasts,
+        notificationHistory,
+        clearNotificationHistory,
+        markNotificationsAsRead,
         auditLogs,
         addAuditLog,
         formatRupiah,

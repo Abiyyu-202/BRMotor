@@ -52,6 +52,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
     updateCustomer,
     addCustomer,
     showToast,
+    formatRupiah,
     language,
     t
   } = useWorkshop();
@@ -247,38 +248,123 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {clientWorkOrders.map((wo) => {
                 const step = getFriendlyStatus(wo.status);
+                const currentStageIdx =
+                  wo.status === 'waiting' || wo.status === 'waiting_parts'
+                    ? 0
+                    : wo.status === 'in_progress'
+                    ? 1
+                    : wo.status === 'quality_control'
+                    ? 2
+                    : 3;
+
+                const stages = [
+                  { num: 1, title: 'Antrean', desc: 'Diagnosa Masuk' },
+                  { num: 2, title: 'Servis', desc: 'Pengerjaan Pit' },
+                  { num: 3, title: 'Uji QC', desc: 'Tes Kelaikan' },
+                  { num: 4, title: 'Selesai', desc: 'Siap Diambil' }
+                ];
+
                 return (
-                  <div key={wo.id} className="p-6 bg-white border border-slate-200 rounded-2xl flex flex-col justify-between space-y-4 shadow-sm hover:shadow-md transition-all">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg">
-                          SPK: {wo.id}
-                        </span>
-                        <span className="text-xs font-mono text-slate-500">
-                          {t.vehicles.plateNumber}: <span className="text-slate-900 font-bold">{wo.licensePlate}</span>
-                        </span>
+                  <div key={wo.id} className="p-6 bg-white border border-slate-200 rounded-3xl flex flex-col justify-between space-y-5 shadow-sm hover:shadow-md transition-all">
+                    <div className="space-y-4">
+                      {/* Card Header: Plate & Status */}
+                      <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider bg-slate-900 text-white px-2.5 py-1 rounded-lg shadow-2xs">
+                            SPK: {wo.id}
+                          </span>
+                          <span className="text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-lg uppercase">
+                            {wo.licensePlate}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Target: <strong className="text-slate-900">{wo.estimatedCompletionTime || '14:30'} WIB</strong></span>
+                        </div>
                       </div>
                       
-                      <h3 className="font-bold text-base text-slate-900 uppercase tracking-tight">{wo.vehicleModel}</h3>
-                      <p className="text-xs text-slate-600 italic">
-                        &quot;{wo.complaint || (language === 'id' ? 'Servis berkala harian' : 'Standard maintenance tuning')}&quot;
-                      </p>
+                      <div>
+                        <h3 className="font-extrabold text-lg text-slate-900 uppercase tracking-tight">{wo.vehicleModel}</h3>
+                        <p className="text-xs text-slate-600 italic mt-0.5">
+                          &quot;{wo.complaint || (language === 'id' ? 'Servis berkala harian' : 'Standard maintenance tuning')}&quot;
+                        </p>
+                      </div>
 
-                      {/* Display Step Update */}
-                      <div className={`mt-4 p-4 rounded-xl ${step.color} space-y-1`}>
+                      {/* --- VISUAL 4-STEP PROGRESS STEPPER --- */}
+                      <div className="pt-2 pb-1">
+                        <div className="relative flex items-center justify-between">
+                          {/* Stepper connecting background bar */}
+                          <div className="absolute left-4 right-4 top-4 -translate-y-1/2 h-1 bg-slate-100 -z-0" />
+                          <div
+                            className="absolute left-4 top-4 -translate-y-1/2 h-1 bg-emerald-500 transition-all duration-500 -z-0"
+                            style={{ width: `${(currentStageIdx / 3) * 88}%` }}
+                          />
+
+                          {/* Stage Nodes */}
+                          {stages.map((st, idx) => {
+                            const isDone = idx < currentStageIdx;
+                            const isCurrent = idx === currentStageIdx;
+
+                            return (
+                              <div key={st.num} className="flex flex-col items-center text-center relative z-10">
+                                <div
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                                    isDone
+                                      ? 'bg-emerald-500 text-white shadow-sm'
+                                      : isCurrent
+                                      ? 'bg-slate-900 text-white ring-4 ring-slate-100 shadow-md scale-110'
+                                      : 'bg-white border-2 border-slate-200 text-slate-400'
+                                  }`}
+                                >
+                                  {isDone ? '✓' : st.num}
+                                </div>
+                                <span className={`text-[11px] font-bold mt-1.5 ${isCurrent ? 'text-slate-900' : isDone ? 'text-emerald-700' : 'text-slate-400'}`}>
+                                  {st.title}
+                                </span>
+                                <span className="text-[9px] text-slate-400 hidden sm:block font-medium">
+                                  {st.desc}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Active Status Badge Note */}
+                      <div className={`p-3.5 rounded-2xl ${step.color} space-y-0.5 border border-slate-200/60`}>
                         <p className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" />
+                          <span className="w-2 h-2 rounded-full bg-current animate-ping" />
                           {step.label}
                         </p>
                         <p className="text-[11px] font-medium leading-relaxed">
                           {step.desc}
                         </p>
                       </div>
+
+                      {/* Live Cost Preview Breakdown */}
+                      <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1.5 text-xs">
+                        <div className="flex justify-between items-center text-slate-600">
+                          <span>Jasa Servis ({wo.services.length} item):</span>
+                          <span className="font-semibold text-slate-800">{formatRupiah(wo.costs.serviceCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-600">
+                          <span>Suku Cadang & Oli ({wo.sparePartsUsed.length} item):</span>
+                          <span className="font-semibold text-slate-800">{formatRupiah(wo.costs.sparePartCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center font-extrabold text-slate-900 pt-1.5 border-t border-slate-200">
+                          <span>Estimasi Total Sementara:</span>
+                          <span className="text-sm font-mono text-slate-900">{formatRupiah(wo.costs.total)}</span>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="border-t border-slate-100 pt-3 flex justify-between items-center text-xs text-slate-500 font-medium">
-                      <span>
-                        {t.dashboard.assignedMechanic}: <span className="text-slate-900 font-bold">{wo.assignedMechanicName}</span>
+                      <span className="flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                        Mekanik PJ: <strong className="text-slate-900">{wo.assignedMechanicName}</strong>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {new Date(wo.createdAt).toLocaleDateString('id-ID')}
                       </span>
                     </div>
                   </div>
@@ -538,38 +624,38 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             {t.dashboard.subtitle}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
             onClick={() => setIsQuickCheckInOpen(true)}
-            className="px-4 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer border border-amber-300 animate-pulse hover:animate-none"
+            className="px-4 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer border border-amber-300 active:scale-95"
           >
             <Sparkles className="w-4 h-4" />
             + Catat Motor Masuk
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('Bookings')}
+            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+          >
+            <Calendar className="w-4 h-4 text-slate-300" />
+            {t.dashboard.newBooking}
+          </button>
+          <button
+            type="button"
             onClick={() => setIsReminderOpen(true)}
-            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 cursor-pointer transition-all shadow-2xs active:scale-95"
           >
             <Bell className="w-4 h-4 text-amber-500" />
-            Pengingat Servis WA
+            Pengingat WA
           </button>
           <button
             type="button"
             onClick={() => setIsAuditLogOpen(true)}
-            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer transition-all shadow-2xs active:scale-95"
           >
             <History className="w-4 h-4 text-slate-500" />
-            {language === 'id' ? 'Catatan Audit' : 'Audit Log'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('Bookings')}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
-          >
-            <Calendar className="w-4 h-4" />
-            {t.dashboard.newBooking}
+            {language === 'id' ? 'Log Audit' : 'Audit Log'}
           </button>
         </div>
       </div>

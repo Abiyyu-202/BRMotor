@@ -24,7 +24,7 @@ export const translations = {
       Customers: "Data Pelanggan",
       Vehicles: "Data Motor",
       Bookings: "Jadwal Booking",
-      "Work Orders": "Daftar Servis (SPK)",
+      "Work Orders": "Daftar Servis",
       Mechanics: "Data Mekanik",
       Inventory: "Stok Sparepart & Oli",
       Payments: "Kasir & Nota",
@@ -345,7 +345,7 @@ export const translations = {
 
     // Work Orders
     workOrders: {
-      title: "Work Orders (SPK)",
+      title: "Work Orders",
       subtitle: "Manage active service tickets, parts usage, diagnostic labor, and mechanic assignments.",
       createWO: "Create New Work Order",
       ticketId: "WO Ticket ID",
