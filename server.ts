@@ -297,11 +297,26 @@ app.post('/api/customers', async (req, res, next) => {
 
 app.put('/api/customers/:id', async (req, res, next) => {
   try {
-    const { name, phone, address = '', email = '' } = req.body;
-    await query(
-      'UPDATE customers SET name=?, phone=?, address=?, email=?, updated_at=NOW() WHERE id=?',
-      [name, phone, address, email, req.params.id]
-    );
+    const { name, phone, address = '', email = '', username = undefined, password = undefined } = req.body;
+    
+    if (password && String(password).trim().length > 0) {
+      const hash = await bcrypt.hash(String(password).trim(), 12);
+      await query(
+        'UPDATE customers SET name=?, phone=?, address=?, email=?, username=COALESCE(?, username), password=?, updated_at=NOW() WHERE id=?',
+        [name, phone, address, email, username || null, hash, req.params.id]
+      );
+    } else if (username !== undefined) {
+      await query(
+        'UPDATE customers SET name=?, phone=?, address=?, email=?, username=?, updated_at=NOW() WHERE id=?',
+        [name, phone, address, email, username || null, req.params.id]
+      );
+    } else {
+      await query(
+        'UPDATE customers SET name=?, phone=?, address=?, email=?, updated_at=NOW() WHERE id=?',
+        [name, phone, address, email, req.params.id]
+      );
+    }
+    await log('Profil Pelanggan Diperbarui', `Data profil pelanggan ${name} diperbarui.`, 'customer');
     res.sendStatus(204);
   } catch (e) { next(e); }
 });

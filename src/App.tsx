@@ -20,6 +20,7 @@ import { Inventory } from './pages/Inventory';
 import { Payments } from './pages/Payments';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
+import { CustomerProfileModal } from './components/CustomerProfileModal';
 
 // Icons
 import {
@@ -37,17 +38,33 @@ import {
   X,
   Shield,
   HelpCircle,
-  Bell
+  Bell,
+  User as UserIcon
 } from 'lucide-react';
 
 function AppContent() {
-  const { currentRole, setCurrentRole, shopInfo, showToast, isAuthenticated, setIsAuthenticated, language, setLanguage, t, updateBookingStatus } = useWorkshop();
+  const {
+    currentRole,
+    setCurrentRole,
+    currentUserId,
+    currentUserName,
+    customers,
+    shopInfo,
+    showToast,
+    isAuthenticated,
+    setIsAuthenticated,
+    language,
+    setLanguage,
+    t,
+    updateBookingStatus
+  } = useWorkshop();
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState('Dashboard');
 
   // Mobile sidebar visibility
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Prefill slot for direct Checked-In from Bookings -> Work Orders Form
   const [prefilledBooking, setPrefilledBooking] = useState<Booking | null>(null);
@@ -151,47 +168,54 @@ function AppContent() {
     );
   }
 
+  // Active Customer profile for customer role
+  const activeCustomer = currentRole === 'user'
+    ? (customers.find(c => String(c.id) === String(currentUserId) || (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())) || null)
+    : null;
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans">
+    <div className="flex h-screen bg-slate-100/60 overflow-hidden font-sans select-none">
       
       {/* 1. SIDEBAR NAVIGATION - DESKTOP */}
-      <aside className="hidden lg:flex flex-col w-64 h-screen sticky top-0 bg-white border-r border-slate-200 shrink-0 no-print">
-        {/* Brand Header */}
-        <div className="h-16 px-5 border-b border-slate-200 flex items-center gap-3 shrink-0">
-          <img
-            src="/BR-Motor_Logo.png"
-            alt="BR Motor Logo"
-            className="w-10 h-10 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-sm shrink-0"
-          />
-          <div className="min-w-0">
-            <h2 className="font-extrabold tracking-tight text-slate-900 text-sm leading-tight truncate">{shopInfo.name}</h2>
-            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider mt-0.5">{t.console}</p>
+      <aside className="w-64 bg-white border-r border-slate-200 flex-col justify-between hidden lg:flex shrink-0 no-print">
+        <div className="p-5">
+          {/* Workshop Brand Header */}
+          <div className="flex items-center gap-3 pb-5 border-b border-slate-200">
+            <img
+              src="/BR-Motor_Logo.png"
+              alt="BR Motor Logo"
+              className="w-10 h-10 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-sm shrink-0"
+            />
+            <div className="min-w-0">
+              <h1 className="font-bold text-sm text-slate-900 tracking-tight truncate">{shopInfo.name}</h1>
+              <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">Konsol Bengkel</p>
+            </div>
           </div>
+
+          {/* Navigation Links */}
+          <nav className="mt-5 space-y-1">
+            {navItems.map((item) => {
+              const IconComponent = item.icon;
+              const isSelected = activeTab === item.name;
+              const label = t.nav[item.name as keyof typeof t.nav] || item.name;
+
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => setActiveTab(item.name)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide cursor-pointer transition-all ${
+                    isSelected
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <IconComponent className="w-4 h-4 shrink-0" />
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
-
-        {/* Links */}
-        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-          {navItems.map((item) => {
-            const IconComponent = item.icon;
-            const isSelected = activeTab === item.name;
-            const label = t.nav[item.name as keyof typeof t.nav] || item.name;
-
-            return (
-              <button
-                key={item.name}
-                onClick={() => setActiveTab(item.name)}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide cursor-pointer transition-all ${
-                  isSelected
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <IconComponent className="w-4 h-4 shrink-0" />
-                {label}
-              </button>
-            );
-          })}
-        </nav>
 
         {/* Sidebar Roster Access Indicator */}
         <div className="p-4 border-t border-slate-200 bg-slate-50/50 space-y-3">
@@ -298,6 +322,24 @@ function AppContent() {
 
           {/* Widgets */}
           <div className="flex items-center gap-3 text-xs font-semibold">
+            {/* User Profile Pill for Customer */}
+            {currentRole === 'user' && (
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(true)}
+                title={language === 'id' ? 'Klik untuk edit profil & no. WA' : 'Click to edit profile & info'}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-800 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
+              >
+                <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                  {currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <span className="truncate max-w-[130px] font-bold">{currentUserName}</span>
+                <span className="text-[9px] uppercase px-1.5 py-0.5 bg-white border border-slate-200 text-slate-600 rounded-md font-bold">
+                  {language === 'id' ? 'Edit Profil' : 'Profile'}
+                </span>
+              </button>
+            )}
+
             {/* Clock Widget */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-mono text-[11px]">
               <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
@@ -313,6 +355,13 @@ function AppContent() {
           {renderActivePage()}
         </main>
       </div>
+
+      {/* Customer Profile Modal Portal */}
+      <CustomerProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        customer={activeCustomer}
+      />
 
       {/* Global Toast portal rendering */}
       <Toasts />

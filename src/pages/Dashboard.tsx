@@ -26,11 +26,13 @@ import {
 import { AuditLog } from '../components/AuditLog';
 import { QuickCheckInModal } from '../components/QuickCheckInModal';
 import { ServiceReminderModal } from '../components/ServiceReminderModal';
+import { CustomerProfileModal } from '../components/CustomerProfileModal';
 
 export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveTab }) => {
   const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
   const [isReminderOpen, setIsReminderOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [inputAddress, setInputAddress] = useState('');
 
@@ -129,41 +131,96 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             </div>
             <button
               type="button"
-              onClick={() => {
-                setInputAddress(activeCustomer?.address === 'Akun pelanggan terdaftar' ? '' : activeCustomer?.address || '');
-                setIsAddressModalOpen(true);
-              }}
+              onClick={() => setIsProfileModalOpen(true)}
               className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer shrink-0"
             >
-              {language === 'id' ? 'Isi Alamat Sekarang' : 'Fill Address Now'}
+              {language === 'id' ? 'Lengkapi Profil & Alamat' : 'Complete Profile & Address'}
             </button>
           </div>
         )}
 
         {/* Customer Banner */}
-        <div className="p-8 bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block animate-ping" />
-              {language === 'id' ? 'Sesi Pelanggan Aktif' : 'Connected client session'}
+        <div className="p-8 bg-white border border-slate-200 rounded-3xl shadow-sm space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block animate-ping" />
+                {language === 'id' ? 'Sesi Pelanggan Aktif' : 'Connected client session'}
+              </div>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+                {language === 'id' ? `Selamat Datang, ${displayName}` : `Welcome Back, ${displayName}`}
+              </h1>
+              <p className="text-xs text-slate-600 max-w-xl">
+                {language === 'id'
+                  ? 'Pantau progres perbaikan sepeda motor Anda di bengkel, lihat daftar kendaraan terdaftar, atau buat reservasi servis secara instan.'
+                  : 'Track active service bay repair reports, view registered motorcycles, or schedule a maintenance check instantly.'}
+              </p>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
-              {language === 'id' ? `Selamat Datang, ${displayName}` : `Welcome Back, ${displayName}`}
-            </h1>
-            <p className="text-xs text-slate-600 max-w-xl">
-              {language === 'id'
-                ? 'Pantau progres perbaikan sepeda motor Anda di bengkel, lihat daftar kendaraan terdaftar, atau buat reservasi servis secara instan.'
-                : 'Track active service bay repair reports, view registered motorcycles, or schedule a maintenance check instantly.'}
-            </p>
+
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(true)}
+                className="px-5 py-3 bg-white hover:bg-slate-100 text-slate-900 border border-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shrink-0 cursor-pointer shadow-2xs flex items-center gap-2"
+              >
+                <Users className="w-4 h-4 text-slate-700" />
+                {language === 'id' ? 'Edit Profil' : 'Edit Profile'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('Bookings')}
+                className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shrink-0 cursor-pointer shadow-sm flex items-center gap-2"
+              >
+                <Calendar className="w-4 h-4 text-slate-300" />
+                {t.dashboard.newBooking}
+              </button>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('Bookings')}
-            className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shrink-0 cursor-pointer shadow-sm"
-          >
-            {t.dashboard.newBooking}
-          </button>
+          {/* Quick Profile Summary Pills */}
+          <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+              <div className="p-2 bg-white rounded-xl border border-slate-200 text-slate-700">
+                <Users className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Nama Akun</p>
+                <p className="font-bold text-slate-900 truncate">{displayName}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+              <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-700">
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase font-bold text-slate-400">WhatsApp / HP</p>
+                <p className="font-bold text-slate-900 truncate">{activeCustomer?.phone || 'Belum diisi'}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+              <div className="p-2 bg-amber-50 rounded-xl border border-amber-200 text-amber-700">
+                <MapPin className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Alamat Rumah</p>
+                <p className="font-bold text-slate-900 truncate">
+                  {activeCustomer?.address && activeCustomer.address !== 'Akun pelanggan terdaftar'
+                    ? activeCustomer.address
+                    : (
+                      <span
+                        onClick={() => setIsProfileModalOpen(true)}
+                        className="text-amber-600 underline cursor-pointer"
+                      >
+                        + Tambah Alamat
+                      </span>
+                    )}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ACTIVE WORK TICKETS / REPAIRS */}
@@ -418,6 +475,13 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             </div>
           </div>
         )}
+
+        {/* Dedicated Customer Profile Modal */}
+        <CustomerProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          customer={activeCustomer || null}
+        />
       </div>
     );
   }
