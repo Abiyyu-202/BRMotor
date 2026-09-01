@@ -19,6 +19,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { canTriggerDelete, canDeleteDirectly } from '../utils/permissions';
 
 export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }> = ({ onCheckInDirect }) => {
   const {
@@ -31,6 +32,7 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
     currentRole,
     currentUserId,
     currentUserName,
+    requestDelete,
     showToast
   } = useWorkshop();
 
@@ -388,14 +390,22 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
                       <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-lg ${statusBadge}`}>
                         {statusLabel}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setBookingToDelete({ id: b.id, queueNumber: b.queueNumber })}
-                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                        title="Hapus Booking"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canTriggerDelete(currentRole) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (canDeleteDirectly(currentRole)) {
+                              setBookingToDelete({ id: b.id, queueNumber: b.queueNumber });
+                            } else {
+                              requestDelete('booking', b.id, `Booking ${b.queueNumber} - ${b.customerName}`);
+                            }
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title={canDeleteDirectly(currentRole) ? 'Hapus Booking' : 'Minta Persetujuan Hapus'}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 

@@ -166,6 +166,27 @@ export interface AuditLog {
   category: AuditLogCategory;
 }
 
+export type DeletableEntityType =
+  | 'customer'
+  | 'vehicle'
+  | 'booking'
+  | 'work_order'
+  | 'sparepart'
+  | 'mechanic';
+
+export interface DeletionRequest {
+  id: string;
+  entityType: DeletableEntityType;
+  entityId: string;
+  entityLabel: string;
+  requestedByName: string;
+  requestedByRole: UserRole;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedByName?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
 export interface NotificationHistoryItem {
   id: string;
   message: string;

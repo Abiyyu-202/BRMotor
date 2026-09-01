@@ -17,9 +17,9 @@ const pool = mysql.createPool({
   dateStrings: true,
 });
 
-// Vehicle photos are currently stored as data URLs, so the request can be
-// larger than Express's default 100 KB JSON body limit.
-app.use(express.json({ limit: '2mb' }));
+// Vehicle photos are stored as data URLs, so allow large image uploads (50 MB)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const query = async <T = RowDataPacket[]>(sql: string, params: unknown[] = []): Promise<T> => {
   const [rows] = await pool.query(sql, params);
@@ -46,9 +46,9 @@ async function readWorkOrders() {
            i.subtotal_services, i.subtotal_spareparts, i.discount, i.grand_total,
            i.cash_tendered, i.change_amount, i.updated_at AS paid_at
     FROM work_orders w
-    JOIN vehicles v ON v.id = w.vehicle_id
-    JOIN customers c ON c.id = v.customer_id
-    JOIN mechanics m ON m.id = w.mechanic_id
+    LEFT JOIN vehicles v ON v.id = w.vehicle_id
+    LEFT JOIN customers c ON c.id = v.customer_id
+    LEFT JOIN mechanics m ON m.id = w.mechanic_id
     LEFT JOIN invoices i ON i.work_order_id = w.id
     ORDER BY w.created_at DESC, w.id DESC
   `);
@@ -76,10 +76,10 @@ async function readWorkOrders() {
     const discount = row.invoice_id ? Number(row.discount) : 0;
     return {
       id: id(row.id), bookingId: row.booking_id ? id(row.booking_id) : undefined,
-      customerId: id(row.customer_id), customerName: row.customer_name,
-      vehicleId: id(row.vehicle_id), licensePlate: row.plate_number, vehicleModel: `${row.brand} ${row.model}`,
-      complaint: row.complaint, diagnosis: row.diagnosis || '', assignedMechanicId: id(row.mechanic_id),
-      assignedMechanicName: row.mechanic_name, services, sparePartsUsed,
+      customerId: id(row.customer_id || 1), customerName: row.customer_name || 'Pelanggan Umum',
+      vehicleId: id(row.vehicle_id || 1), licensePlate: row.plate_number || 'N/A', vehicleModel: `${row.brand || 'Motor'} ${row.model || 'Umum'}`.trim(),
+      complaint: row.complaint || '', diagnosis: row.diagnosis || '', assignedMechanicId: id(row.mechanic_id || 1),
+      assignedMechanicName: row.mechanic_name || 'Mekanik BR Motor', services, sparePartsUsed,
       estimatedCompletionTime: row.estimated_completion_time ? String(row.estimated_completion_time).slice(0, 5) : '13:30',
       notes: row.notes || '', status: uiWorkOrderStatus(row.status), paymentStatus: row.payment_status || 'unpaid',
       paymentMethod: row.payment_method || undefined, cashTendered: row.cash_tendered ?? undefined,
@@ -91,12 +91,12 @@ async function readWorkOrders() {
 }
 
 async function bootstrap() {
-  const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders] = await Promise.all([
+  const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders, deletionRequests] = await Promise.all([
     query('SELECT * FROM shop_settings WHERE id = 1'),
     query('SELECT id, name, phone, address, email, username, created_at FROM customers ORDER BY name'),
-    query('SELECT v.*, c.name AS customer_name FROM vehicles v JOIN customers c ON c.id = v.customer_id ORDER BY v.id DESC'),
+    query('SELECT v.*, c.name AS customer_name FROM vehicles v LEFT JOIN customers c ON c.id = v.customer_id ORDER BY v.id DESC'),
     query(`SELECT b.*, c.id AS customer_id, c.name AS customer_name, v.plate_number, v.brand, v.model
-           FROM bookings b JOIN vehicles v ON v.id=b.vehicle_id JOIN customers c ON c.id=v.customer_id ORDER BY b.scheduled_date DESC, b.scheduled_time DESC`),
+           FROM bookings b LEFT JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN customers c ON c.id=v.customer_id ORDER BY b.scheduled_date DESC, b.scheduled_time DESC`),
     query(`SELECT m.*, COUNT(CASE WHEN w.status NOT IN ('completed','picked_up') THEN 1 END) AS assigned_jobs_count,
            COUNT(CASE WHEN w.status IN ('completed','picked_up') THEN 1 END) AS completed_jobs_count
            FROM mechanics m LEFT JOIN work_orders w ON w.mechanic_id=m.id GROUP BY m.id ORDER BY m.name`),
@@ -106,6 +106,7 @@ async function bootstrap() {
     query(`SELECT DATE(updated_at) AS date, SUM(grand_total) AS amount, COUNT(*) AS count
            FROM invoices WHERE payment_status='paid' GROUP BY DATE(updated_at) ORDER BY date`),
     readWorkOrders(),
+    readDeletionRequests(),
   ]);
   const settings: any = settingsRows[0] || { name: 'BR Motor', address: '', phone: '', email: '', tax_rate: 0, currency: 'IDR' };
   return {
@@ -127,10 +128,122 @@ async function bootstrap() {
     workOrders,
     salesHistory: salesHistory.map((row: any) => ({ id: `sale-${row.date}`, date: String(row.date).slice(0, 10), amount: Number(row.amount), count: Number(row.count) })),
     auditLogs: logs.map((row: any) => ({ id: id(row.id), action: row.activity, details: row.details || row.activity, timestamp: row.created_at, userRole: row.user_role || 'admin', category: row.category || 'work_order' })),
+    deletionRequests,
   };
 }
 
-app.get('/api/health', async (_req, res) => { await query('SELECT 1'); res.json({ ok: true }); });
+// --- DELETION APPROVAL WORKFLOW ---
+// Admin cannot delete directly: they file a request that an owner must approve.
+const DELETION_TARGETS: Record<string, string> = {
+  customer: 'customers',
+  vehicle: 'vehicles',
+  booking: 'bookings',
+  work_order: 'work_orders',
+  sparepart: 'spareparts',
+  mechanic: 'mechanics',
+};
+
+async function readDeletionRequests() {
+  const rows = await query('SELECT * FROM deletion_requests ORDER BY created_at DESC LIMIT 100');
+  return rows.map((row: any) => ({
+    id: id(row.id),
+    entityType: row.entity_type,
+    entityId: id(row.entity_id),
+    entityLabel: row.entity_label || '',
+    requestedByName: row.requested_by_name || 'admin',
+    requestedByRole: row.requested_by_role || 'admin',
+    status: row.status,
+    reviewedByName: row.reviewed_by_name || undefined,
+    reviewedAt: row.reviewed_at || undefined,
+    createdAt: row.created_at,
+  }));
+}
+
+app.get('/api/deletion-requests', async (_req, res, next) => {
+  try { res.json(await readDeletionRequests()); } catch (error) { next(error); }
+});
+
+app.post('/api/deletion-requests', async (req, res, next) => {
+  try {
+    const { entityType, entityId, entityLabel = '', requestedByName = 'admin', requestedByRole = 'admin' } = req.body;
+    if (!DELETION_TARGETS[entityType] || !entityId) {
+      return res.status(400).json({ message: 'entityType atau entityId tidak valid.' });
+    }
+    const dupes: any = await query(
+      "SELECT id FROM deletion_requests WHERE entity_type=? AND entity_id=? AND status='pending' LIMIT 1",
+      [entityType, entityId],
+    );
+    if (dupes.length > 0) {
+      return res.status(409).json({ message: 'Sudah ada permintaan hapus pending untuk data ini.' });
+    }
+    await query<ResultSetHeader>(
+      'INSERT INTO deletion_requests (entity_type,entity_id,entity_label,requested_by_name,requested_by_role,status,created_at,updated_at) VALUES (?,?,?,?,?,\'pending\',NOW(),NOW())',
+      [entityType, entityId, String(entityLabel).slice(0, 255), String(requestedByName).slice(0, 120), String(requestedByRole).slice(0, 20)],
+    );
+    await log(
+      'Permintaan Hapus Dibuat',
+      `${requestedByRole} ${requestedByName} meminta izin hapus ${entityType} "${entityLabel}" (ID: ${entityId}). Menunggu persetujuan owner.`,
+      entityType === 'mechanic' ? 'staff' : entityType,
+      requestedByRole,
+    );
+    res.status(201).json(await readDeletionRequests());
+  } catch (error) { next(error); }
+});
+
+app.post('/api/deletion-requests/:id/approve', async (req, res, next) => {
+  try {
+    const rows: any = await query('SELECT * FROM deletion_requests WHERE id=? LIMIT 1', [req.params.id]);
+    const request = rows[0];
+    if (!request) return res.status(404).json({ message: 'Permintaan hapus tidak ditemukan.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Permintaan ini sudah diproses.' });
+
+    const table = DELETION_TARGETS[request.entity_type];
+    if (!table) return res.status(400).json({ message: 'Tipe data tidak dikenal.' });
+
+    await query(`DELETE FROM ${table} WHERE id=?`, [request.entity_id]);
+    await query(
+      'UPDATE deletion_requests SET status=\'approved\', reviewed_by_name=?, reviewed_at=NOW(), updated_at=NOW() WHERE id=?',
+      [String(req.body?.reviewedByName || 'owner').slice(0, 120), req.params.id],
+    );
+    await log(
+      'Hapus Disetujui Owner',
+      `Owner menyetujui permintaan hapus ${request.entity_type} "${request.entity_label}" (ID: ${request.entity_id}) dari ${request.requested_by_name}. Data telah dihapus permanen.`,
+      request.entity_type === 'mechanic' ? 'staff' : request.entity_type,
+      'owner',
+    );
+    res.json(await readDeletionRequests());
+  } catch (error) { next(error); }
+});
+
+app.post('/api/deletion-requests/:id/reject', async (req, res, next) => {
+  try {
+    const rows: any = await query('SELECT * FROM deletion_requests WHERE id=? LIMIT 1', [req.params.id]);
+    const request = rows[0];
+    if (!request) return res.status(404).json({ message: 'Permintaan hapus tidak ditemukan.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Permintaan ini sudah diproses.' });
+
+    await query(
+      'UPDATE deletion_requests SET status=\'rejected\', reviewed_by_name=?, reviewed_at=NOW(), updated_at=NOW() WHERE id=?',
+      [String(req.body?.reviewedByName || 'owner').slice(0, 120), req.params.id],
+    );
+    await log(
+      'Hapus Ditolak Owner',
+      `Owner menolak permintaan hapus ${request.entity_type} "${request.entity_label}" (ID: ${request.entity_id}) dari ${request.requested_by_name}.`,
+      request.entity_type === 'mechanic' ? 'staff' : request.entity_type,
+      'owner',
+    );
+    res.json(await readDeletionRequests());
+  } catch (error) { next(error); }
+});
+
+app.get('/api/health', async (_req, res) => {
+  try {
+    await query('SELECT 1');
+    res.json({ ok: true, database: 'connected' });
+  } catch (error: any) {
+    res.status(503).json({ ok: false, database: 'disconnected', message: error?.message || 'Database connection lost' });
+  }
+});
 app.get('/api/bootstrap', async (_req, res, next) => { try { res.json(await bootstrap()); } catch (error) { next(error); } });
 
 app.post('/api/auth/login', async (req, res, next) => {
@@ -332,16 +445,66 @@ app.post('/api/vehicles', async (req, res, next) => { try { const v=req.body; co
 app.put('/api/vehicles/:id', async (req, res, next) => { try { const v=req.body; await query('UPDATE vehicles SET plate_number=?,brand=?,model=?,year=?,image_url=?,updated_at=NOW() WHERE id=?',[v.licensePlate,v.brand,v.model,v.year,v.imageUrl||null,req.params.id]);res.sendStatus(204);}catch(e){next(e);} });
 app.delete('/api/vehicles/:id', async (req,res,next)=>{try{await query('DELETE FROM vehicles WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
 
-app.post('/api/bookings', async (req,res,next)=>{try{const b=req.body; const count:any=await query('SELECT COUNT(*) AS total FROM bookings WHERE scheduled_date=?',[b.date]); const q=`Q-${String(Number(count[0].total)+1).padStart(3,'0')}`; const code=`BKG-${Date.now()}`; const r=await query<ResultSetHeader>('INSERT INTO bookings (vehicle_id,booking_code,scheduled_date,scheduled_time,complaint,estimated_duration_minutes,status,queue_number,created_at,updated_at) VALUES (?,?,?,?,?,? ,\'pending\',?,NOW(),NOW())',[b.vehicleId,code,b.date,b.time,b.notes||'',b.estimatedDurationMinutes||60,q]);res.json({id:id(r.insertId)});}catch(e){next(e);}});
-app.patch('/api/bookings/:id/status', async(req,res,next)=>{try{const status=req.body.status==='checked-in'?'confirmed':req.body.status;await query('UPDATE bookings SET status=?,updated_at=NOW() WHERE id=?',[status,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
-app.delete('/api/bookings/:id',async(req,res,next)=>{try{await query('DELETE FROM bookings WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+app.post('/api/bookings', async (req, res, next) => {
+  try {
+    const b = req.body;
+    let vehicleId = b.vehicleId;
+    // Resolve string vehicleId (e.g. v-v4nhu) by vehicle license plate or latest vehicle
+    if (typeof vehicleId === 'string' && !/^\d+$/.test(vehicleId)) {
+      const [vehRows]: any = await query('SELECT id FROM vehicles WHERE plate_number=? LIMIT 1', [b.licensePlate || '']);
+      if (vehRows.length > 0) {
+        vehicleId = vehRows[0].id;
+      } else {
+        const [latestVeh]: any = await query('SELECT id FROM vehicles ORDER BY id DESC LIMIT 1');
+        vehicleId = latestVeh[0]?.id || 1;
+      }
+    }
+    const count: any = await query('SELECT COUNT(*) AS total FROM bookings WHERE scheduled_date=?', [b.date]);
+    const q = `Q-${String(Number(count[0].total) + 1).padStart(3, '0')}`;
+    const code = `BKG-${Date.now()}`;
+    const r = await query<ResultSetHeader>(
+      'INSERT INTO bookings (vehicle_id,booking_code,scheduled_date,scheduled_time,complaint,estimated_duration_minutes,status,queue_number,created_at,updated_at) VALUES (?,?,?,?,?,?,\'pending\',?,NOW(),NOW())',
+      [vehicleId, code, b.date, b.time, b.notes || '', b.estimatedDurationMinutes || 60, q]
+    );
+    res.json({ id: id(r.insertId) });
+  } catch (e) {
+    next(e);
+  }
+});
+app.patch('/api/bookings/:id/status', async (req, res, next) => {
+  try {
+    const status = req.body.status === 'checked-in' ? 'confirmed' : req.body.status;
+    await query('UPDATE bookings SET status=?,updated_at=NOW() WHERE id=?', [status, req.params.id]);
+    res.sendStatus(204);
+  } catch (e) {
+    next(e);
+  }
+});
+app.delete('/api/bookings/:id', async (req, res, next) => {
+  try {
+    await query('DELETE FROM bookings WHERE id=?', [req.params.id]);
+    res.sendStatus(204);
+  } catch (e) {
+    next(e);
+  }
+});
 
 async function replaceDetails(connection: mysql.PoolConnection, orderId: number, services: any[], parts: any[]) {
+  // 1. If this work order already had spare parts allocated, restore their stock first
+  const [oldDetails]: any = await connection.query(
+    'SELECT sparepart_id, quantity FROM service_details WHERE work_order_id=? AND sparepart_id IS NOT NULL',
+    [orderId]
+  );
+  for (const old of oldDetails) {
+    await connection.query('UPDATE spareparts SET stock=stock+? WHERE id=?', [Number(old.quantity), old.sparepart_id]);
+  }
+
+  // 2. Clear previous service_details for this order
   await connection.query('DELETE FROM service_details WHERE work_order_id=?', [orderId]);
+
+  // 3. Insert services
   for (const service of services) {
     let dbServiceId = service.serviceId;
-    // If the serviceId is a non-numeric string (e.g. from QuickCheckIn 'qs-oli-mesin'),
-    // look up or auto-create a matching row in the `services` table.
     if (typeof dbServiceId === 'string' && !/^\d+$/.test(dbServiceId)) {
       const serviceName = service.name || dbServiceId;
       const [existing]: any = await connection.query('SELECT id FROM services WHERE name=? LIMIT 1', [serviceName]);
@@ -357,7 +520,17 @@ async function replaceDetails(connection: mysql.PoolConnection, orderId: number,
     }
     await connection.query('INSERT INTO service_details (work_order_id,service_id,quantity,price,created_at,updated_at) VALUES (?,?,1,?,NOW(),NOW())',[orderId, dbServiceId, service.price]);
   }
-  for (const part of parts) await connection.query('INSERT INTO service_details (work_order_id,sparepart_id,quantity,price,created_at,updated_at) VALUES (?,?,?, ?,NOW(),NOW())',[orderId,part.partId,part.quantity,part.pricePerUnit]);
+
+  // 4. Insert spare parts and deduct stock immediately from warehouse
+  for (const part of parts) {
+    const qty = Number(part.quantity || 1);
+    await connection.query('INSERT INTO service_details (work_order_id,sparepart_id,quantity,price,created_at,updated_at) VALUES (?,?,?, ?,NOW(),NOW())',[orderId,part.partId,qty,part.pricePerUnit]);
+    await connection.query('UPDATE spareparts SET stock=GREATEST(0, stock-?) WHERE id=?', [qty, part.partId]);
+    await connection.query(
+      "INSERT INTO stock_transactions (sparepart_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?, 'stock_out', ?, ?, 'Pemakaian servis SPK', NOW())",
+      [part.partId, qty, orderId]
+    );
+  }
 }
 
 app.post('/api/quick-checkin', async (req, res, next) => {
@@ -408,11 +581,94 @@ app.post('/api/quick-checkin', async (req, res, next) => {
   }
 });
 
-app.post('/api/work-orders',async(req,res,next)=>{const c=await pool.getConnection();try{const w=req.body;await c.beginTransaction();const number=`WO-${Date.now()}`;const [r]:any=await c.query('INSERT INTO work_orders (vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?, ?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',[w.vehicleId,w.assignedMechanicId,w.bookingId||null,number,w.complaint,w.diagnosis||'',w.estimatedCompletionTime,w.notes||'']);await replaceDetails(c,r.insertId,w.services,w.sparePartsUsed);if(w.bookingId)await c.query("UPDATE bookings SET status='confirmed',updated_at=NOW() WHERE id=?",[w.bookingId]);await c.commit();res.json({id:id(r.insertId)});}catch(e){await c.rollback();next(e);}finally{c.release();}});
+app.post('/api/work-orders', async (req, res, next) => {
+  const c = await pool.getConnection();
+  try {
+    const w = req.body;
+    let vehicleId = w.vehicleId;
+    if (typeof vehicleId === 'string' && !/^\d+$/.test(vehicleId)) {
+      const [vehRows]: any = await c.query('SELECT id FROM vehicles WHERE plate_number=? LIMIT 1', [w.licensePlate || '']);
+      if (vehRows.length > 0) {
+        vehicleId = vehRows[0].id;
+      } else {
+        const [latestVeh]: any = await c.query('SELECT id FROM vehicles ORDER BY id DESC LIMIT 1');
+        vehicleId = latestVeh[0]?.id || 1;
+      }
+    }
+    let mechanicId = w.assignedMechanicId;
+    if (typeof mechanicId === 'string' && !/^\d+$/.test(mechanicId)) {
+      const [mechRows]: any = await c.query('SELECT id FROM mechanics WHERE name=? LIMIT 1', [w.assignedMechanicName || '']);
+      mechanicId = mechRows[0]?.id || 1;
+    }
+    await c.beginTransaction();
+    const number = `WO-${Date.now()}`;
+    const [r]: any = await c.query(
+      'INSERT INTO work_orders (vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',
+      [vehicleId, mechanicId || 1, w.bookingId || null, number, w.complaint, w.diagnosis || '', w.estimatedCompletionTime, w.notes || '']
+    );
+    await replaceDetails(c, r.insertId, w.services, w.sparePartsUsed);
+    if (w.bookingId) await c.query("UPDATE bookings SET status='confirmed',updated_at=NOW() WHERE id=?", [w.bookingId]);
+    await c.commit();
+    res.json({ id: id(r.insertId) });
+  } catch (e) {
+    await c.rollback();
+    next(e);
+  } finally {
+    c.release();
+  }
+});
 app.put('/api/work-orders/:id',async(req,res,next)=>{const c=await pool.getConnection();try{const w=req.body;await c.beginTransaction();await c.query('UPDATE work_orders SET mechanic_id=?,complaint=?,diagnosis=?,estimated_completion_time=?,notes=?,updated_at=NOW() WHERE id=?',[w.assignedMechanicId,w.complaint,w.diagnosis||'',w.estimatedCompletionTime,w.notes||'',req.params.id]);await replaceDetails(c,Number(req.params.id),w.services,w.sparePartsUsed);await c.commit();res.sendStatus(204);}catch(e){await c.rollback();next(e);}finally{c.release();}});
 app.patch('/api/work-orders/:id/status',async(req,res,next)=>{try{const status=dbWorkOrderStatus(req.body.status);const timestamps=status==='completed'?', completed_at=NOW(), end_time=NOW()':status==='picked_up'?', picked_up_at=NOW()':'';await query(`UPDATE work_orders SET status=?, updated_at=NOW()${timestamps} WHERE id=?`,[status,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
-app.delete('/api/work-orders/:id',async(req,res,next)=>{try{await query('DELETE FROM work_orders WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
-app.post('/api/work-orders/:id/checkout',async(req,res,next)=>{const c=await pool.getConnection();try{const {discount=0,paymentMethod='cash',cashTendered=null,changeAmount=null}=req.body;await c.beginTransaction();const [details]:any=await c.query(`SELECT sd.*, s.name AS service_name, sp.name AS part_name FROM service_details sd LEFT JOIN services s ON s.id=sd.service_id LEFT JOIN spareparts sp ON sp.id=sd.sparepart_id WHERE sd.work_order_id=?`,[req.params.id]);const serviceCost=details.filter((d:any)=>d.service_id).reduce((x:number,d:any)=>x+Number(d.price),0);const partCost=details.filter((d:any)=>d.sparepart_id).reduce((x:number,d:any)=>x+Number(d.price)*Number(d.quantity),0);const total=Math.max(0,serviceCost+partCost-Number(discount));const [cashiers]:any=await c.query("SELECT id FROM staff WHERE role='cashier' OR role='admin' ORDER BY id LIMIT 1");const cashierId=cashiers[0]?.id||1;const inv=`INV-${Date.now()}`;await c.query("INSERT INTO invoices (work_order_id,cashier_user_id,invoice_number,subtotal_services,subtotal_spareparts,discount,tax,grand_total,payment_method,payment_status,cash_tendered,change_amount,created_at,updated_at) VALUES (?,?,?,?,?,?,0,?,?, 'paid',?,?,NOW(),NOW())",[req.params.id,cashierId,inv,serviceCost,partCost,discount,total,paymentMethod,cashTendered,changeAmount]);for(const d of details.filter((x:any)=>x.sparepart_id)){await c.query('UPDATE spareparts SET stock=GREATEST(0,stock-?) WHERE id=?',[d.quantity,d.sparepart_id]);await c.query("INSERT INTO stock_transactions (sparepart_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?, 'stock_out', ?, ?, 'Checkout work order', NOW())",[d.sparepart_id,d.quantity,req.params.id]);}await c.query("UPDATE work_orders SET status='picked_up',picked_up_at=NOW(),updated_at=NOW() WHERE id=?",[req.params.id]);await c.commit();res.sendStatus(204);}catch(e){await c.rollback();next(e);}finally{c.release();}});
+app.delete('/api/work-orders/:id', async (req, res, next) => {
+  const c = await pool.getConnection();
+  try {
+    await c.beginTransaction();
+    // Return spareparts to stock upon work order deletion
+    const [details]: any = await c.query('SELECT sparepart_id, quantity FROM service_details WHERE work_order_id=? AND sparepart_id IS NOT NULL', [req.params.id]);
+    for (const d of details) {
+      await c.query('UPDATE spareparts SET stock=stock+? WHERE id=?', [Number(d.quantity), d.sparepart_id]);
+      await c.query("INSERT INTO stock_transactions (sparepart_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?, 'stock_in', ?, ?, 'Pembatalan/Hapus SPK', NOW())", [d.sparepart_id, d.quantity, req.params.id]);
+    }
+    await c.query('DELETE FROM service_details WHERE work_order_id=?', [req.params.id]);
+    await c.query('DELETE FROM work_orders WHERE id=?', [req.params.id]);
+    await c.commit();
+    res.sendStatus(204);
+  } catch (e) {
+    await c.rollback();
+    next(e);
+  } finally {
+    c.release();
+  }
+});
+app.post('/api/work-orders/:id/checkout', async (req, res, next) => {
+  const c = await pool.getConnection();
+  try {
+    const { discount = 0, paymentMethod = 'cash', cashTendered = null, changeAmount = null } = req.body;
+    await c.beginTransaction();
+    const [details]: any = await c.query(
+      `SELECT sd.*, s.name AS service_name, sp.name AS part_name FROM service_details sd LEFT JOIN services s ON s.id=sd.service_id LEFT JOIN spareparts sp ON sp.id=sd.sparepart_id WHERE sd.work_order_id=?`,
+      [req.params.id]
+    );
+    const serviceCost = details.filter((d: any) => d.service_id).reduce((x: number, d: any) => x + Number(d.price), 0);
+    const partCost = details.filter((d: any) => d.sparepart_id).reduce((x: number, d: any) => x + Number(d.price) * Number(d.quantity), 0);
+    const total = Math.max(0, serviceCost + partCost - Number(discount));
+    const [cashiers]: any = await c.query("SELECT id FROM staff WHERE role='cashier' OR role='admin' ORDER BY id LIMIT 1");
+    const cashierId = cashiers[0]?.id || 1;
+    const inv = `INV-${Date.now()}`;
+    await c.query(
+      "INSERT INTO invoices (work_order_id,cashier_user_id,invoice_number,subtotal_services,subtotal_spareparts,discount,tax,grand_total,payment_method,payment_status,cash_tendered,change_amount,created_at,updated_at) VALUES (?,?,?,?,?,?,0,?,?,'paid',?,?,NOW(),NOW())",
+      [req.params.id, cashierId, inv, serviceCost, partCost, discount, total, paymentMethod, cashTendered, changeAmount]
+    );
+    await c.query("UPDATE work_orders SET status='picked_up',picked_up_at=NOW(),updated_at=NOW() WHERE id=?", [req.params.id]);
+    await c.commit();
+    res.sendStatus(204);
+  } catch (e) {
+    await c.rollback();
+    next(e);
+  } finally {
+    c.release();
+  }
+});
 
 app.post('/api/mechanics',async(req,res,next)=>{try{const m=req.body;const r=await query<ResultSetHeader>('INSERT INTO mechanics (name,phone,status,specialization,created_at,updated_at) VALUES (?, ?,\'active\',?,NOW(),NOW())',[m.name,m.phone,m.position]);res.json({id:id(r.insertId)});}catch(e){next(e);}});
 app.put('/api/mechanics/:id',async(req,res,next)=>{try{const m=req.body;const status=m.status==='available'?'active':m.status==='busy'?'on_leave':m.status;await query('UPDATE mechanics SET name=?,phone=?,status=?,specialization=?,updated_at=NOW() WHERE id=?',[m.name,m.phone,status,m.position,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
@@ -425,6 +681,203 @@ app.delete('/api/spare-parts/:id',async(req,res,next)=>{try{await query('DELETE 
 
 app.put('/api/settings',async(req,res,next)=>{try{const s=req.body;await query('UPDATE shop_settings SET name=?,address=?,phone=?,email=?,tax_rate=?,currency=\'IDR\',updated_at=NOW(3) WHERE id=1',[s.name,s.address,s.phone,s.email,s.taxRate]);res.sendStatus(204);}catch(e){next(e);}});
 
+// --- PUBLIC LANDING PAGE API ENDPOINTS ---
+app.get('/api/public/track-status', async (req, res, next) => {
+  try {
+    const rawQuery = String(req.query.query || '').trim();
+    if (!rawQuery) {
+      return res.status(400).json({ message: 'Harap masukkan plat nomor atau kode booking/SPK.' });
+    }
+    const cleanPlate = rawQuery.replace(/\s+/g, '').toUpperCase();
+    const cleanSearch = rawQuery.toUpperCase();
+
+    // 1. Search Work Orders first (Active / Recent)
+    const workOrders = await readWorkOrders();
+    const matchedWo = workOrders.find((w: any) => {
+      const p = String(w.licensePlate || '').replace(/\s+/g, '').toUpperCase();
+      const idStr = String(w.id || '').toUpperCase();
+      const bId = String(w.bookingId || '').toUpperCase();
+      return p === cleanPlate || p.includes(cleanPlate) || idStr === cleanSearch || bId === cleanSearch;
+    });
+
+    if (matchedWo) {
+      return res.json({
+        found: true,
+        type: 'work_order',
+        data: {
+          id: matchedWo.id,
+          licensePlate: matchedWo.licensePlate,
+          vehicleModel: matchedWo.vehicleModel,
+          customerName: matchedWo.customerName,
+          status: matchedWo.status,
+          complaint: matchedWo.complaint,
+          diagnosis: matchedWo.diagnosis,
+          assignedMechanicName: matchedWo.assignedMechanicName,
+          estimatedCompletionTime: matchedWo.estimatedCompletionTime,
+          paymentStatus: matchedWo.paymentStatus,
+          services: matchedWo.services,
+          sparePartsUsed: matchedWo.sparePartsUsed,
+          costs: matchedWo.costs,
+          createdAt: matchedWo.createdAt,
+          completedAt: matchedWo.completedAt,
+          pickedUpAt: matchedWo.pickedUpAt,
+        }
+      });
+    }
+
+    // 2. Search Bookings if no work order is active
+    const bookingsData: any = await query(`
+      SELECT b.*, c.name AS customer_name, c.phone AS customer_phone, v.plate_number, v.brand, v.model
+      FROM bookings b
+      LEFT JOIN vehicles v ON v.id = b.vehicle_id
+      LEFT JOIN customers c ON c.id = v.customer_id
+      WHERE REPLACE(UPPER(v.plate_number), ' ', '') = ?
+         OR UPPER(b.booking_code) = ?
+         OR UPPER(b.queue_number) = ?
+      ORDER BY b.id DESC
+      LIMIT 1
+    `, [cleanPlate, cleanSearch, cleanSearch]);
+
+    if (bookingsData.length > 0) {
+      const b = bookingsData[0];
+      return res.json({
+        found: true,
+        type: 'booking',
+        data: {
+          id: id(b.id),
+          bookingCode: b.booking_code,
+          queueNumber: b.queue_number,
+          licensePlate: b.plate_number,
+          vehicleModel: `${b.brand || ''} ${b.model || ''}`.trim() || 'Motor Pelanggan',
+          customerName: b.customer_name || 'Pelanggan Terdaftar',
+          status: b.status === 'confirmed' ? 'checked-in' : b.status,
+          date: String(b.scheduled_date || '').slice(0, 10),
+          time: String(b.scheduled_time || '').slice(0, 5),
+          notes: b.complaint || '',
+          estimatedDurationMinutes: b.estimated_duration_minutes || 45,
+          createdAt: b.created_at
+        }
+      });
+    }
+
+    return res.status(404).json({
+      found: false,
+      message: `Tidak ditemukan riwayat servis aktif untuk "${rawQuery}". Pastikan plat nomor atau kode booking sudah benar.`
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/public/booking', async (req, res, next) => {
+  const c = await pool.getConnection();
+  try {
+    const {
+      customerName,
+      phone,
+      email = '',
+      plateNumber,
+      brand = 'Honda',
+      model = 'Motor Matic',
+      year = new Date().getFullYear(),
+      serviceType = 'Servis Rutin',
+      date,
+      time = '09:00',
+      complaint = '',
+      notes = ''
+    } = req.body;
+
+    if (!customerName || !phone || !plateNumber || !date) {
+      return res.status(400).json({ message: 'Nama, No. WhatsApp, Plat Nomor, dan Tanggal Servis wajib diisi.' });
+    }
+
+    await c.beginTransaction();
+
+    // 1. Find or create Customer
+    const cleanPhone = String(phone).trim();
+    const cleanName = String(customerName).trim();
+    let customerId: number;
+
+    const [existingCust]: any = await c.query(
+      'SELECT id FROM customers WHERE phone = ? OR LOWER(name) = ? LIMIT 1',
+      [cleanPhone, cleanName.toLowerCase()]
+    );
+
+    if (existingCust.length > 0) {
+      customerId = existingCust[0].id;
+    } else {
+      const [custRes]: any = await c.query(
+        'INSERT INTO customers (name, phone, email, address, created_at, updated_at) VALUES (?, ?, ?, \'\', NOW(), NOW())',
+        [cleanName, cleanPhone, email]
+      );
+      customerId = custRes.insertId;
+    }
+
+    // 2. Find or create Vehicle
+    const cleanPlate = String(plateNumber).trim().toUpperCase();
+    let vehicleId: number;
+
+    const [existingVeh]: any = await c.query(
+      'SELECT id FROM vehicles WHERE UPPER(REPLACE(plate_number, \' \', \'\')) = ? LIMIT 1',
+      [cleanPlate.replace(/\s+/g, '')]
+    );
+
+    if (existingVeh.length > 0) {
+      vehicleId = existingVeh[0].id;
+    } else {
+      const [vehRes]: any = await c.query(
+        'INSERT INTO vehicles (customer_id, plate_number, brand, model, year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+        [customerId, cleanPlate, brand, model, Number(year) || new Date().getFullYear()]
+      );
+      vehicleId = vehRes.insertId;
+    }
+
+    // 3. Create Booking
+    const [countRows]: any = await c.query(
+      'SELECT COUNT(*) AS total FROM bookings WHERE scheduled_date = ?',
+      [date]
+    );
+    const queueNumber = `Q-${String(Number(countRows[0]?.total || 0) + 1).padStart(3, '0')}`;
+    const bookingCode = `BKG-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const mergedComplaint = [serviceType ? `[${serviceType}]` : '', complaint, notes].filter(Boolean).join(' - ');
+
+    const [bkgRes]: any = await c.query(
+      'INSERT INTO bookings (vehicle_id, booking_code, scheduled_date, scheduled_time, complaint, estimated_duration_minutes, status, queue_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 60, \'pending\', ?, NOW(), NOW())',
+      [vehicleId, bookingCode, date, time, mergedComplaint, queueNumber]
+    );
+
+    await log(
+      'Booking Servis Online (Landing Page)',
+      `Pelanggan ${cleanName} (${cleanPlate}) booking servis untuk ${date} jam ${time}. No Antrean: ${queueNumber}`,
+      'booking',
+      'user',
+      customerId
+    );
+
+    await c.commit();
+
+    res.status(201).json({
+      success: true,
+      id: id(bkgRes.insertId),
+      bookingCode,
+      queueNumber,
+      customerName: cleanName,
+      plateNumber: cleanPlate,
+      vehicleModel: `${brand} ${model}`.trim(),
+      date,
+      time,
+      serviceType,
+      message: `Booking berhasil dijadwalkan! Nomor Antrean Anda adalah ${queueNumber}.`
+    });
+  } catch (error) {
+    await c.rollback();
+    next(error);
+  } finally {
+    c.release();
+  }
+});
+
+
 app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(error);
   if (error.type === 'entity.too.large') {
@@ -432,4 +885,12 @@ app.use((error: any, _req: express.Request, res: express.Response, _next: expres
   }
   return res.status(500).json({ message: error.message || 'Server database error' });
 });
+
+process.on('unhandledRejection', (reason) => {
+  console.warn('Database/Network Notice (unhandledRejection):', (reason as any)?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.warn('Database/Network Notice (uncaughtException):', err.message);
+});
+
 app.listen(port, () => console.log(`BR Motor API running at http://localhost:${port}`));

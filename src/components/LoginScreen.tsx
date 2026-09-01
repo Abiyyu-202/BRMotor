@@ -22,7 +22,11 @@ declare global {
   }
 }
 
-export const LoginScreen: React.FC = () => {
+interface LoginScreenProps {
+  onBackToLanding?: () => void;
+}
+
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => {
   const { setIsAuthenticated, setCurrentRole, setCurrentUserName, setCurrentUserId, showToast, shopInfo, language, t } = useWorkshop();
   const [activeMode, setActiveMode] = useState<'signin' | 'register'>('signin');
   const [username, setUsername] = useState('');
@@ -38,6 +42,23 @@ export const LoginScreen: React.FC = () => {
   const [customGoogleName, setCustomGoogleName] = useState('');
   const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
   const [googleButtonRendered, setGoogleButtonRendered] = useState(false);
+
+  // Real backend health check
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    const checkHealth = async () => {
+      try {
+        const res = await fetch('/api/health', { signal: AbortSignal.timeout(3000) });
+        if (mounted) setServerOnline(res.ok);
+      } catch {
+        if (mounted) setServerOnline(false);
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 3500);
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
 
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
@@ -251,7 +272,20 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex items-center justify-center p-4 sm:p-6 md:p-12">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col items-center justify-center p-4 sm:p-6 md:p-12 relative">
+      {onBackToLanding && (
+        <div className="w-full max-w-5xl mb-4 flex justify-between items-center">
+          <button
+            type="button"
+            onClick={onBackToLanding}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
+          >
+            <span>←</span>
+            <span>Kembali ke Halaman Utama (Landing Page)</span>
+          </button>
+        </div>
+      )}
+
       {/* Outer Card with Split Design */}
       <div className="w-full max-w-5xl bg-white border border-slate-200 rounded-3xl shadow-xl flex flex-col md:flex-row overflow-hidden min-h-[600px]">
         
@@ -288,8 +322,8 @@ export const LoginScreen: React.FC = () => {
           </div>
 
           <div className="text-xs font-mono font-medium tracking-wider text-slate-400 flex items-center gap-2 mt-8">
-            <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full inline-block animate-ping" />
-            Active Service Bay: ONLINE
+            <span className={`w-2.5 h-2.5 rounded-full inline-block ${serverOnline === null ? 'bg-yellow-400 animate-pulse' : serverOnline ? 'bg-emerald-400 animate-ping' : 'bg-red-400'}`} />
+            Active Service Bay: {serverOnline === null ? 'CHECKING...' : serverOnline ? 'ONLINE' : 'OFFLINE'}
           </div>
         </div>
 
@@ -566,9 +600,9 @@ export const LoginScreen: React.FC = () => {
                 </p>
 
                 {/* Status Mode Badge */}
-                <div className="mt-3 flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold rounded-full">
+                <div className={`mt-3 flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold rounded-full ${serverOnline ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{language === 'id' ? 'Autentikasi Terhubung ke MySQL' : 'Connected to MySQL Database'}</span>
+                  <span>{serverOnline ? (language === 'id' ? 'Autentikasi Terhubung ke MySQL' : 'Connected to MySQL Database') : (language === 'id' ? 'Koneksi ke Database Terputus' : 'Database Connection Lost')}</span>
                 </div>
               </div>
 

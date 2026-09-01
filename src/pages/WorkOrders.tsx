@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { QuickCheckInModal } from '../components/QuickCheckInModal';
+import { canTriggerDelete, canDeleteDirectly } from '../utils/permissions';
 
 interface WorkOrdersProps {
   prefilledBooking: any;
@@ -47,7 +48,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
     shopInfo,
     currentRole,
     language,
-    t
+    t,
+    requestDelete
   } = useWorkshop();
 
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
@@ -367,7 +369,13 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
 
   const handleDeleteWorkOrder = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setWoToDelete(id);
+    if (!canTriggerDelete(currentRole)) return;
+    if (canDeleteDirectly(currentRole)) {
+      setWoToDelete(id);
+    } else {
+      const wo = workOrders.find((w) => w.id === id);
+      requestDelete('work_order', id, `SPK ${id} - ${wo?.customerName || ''}`);
+    }
   };
 
   const confirmDeleteWO = () => {
@@ -648,14 +656,16 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
                             </button>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteWorkOrder(wo.id, e)}
-                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl cursor-pointer transition-colors shrink-0 flex items-center justify-center"
-                            title="Hapus SPK"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canTriggerDelete(currentRole) && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteWorkOrder(wo.id, e)}
+                              className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl cursor-pointer transition-colors shrink-0 flex items-center justify-center"
+                              title="Hapus SPK"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -952,15 +962,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
             <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0 bg-slate-50">
               <h3 className="font-bold text-slate-900 uppercase tracking-wide text-xs">Penyesuaian Teknis SPK ({editingWO.id})</h3>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleDeleteWorkOrder(editingWO.id)}
-                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
-                  title="Hapus SPK Ini"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Hapus SPK</span>
-                </button>
+                {canTriggerDelete(currentRole) && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteWorkOrder(editingWO.id)}
+                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                    title="Hapus SPK Ini"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus SPK</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsEditWOOpen(false)}

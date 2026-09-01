@@ -30,6 +30,10 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     background-color: #f8fafc; /* Clean slate-50 canvas */
     color: #0f172a; /* Slate-900 text */

@@ -23,6 +23,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { canTriggerDelete, canDeleteDirectly } from '../utils/permissions';
 
 export const Mechanics: React.FC = () => {
   const {
@@ -33,6 +34,7 @@ export const Mechanics: React.FC = () => {
     deleteMechanic,
     showToast,
     currentRole,
+    requestDelete,
     formatRupiah
   } = useWorkshop();
 
@@ -87,7 +89,13 @@ export const Mechanics: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    setMechanicToDelete(id);
+    if (!canTriggerDelete(currentRole)) return;
+    if (canDeleteDirectly(currentRole)) {
+      setMechanicToDelete(id);
+    } else {
+      const mech = mechanics.find((m) => m.id === id);
+      requestDelete('mechanic', id, mech?.name || id);
+    }
   };
 
   const confirmDeleteMechanic = () => {
@@ -235,13 +243,15 @@ export const Mechanics: React.FC = () => {
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={() => handleDelete(m.id)}
-                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                  title="Hapus Mekanik"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {canTriggerDelete(currentRole) && (
+                  <button
+                    onClick={() => handleDelete(m.id)}
+                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                    title="Hapus Mekanik"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Staff Profile and Title */}

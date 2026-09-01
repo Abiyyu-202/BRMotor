@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ServiceReminderModal } from '../components/ServiceReminderModal';
+import { canTriggerDelete, canDeleteDirectly } from '../utils/permissions';
 
 export const Customers: React.FC = () => {
   const {
@@ -38,6 +39,8 @@ export const Customers: React.FC = () => {
     language,
     t,
     currentRole,
+    currentUserName,
+    requestDelete,
     formatRupiah
   } = useWorkshop();
 
@@ -102,7 +105,14 @@ export const Customers: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    setCustomerToDelete(id);
+    if (!canTriggerDelete(currentRole)) return;
+    if (canDeleteDirectly(currentRole)) {
+      setCustomerToDelete(id);
+    } else {
+      // admin: request owner approval
+      const customer = customers.find((c) => c.id === id);
+      requestDelete('customer', id, customer?.name || id);
+    }
   };
 
   const confirmDeleteCustomer = () => {
@@ -260,13 +270,15 @@ export const Customers: React.FC = () => {
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
-                  <button
-                    onClick={() => handleDelete(selectedCustomer.id)}
-                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-xl transition-colors"
-                    title="Hapus Pelanggan"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canTriggerDelete(currentRole) && (
+                    <button
+                      onClick={() => handleDelete(selectedCustomer.id)}
+                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-xl transition-colors"
+                      title={canDeleteDirectly(currentRole) ? 'Hapus Pelanggan' : 'Minta Persetujuan Hapus'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-start gap-4">

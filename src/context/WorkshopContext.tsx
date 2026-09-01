@@ -20,8 +20,11 @@ import {
   WorkOrderService,
   AuditLog,
   AuditLogCategory,
+  DeletionRequest,
+  DeletableEntityType,
   NotificationHistoryItem
 } from '../types';
+import { canDirectDelete } from '../utils/permissions';
 import { Language, translations } from '../utils/translations';
 
 interface WorkshopContextType {
@@ -52,6 +55,11 @@ interface WorkshopContextType {
   markNotificationsAsRead: () => void;
   auditLogs: AuditLog[];
   addAuditLog: (action: string, details: string, category: AuditLogCategory) => void;
+  deletionRequests: DeletionRequest[];
+  pendingDeletionCount: number;
+  requestDelete: (entityType: DeletableEntityType, entityId: string, entityLabel: string) => Promise<void>;
+  approveDeletion: (requestId: string) => Promise<void>;
+  rejectDeletion: (requestId: string) => Promise<void>;
   formatRupiah: (amount: number) => string;
 
   // Toast notifications
@@ -187,16 +195,19 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [salesHistory, setSalesHistory] = useState<{ id: string; date: string; amount: number; count: number }[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);
 
   const refreshDatabase = useCallback(async () => {
     const data = await api<{
       shopInfo: ShopInfo; customers: Customer[]; vehicles: Vehicle[]; bookings: Booking[];
       workOrders: WorkOrder[]; spareParts: SparePart[]; mechanics: Mechanic[];
       serviceItems: ServiceItem[]; salesHistory: { id: string; date: string; amount: number; count: number }[]; auditLogs: AuditLog[];
+      deletionRequests?: DeletionRequest[];
     }>('/api/bootstrap');
     setShopInfoState(data.shopInfo); setCustomers(data.customers); setVehicles(data.vehicles);
     setBookings(data.bookings); setWorkOrders(data.workOrders); setSpareParts(data.spareParts);
     setMechanics(data.mechanics); setServiceItems(data.serviceItems); setSalesHistory(data.salesHistory); setAuditLogs(data.auditLogs);
+    setDeletionRequests(data.deletionRequests || []);
 
     // Auto-detect and sync currentUserId and currentUserName
     const storedUserId = localStorage.getItem('br_motor_userid');
@@ -348,6 +359,10 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteCustomer = (id: string) => {
+    if (!canDirectDelete(currentRole)) {
+      showToast('Hanya akun Owner yang dapat menghapus data pelanggan langsung.', 'warning');
+      return;
+    }
     const target = customers.find((c) => c.id === id);
     setCustomers((prev) => prev.filter((c) => c.id !== id));
     // Also remove customer's vehicles to preserve relations
@@ -364,14 +379,21 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // --- VEHICLE CRUD ---
   const addVehicle = (vehicle: Omit<Vehicle, 'id' | 'customerName'>) => {
     const customer = customers.find((c) => c.id === vehicle.customerId);
+    const tempId = `v-${Math.random().toString(36).substring(2, 7)}`;
     const newVehicle: Vehicle = {
       ...vehicle,
-      id: `v-${Math.random().toString(36).substring(2, 7)}`,
+      id: tempId,
       customerName: customer ? customer.name : "Unknown Customer"
     };
     setVehicles((prev) => [...prev, newVehicle]);
-    void api('/api/vehicles', { method: 'POST', body: JSON.stringify(vehicle) })
-      .then(refreshDatabase)
+    void api<{ id: string }>('/api/vehicles', { method: 'POST', body: JSON.stringify(vehicle) })
+      .then((result) => {
+        if (result?.id) {
+          newVehicle.id = result.id;
+          setVehicles((prev) => prev.map((v) => v.id === tempId ? { ...v, id: result.id } : v));
+        }
+        return refreshDatabase();
+      })
       .catch((error) => showToast(error.message, 'error'));
     showToast(`Vehicle ${vehicle.licensePlate} (${vehicle.brand}) registered`, 'success');
     addAuditLog("Vehicle Registered", `Registered vehicle ${newVehicle.brand} ${newVehicle.model} [${newVehicle.licensePlate}] for ${newVehicle.customerName}`, 'customer');
@@ -397,6 +419,10 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteVehicle = (id: string) => {
+    if (!canDirectDelete(currentRole)) {
+      showToast('Hanya akun Owner yang dapat menghapus data kendaraan langsung.', 'warning');
+      return;
+    }
     const target = vehicles.find((v) => v.id === id);
     setVehicles((prev) => prev.filter((v) => v.id !== id));
     void api(`/api/vehicles/${id}`, { method: 'DELETE' })
@@ -455,6 +481,10 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteBooking = (id: string) => {
+    if (!canDirectDelete(currentRole)) {
+      showToast('Hanya akun Owner yang dapat menghapus data antrean booking langsung.', 'warning');
+      return;
+    }
     const target = bookings.find((b) => b.id === id);
     setBookings((prev) => prev.filter((b) => b.id !== id));
     void api(`/api/bookings/${id}`, { method: 'DELETE' })
@@ -631,6 +661,10 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteWorkOrder = (id: string) => {
+    if (!canDirectDelete(currentRole)) {
+      showToast('Hanya akun Owner yang dapat menghapus SPK langsung.', 'warning');
+      return;
+    }
     const target = workOrders.find((wo) => wo.id === id);
     setWorkOrders((prev) => prev.filter((wo) => wo.id !== id));
     void api(`/api/work-orders/${id}`, { method: 'DELETE' })
@@ -754,6 +788,10 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteSparePart = (id: string) => {
+    if (!canDirectDelete(currentRole)) {
+      showToast('Hanya akun Owner yang dapat menghapus suku cadang langsung.', 'warning');
+      return;
+    }
     const target = spareParts.find((p) => p.id === id);
     setSpareParts((prev) => prev.filter((p) => p.id !== id));
     void api(`/api/spare-parts/${id}`, { method: 'DELETE' })
@@ -808,6 +846,10 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteMechanic = (id: string) => {
+    if (!canDirectDelete(currentRole)) {
+      showToast('Hanya akun Owner yang dapat menghapus data mekanik langsung.', 'warning');
+      return;
+    }
     const target = mechanics.find((m) => m.id === id);
     setMechanics((prev) => prev.filter((m) => m.id !== id));
     void api(`/api/mechanics/${id}`, { method: 'DELETE' })
@@ -815,6 +857,42 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .catch((error) => showToast(error.message, 'error'));
     showToast("Mechanic removed from shop database", "warning");
     addAuditLog("Staff Record Removed", `Dismissed technician "${target?.name || id}" from active store registry`, 'staff');
+  };
+
+  // --- DELETION REQUESTS (admin needs owner approval) ---
+  const pendingDeletionCount = deletionRequests.filter((r) => r.status === 'pending').length;
+
+  const requestDelete = async (entityType: DeletableEntityType, entityId: string, entityLabel: string) => {
+    const res = await api<DeletionRequest[]>('/api/deletion-requests', {
+      method: 'POST',
+      body: JSON.stringify({ entityType, entityId, entityLabel, requestedByName: currentUserName, requestedByRole: currentRole }),
+    });
+    setDeletionRequests(res);
+    showToast(`Penghapusan ${entityLabel} menunggu persetujuan owner.`, 'info');
+    addAuditLog('Deletion Requested', currentUserName + ' (' + currentRole + ') requested deletion of ' + entityType + ' ' + entityLabel, 'staff');
+  };
+
+  const approveDeletion = async (requestId: string) => {
+    const req = deletionRequests.find((r) => r.id === requestId);
+    const res = await api<DeletionRequest[]>(`/api/deletion-requests/${requestId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ reviewedByName: currentUserName }),
+    });
+    setDeletionRequests(res);
+    await refreshDatabase();
+    showToast(`Penghapusan ${req?.entityLabel || ''} disetujui & data telah dihapus.`, 'success');
+    addAuditLog('Deletion Approved', 'Owner ' + currentUserName + ' approved deletion of ' + (req?.entityType || '') + ' ' + (req?.entityLabel || ''), 'staff');
+  };
+
+  const rejectDeletion = async (requestId: string) => {
+    const req = deletionRequests.find((r) => r.id === requestId);
+    const res = await api<DeletionRequest[]>(`/api/deletion-requests/${requestId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reviewedByName: currentUserName }),
+    });
+    setDeletionRequests(res);
+    showToast(`Penghapusan ditolak oleh ${currentUserName}.`, 'warning');
+    addAuditLog('Deletion Rejected', 'Owner ' + currentUserName + ' rejected deletion of ' + (req?.entityType || '') + ' ' + (req?.entityLabel || ''), 'staff');
   };
 
   // --- DATABASE JSON OPERATIONS ---
@@ -913,6 +991,11 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addMechanic,
         updateMechanic,
         deleteMechanic,
+        deletionRequests,
+        pendingDeletionCount,
+        requestDelete,
+        approveDeletion,
+        rejectDeletion,
         exportDatabaseJSON,
         importDatabaseJSON,
         resetDatabaseToDefault

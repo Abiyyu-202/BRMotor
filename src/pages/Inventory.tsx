@@ -20,6 +20,7 @@ import {
   Database
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { canTriggerDelete, canDeleteDirectly } from '../utils/permissions';
 
 export const Inventory: React.FC = () => {
   const {
@@ -32,6 +33,7 @@ export const Inventory: React.FC = () => {
     language,
     t,
     currentRole,
+    requestDelete,
     formatRupiah
   } = useWorkshop();
 
@@ -128,7 +130,13 @@ export const Inventory: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    setPartToDelete(id);
+    if (!canTriggerDelete(currentRole)) return;
+    if (canDeleteDirectly(currentRole)) {
+      setPartToDelete(id);
+    } else {
+      const part = spareParts.find((p) => p.id === id);
+      requestDelete('sparepart', id, part?.name || id);
+    }
   };
 
   const confirmDeletePart = () => {
@@ -375,13 +383,15 @@ export const Inventory: React.FC = () => {
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(p.id)}
-                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer transition-colors"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canTriggerDelete(currentRole) && (
+                            <button
+                              onClick={() => handleDelete(p.id)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer transition-colors"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

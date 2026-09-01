@@ -19,6 +19,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { canTriggerDelete, canDeleteDirectly } from '../utils/permissions';
 
 export const Vehicles: React.FC = () => {
   const {
@@ -32,6 +33,7 @@ export const Vehicles: React.FC = () => {
     currentRole,
     currentUserId,
     currentUserName,
+    requestDelete,
     showToast,
     language,
     formatRupiah
@@ -213,7 +215,13 @@ export const Vehicles: React.FC = () => {
 
   const handleDelete = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setVehicleToDelete(id);
+    if (!canTriggerDelete(currentRole)) return;
+    if (canDeleteDirectly(currentRole)) {
+      setVehicleToDelete(id);
+    } else {
+      const vehicle = vehicles.find((v) => v.id === id);
+      requestDelete('vehicle', id, `${vehicle?.brand || ''} ${vehicle?.model || ''} [${vehicle?.licensePlate || ''}]`);
+    }
   };
 
   const confirmDelete = () => {
@@ -307,14 +315,16 @@ export const Vehicles: React.FC = () => {
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={(e) => handleDelete(v.id, e)}
-                        className="p-1.5 ml-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
-                        title="Hapus Kendaraan"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canTriggerDelete(currentRole) && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDelete(v.id, e)}
+                          className="p-1.5 ml-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                          title="Hapus Kendaraan"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   );
                 })
@@ -338,14 +348,16 @@ export const Vehicles: React.FC = () => {
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(selectedVehicle.id)}
-                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-xl transition-colors"
-                    title="Hapus Kendaraan"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canTriggerDelete(currentRole) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(selectedVehicle.id)}
+                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-xl transition-colors"
+                      title="Hapus Kendaraan"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-start gap-4">

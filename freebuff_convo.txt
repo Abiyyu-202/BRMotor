@@ -1,0 +1,3244 @@
+# Freebuff conversation
+_7 messages_
+
+---
+
+## Assistant
+
+## User
+
+tadi aku menggunakan AI lain untuk mengerjakan tugas ini
+
+## Assistant
+
+[response interrupted]
+
+## User
+
+tadi aku menggunakan AI lain untuk mengerjakan tugas ini "oke, selanjutnya ini aku pengen benerin hak akses fitur pada role tertentu
+
+- owner: semuanya, termasuk delete
+- mekanik: ga bisa delete, sisa nya dah bener
+- kasir: ga bisa delete, selain itu dah bener
+- admin: ga bisa akses setting, delete harus ada approve dari owner dan HARUS ADA LOG
+
+sisa nya dah bener sih, sama itu di login screen percuma kalo ada pemberitahuan online tapi kalo aku matiin laragon masih stay on, berguna dikit kek"
+
+## Assistant
+
+[response interrupted]
+
+## User
+
+tadi aku menggunakan AI lain untuk mengerjakan tugas ini "oke, selanjutnya ini aku pengen benerin hak akses fitur pada role tertentu
+
+- owner: semuanya, termasuk delete
+- mekanik: ga bisa delete, sisa nya dah bener
+- kasir: ga bisa delete, selain itu dah bener
+- admin: ga bisa akses setting, delete harus ada approve dari owner dan HARUS ADA LOG
+
+sisa nya dah bener sih, sama itu di login screen percuma kalo ada pemberitahuan online tapi kalo aku matiin laragon masih stay on, berguna dikit kek" terus tadi AI nya kan limit, jadi aku tidak tahu progress nya sampai mana, bisa kah kamu mengecek ulang dan jika masih banyak kurang nya, tolong selesaikan
+
+## Assistant
+
+> _Reasoning_
+> The user says they were working with another AI on this task (role-based access control fixes) and it hit a limit, so they don't know the progress. They want me to check the current state and complete what's missing.
+> 
+> Requirements:
+> - owner: everything, including delete
+> - mekanik: cannot delete, rest is fine
+> - kasir: cannot delete, rest is fine
+> - admin: cannot access settings, delete requires owner approval AND must have log
+> - Login screen: online notification is useless if Laragon is off but still shows "online" — need real backend health check
+> 
+> Let me explore the codebase first.
+
+Oke, aku cek dulu kondisi kode sekarang untuk melihat seberapa jauh progress dari AI sebelumnya.
+
+**🛠 Write Todos**
+
+```json
+{
+  "todos": [
+    {
+      "task": "Audit implementasi hak akses role saat ini",
+      "completed": false
+    },
+    {
+      "task": "Pastikan mekanik & kasir tidak bisa delete",
+      "completed": false
+    },
+    {
+      "task": "Admin: blok akses Settings + approval owner untuk delete + log",
+      "completed": false
+    },
+    {
+      "task": "Perbaiki indikator online di login screen (health check backend)",
+      "completed": false
+    },
+    {
+      "task": "Verifikasi build/typecheck",
+      "completed": false
+    }
+  ]
+}
+```
+
+```
+message: Todos written
+```
+
+**🛠 List Directories**
+
+```json
+{
+  "path": "src"
+}
+```
+
+```
+files: 
+  - App.tsx
+  - index.css
+  - main.tsx
+  - types.ts
+  - vite-env.d.ts
+directories: 
+  - assets
+  - components
+  - context
+  - data
+  - pages
+  - utils
+path: src
+```
+
+**🛠 Code Search**
+
+```json
+{
+  "pattern": "role|canDelete|permission|hasPermission",
+  "flags": "-i",
+  "maxResults": 40
+}
+```
+
+```
+stdout: |
+    Found 179 matches
+    .\metadata.json:
+      Line 4:   "requestFramePermissions": [],
+    
+    .\database\migrations\002_adapt_br_motor_for_frontend.sql:
+      Line 24:   ADD COLUMN user_role VARCHAR(20) NULL AFTER details,
+      Line 25:   ADD COLUMN category VARCHAR(30) NULL AFTER user_role;
+    
+    .\database\migrations\001_create_workshop_schema.sql:
+      Line 56:   role ENUM('owner', 'admin', 'mechanic', 'cashier', 'user') NOT NULL DEFAULT 'user',
+      Line 226:   user_role ENUM('owner', 'admin', 'mechanic', 'cashier', 'user') NOT NULL,
+    
+    .\database\migrations\007_create_staff_and_upgrade_customers.sql:
+      Line 12:   role ENUM('owner', 'admin', 'mechanic', 'cashier') NOT NULL DEFAULT 'admin',
+      Line 19: INSERT IGNORE INTO staff (id, name, username, email, password, role, phone, created_at, updated_at)
+      Line 31:   END AS role,
+      Line 36: JOIN roles r ON r.id = u.role_id
+    
+    .\database\migrations\008_drop_legacy_users_and_roles.sql:
+      Line 1: -- Migration 008: Clean up legacy users and roles tables
+      Line 14: -- 3. Drop obsolete users and roles tables
+      Line 16: DROP TABLE IF EXISTS roles;
+    
+    .\scratch\clean_old_tables.cjs:
+      Line 14:     WHERE REFERENCED_TABLE_SCHEMA = 'br_motor' AND REFERENCED_TABLE_NAME IN ('users', 'roles')
+      Line 16:   console.log('Foreign keys referencing users or roles:', fks);
+    
+    .\src\App.tsx:
+      Line 8: import { Booking, UserRole } from './types';
+      Line 48:     currentRole,
+      Line 49:     setCurrentRole,
+      Line 99:   // Navigation tabs configuration with explicit role assignments
+      Line 101:     { name: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
+      Line 102:     { name: 'Customers', icon: Users, roles: ['owner', 'admin', 'cashier'] },
+      Line 103:     { name: 'Vehicles', icon: Bike, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
+      Line 104:     { name: 'Bookings', icon: Calendar, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
+      Line 105:     { name: 'Work Orders', icon: Wrench, roles: ['owner', 'admin', 'mechanic', 'cashier'] },
+      Line 106:     { name: 'Mechanics', icon: Users, roles: ['owner', 'admin'] },
+      Line 107:     { name: 'Inventory', icon: Package, roles: ['owner', 'admin', 'mechanic'] },
+      Line 108:     { name: 'Payments', icon: CreditCard, roles: ['owner', 'admin', 'cashier'] },
+      Line 109:     { name: 'Reports', icon: TrendingUp, roles: ['owner', 'admin'] },
+      Line 110:     { name: 'Settings', icon: SettingsIcon, roles: ['owner', 'admin'] }
+      Line 111:   ].filter(item => item.roles.includes(currentRole));
+      Line 113:   // Auto-redirect if role switcher makes activeTab illegal
+      Line 119:   }, [currentRole]);
+      Line 175:   // Active Customer profile for customer role
+      Line 176:   const activeCustomer = currentRole === 'user'
+      Line 330:             {currentRole === 'user' && (
+    
+    .\server.ts:
+      Line 29: const roleFromDb = (role: string) => (role === 'customer' ? 'user' : role);
+      Line 35: async function log(action: string, details: string, category: string, userRole = 'admin', userId = 1) {
+      Line 37:     'INSERT INTO activity_logs (user_id, activity, details, user_role, category, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      Line 38:     [userId, action, details, userRole, category],
+      Line 129:     auditLogs: logs.map((row: any) => ({ id: id(row.id), action: row.activity, details: row.details || row.activity, timestamp: row.created_at, userRole: row.user_role || 'admin', category: row.category || 'work_order' })),
+      Line 154:         await log('Login Staf Sukses', `Staf ${staff.name} (${staff.role}) berhasil masuk.`, 'auth', staff.role, staff.id);
+      Line 155:         return res.json({ id: id(staff.id), name: staff.name, role: staff.role });
+      Line 170:         return res.json({ id: id(cust.id), name: cust.name, role: 'user' });
+      Line 199:     res.status(201).json({ id: id(result.insertId), name: fullName, role: 'user' });
+      Line 214:     await log('Login Akun Google Staf', `Staf ${s.name} (${cleanEmail}) masuk via Google.`, 'auth', s.role, s.id);
+      Line 215:     return { id: id(s.id), name: s.name, role: s.role, email: s.email };
+      Line 226:     return { id: id(c.id), name: c.name, role: 'user', email: c.email };
+      Line 241:   return { id: id(customerId), name: displayName, role: 'user', email: cleanEmail };
+      Line 415: app.post('/api/work-orders/:id/checkout',async(req,res,next)=>{const c=await pool.getConnection();try{const {discount=0,paymentMethod='cash',cashTendered=null,changeAmount=null}=req.body;await c.beginTransaction();const [details]:any=await c.query(`SELECT sd.*, s.name AS service_name, sp.name AS part_name FROM service_details sd LEFT JOIN services s ON s.id=sd.service_id LEFT JOIN spareparts sp ON sp.id=sd.sparepart_id WHERE sd.work_order_id=?`,[req.params.id]);const serviceCost=details.filter((d:any)=>d.service_id).reduce((x:number,d:any)=>x+Number(d.price),0);const partCost=details.filter((d:any)=>d.sparepart_id).reduce((x:number,d:any)=>x+Number(d.price)*Number(d.quantity),0);const total=Math.max(0,serviceCost+partCost-Number(discount));const [cashiers]:any=await c.query("SELECT id FROM staff WHERE role='cashier' OR role='admin' ORDER BY id LIMIT 1");const cashierId=cashiers[0]?.id||1;const inv=`INV-${Date.now()}`;await c.query("INSERT INTO invoices (work_order_id,cashier_user_id,invoice_number,subtotal_services,subtotal_spareparts,discount,tax,grand_total,payment_method,payment_status,cash_tendered,change_amount,created_at,updated_at) VALUES (?,?,?,?,?,?,0,?,?, 'paid',?,?,NOW(),NOW())",[req.params.id,cashierId,inv,serviceCost,partCost,discount,total,paymentMethod,cashTendered,changeAmount]);for(const d of details.filter((x:any)=>x.sparepart_id)){await c.query('UPDATE spareparts SET stock=GREATEST(0,stock-?) WHERE id=?',[d.quantity,d.sparepart_id]);await c.query("INSERT INTO stock_transactions (sparepart_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?, 'stock_out', ?, ?, 'Checkout work order', NOW())",[d.sparepart_id,d.quantity,req.params.id]);}await c.query("UPDATE work_orders SET status='picked_up',picked_up_at=NOW(),updated_at=NOW() WHERE id=?",[req.params.id]);await c.commit();res.sendStatus(204);}catch(e){await c.rollback();next(e);}finally{c.release();}});
+    
+    .\scratch\migrate_007.cjs:
+      Line 21:       role ENUM('owner', 'admin', 'mechanic', 'cashier') NOT NULL DEFAULT 'admin',
+      Line 31:     INSERT IGNORE INTO staff (id, name, username, email, password, role, phone, created_at, updated_at)
+      Line 43:       END AS role,
+      Line 48:     JOIN roles r ON r.id = u.role_id
+      Line 82:   const [staffList] = await conn.query('SELECT id, name, username, role, email FROM staff');
+    
+    .\scratch\migrate_008.cjs:
+      Line 13:   // 1. Find all foreign keys referencing users or roles
+      Line 17:     WHERE REFERENCED_TABLE_SCHEMA = 'br_motor' AND REFERENCED_TABLE_NAME IN ('users', 'roles')
+      Line 43:   // 4. Drop users and roles tables
+      Line 47:   await conn.query('DROP TABLE IF EXISTS roles');
+      Line 48:   console.log('Dropped legacy roles table.');
+      Line 57:   const [staff] = await conn.query('SELECT id, name, username, role, email FROM staff');
+    
+    .\scratch\migrate_007.js:
+      Line 21:       role ENUM('owner', 'admin', 'mechanic', 'cashier') NOT NULL DEFAULT 'admin',
+      Line 31:     INSERT IGNORE INTO staff (id, name, username, email, password, role, phone, created_at, updated_at)
+      Line 43:       END AS role,
+      Line 48:     JOIN roles r ON r.id = u.role_id
+      Line 82:   const [staffList] = await conn.query('SELECT id, name, username, role, email FROM staff');
+    
+    .\src\types.ts:
+      Line 6: export type UserRole = 'owner' | 'admin' | 'mechanic' | 'cashier' | 'user';
+      Line 165:   userRole: UserRole;
+    
+    .\src\components\AuditLog.tsx:
+      Line 23: import { AuditLogCategory, UserRole } from '../types';
+      Line 84: const roleLabels: Record<UserRole, string> = {
+      Line 96:   const [selectedRole, setSelectedRole] = useState<UserRole | 'all'>('all');
+      Line 104:       const matchesRole = selectedRole === 'all' || log.userRole === selectedRole;
+      Line 105:       return matchesSearch && matchesCategory && matchesRole;
+      Line 107:   }, [auditLogs, searchTerm, selectedCategory, selectedRole]);
+      Line 209:               {/* Role Filtering */}
+      Line 217:                     onClick={() => setSelectedRole('all')}
+      Line 219:                       selectedRole === 'all'
+      Line 226:                   {(['owner', 'admin', 'mechanic', 'cashier', 'user'] as UserRole[]).map((r) => {
+      Line 227:                     const isSelected = selectedRole === r;
+      Line 232:                         onClick={() => setSelectedRole(r)}
+      Line 239:                         {roleLabels[r]}
+      Line 262:                     const roleName = roleLabels[log.userRole] || log.userRole;
+      Line 301:                                 {roleName}
+    
+    .\src\pages\Bookings.tsx:
+      Line 31:     currentRole,
+      Line 70:   // Filter list of bookings based on role
+      Line 71:   // For 'user' role: show bookings matching user's vehicles or user's customer IDs
+      Line 75:   const allowedBookings = currentRole === 'user'
+      Line 85:   const activeCustomerId = currentRole === 'user' ? (userCustomer?.id || '') : selectedCustomerId;
+      Line 86:   const customerVehicles = currentRole === 'user'
+      Line 92:     if (currentRole === 'user') {
+      Line 119:     const finalCustomerId = currentRole === 'user' ? (userCustomer?.id || '') : selectedCustomerId;
+      Line 162:     // For normal staff, we enforce the date filter if set. For user roles, show all their bookings by default
+      Line 163:     const matchesDate = currentRole === 'user' || !dateFilter ? true : normalizeDate(b.date) === normalizeDate(dateFilter);
+      Line 172:   const isMatchingDate = (bDate: string) => currentRole === 'user' || !dateFilter ? true : normalizeDate(bDate) === normalizeDate(dateFilter);
+      Line 186:             {currentRole === 'user' ? 'Booking Servis Saya' : 'Manajemen Booking & Antrean Servis'}
+      Line 189:             {currentRole === 'user'
+      Line 209:               {currentRole === 'user' ? 'Total Booking Saya' : 'Total Booking Hari Ini'}
+      Line 290:             {currentRole !== 'user' && (
+      Line 329:             {currentRole === 'user' && (
+      Line 356:             {currentRole === 'user'
+      Line 446:                     {['owner', 'admin', 'cashier'].includes(currentRole) && (
+      Line 497:               {/* Select Customer (Only show for non-client roles) */}
+      Line 498:               {currentRole !== 'user' ? (
+      Line 555:                   {currentRole !== 'user' && (
+      Line 572:                       bookingType === 'scheduled' || currentRole === 'user'
+    
+    .\src\components\LoginScreen.tsx:
+      Line 26:   const { setIsAuthenticated, setCurrentRole, setCurrentUserName, setCurrentUserId, showToast, shopInfo, language, t } = useWorkshop();
+      Line 125:       setCurrentRole(user.role);
+      Line 160:       setCurrentRole(user.role);
+      Line 190:       setCurrentRole(user.role);
+      Line 231:       setCurrentRole(user.role);
+    
+    .\src\data\mockData.ts:
+      Line 436:     userRole: "owner",
+      Line 444:     userRole: "owner",
+      Line 452:     userRole: "admin",
+      Line 460:     userRole: "admin",
+      Line 468:     userRole: "mechanic",
+      Line 476:     userRole: "cashier",
+      Line 484:     userRole: "mechanic",
+    
+    .\src\utils\translations.ts:
+      Line 35:     // Roles
+      Line 36:     roles: {
+      Line 250:     // Roles
+      Line 251:     roles: {
+      Line 426:       subtitle: "Configure workshop profile, contact details, tax rules, and user role simulation.",
+    
+    .\src\context\WorkshopContext.tsx:
+      Line 16:   UserRole,
+      Line 33:   currentRole: UserRole;
+      Line 34:   setCurrentRole: (role: UserRole) => void;
+      Line 144:   const [currentRole, setCurrentRoleState] = useState<UserRole>(() => {
+      Line 145:     return (localStorage.getItem('br_motor_role') as UserRole) || 'user';
+      Line 159:       localStorage.removeItem('br_motor_role');
+      Line 165:   const setCurrentRole = (role: UserRole) => {
+      Line 166:     setCurrentRoleState(role);
+      Line 167:     localStorage.setItem('br_motor_role', role);
+      Line 168:     showToast(`Switched user profile to ${role.toUpperCase()}`, 'info');
+      Line 286:       userRole: currentRole,
+      Line 869:         currentRole,
+      Line 870:         setCurrentRole,
+    
+    .\src\pages\Inventory.tsx:
+      Line 34:     currentRole,
+    
+    .\src\pages\WorkOrders.tsx:
+      Line 48:     currentRole,
+      Line 302:     const allowedRoles = ['owner', 'admin', 'mechanic'];
+      Line 303:     if (!allowedRoles.includes(currentRole)) {
+      Line 359:     const allowedRoles = ['owner', 'admin', 'mechanic'];
+      Line 360:     if (!allowedRoles.includes(currentRole)) {
+      Line 446:           {['owner', 'admin', 'cashier', 'mechanic'].includes(currentRole) && (
+      Line 456:           {['owner', 'admin', 'cashier'].includes(currentRole) && (
+      Line 497:             const isMe = currentRole === 'mechanic' && m.name.toLowerCase().includes('mekanik');
+    
+    .\src\pages\Settings.tsx:
+      Line 8: import { UserRole } from '../types';
+      Line 31:     currentRole,
+      Line 32:     setCurrentRole,
+      Line 144:   // Role details
+      Line 145:   const rolesList: { role: UserRole; title: string; desc: string; permissions: string }[] = [
+      Line 147:       role: 'owner',
+      Line 148:       title: t.roles.owner,
+      Line 150:       permissions: language === 'id' ? 'Semua menu + Pengaturan Sistem' : 'All tabs + System settings enabled'
+      Line 153:       role: 'admin',
+      Line 154:       title: t.roles.admin,
+      Line 156:       permissions: language === 'id' ? 'Menu Antrean + SPK Kanban' : 'Queue registry + Workorders Kanban'
+      Line 159:       role: 'mechanic',
+      Line 160:       title: t.roles.mechanic,
+      Line 162:       permissions: language === 'id' ? 'Tampilan Kanban + Pengerjaan Servis' : 'Kanban view + Mechanics assignments'
+      Line 165:       role: 'cashier',
+      Line 166:       title: t.roles.cashier,
+      Line 168:       permissions: language === 'id' ? 'Meja Kasir + Cetak Struk' : 'Billing desks + Printed receipts'
+      Line 580:         {/* Right Column (1 Gridwide): Quick Switch User role */}
+      Line 590:                 : 'Test other user profiles. Selecting a role allows you to simulate their real workflow context.'}
+      Line 594:               {rolesList.map((item) => {
+      Line 595:                 const isActive = currentRole === item.role;
+      Line 599:                     key={item.role}
+      Line 600:                     onClick={() => setCurrentRole(item.role)}
+      Line 615:                       {item.permissions}
+    
+    .\src\pages\Customers.tsx:
+      Line 40:     currentRole,
+    
+    .\src\pages\Mechanics.tsx:
+      Line 35:     currentRole,
+    
+    .\src\pages\Dashboard.tsx:
+      Line 48:     currentRole,
+      Line 60:   // If role is a regular client, show a tailored simplified client-portal layout
+      Line 61:   if (currentRole === 'user') {
+    
+    .\src\pages\Vehicles.tsx:
+      Line 32:     currentRole,
+      Line 84:   // Filter vehicles by user role (regular user only accesses their own vehicles)
+      Line 85:   const allowedVehicles = currentRole === 'user'
+      Line 107:   }, [vehicles, currentRole, currentUserName]);
+      Line 123:     if (currentRole === 'user') {
+      Line 156:     if (currentRole === 'user') {
+      Line 548:               {/* Select Customer (Only show for non-client roles) */}
+      Line 549:               {!vehicleToEdit && currentRole !== 'user' ? (
+message: "Exit code: 0"
+```
+
+**🛠 List Directories**
+
+```json
+{
+  "path": "src/context"
+}
+```
+
+```
+files: 
+  - WorkshopContext.tsx
+directories: []
+path: src/context
+```
+
+> _Reasoning_
+> Let me look for delete buttons and how they're guarded. Search for delete handlers in pages.
+
+Sekarang aku cek bagaimana tombol delete di-handle di tiap halaman, dan apakah sudah ada guard role:
+
+**🛠 Code Search**
+
+```json
+{
+  "pattern": "handleDelete|confirmDelete|onDelete|Delete",
+  "flags": "-n",
+  "cwd": "src/pages",
+  "maxResults": 60
+}
+```
+
+```
+stdout: |
+    Found 70 matches
+    .\Customers.tsx:
+      Line 58:   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
+      Line 104:   const handleDelete = (id: string) => {
+      Line 105:     setCustomerToDelete(id);
+      Line 108:   const confirmDeleteCustomer = () => {
+      Line 109:     if (customerToDelete) {
+      Line 110:       deleteCustomer(customerToDelete);
+      Line 111:       if (selectedCustomer?.id === customerToDelete) {
+      Line 114:       setCustomerToDelete(null);
+      Line 264:                     onClick={() => handleDelete(selectedCustomer.id)}
+      Line 547:         isOpen={!!customerToDelete}
+      Line 550:         onConfirm={confirmDeleteCustomer}
+      Line 551:         onClose={() => setCustomerToDelete(null)}
+    
+    .\Inventory.tsx:
+      Line 70:   const [partToDelete, setPartToDelete] = useState<string | null>(null);
+      Line 130:   const handleDelete = (id: string) => {
+      Line 131:     setPartToDelete(id);
+      Line 134:   const confirmDeletePart = () => {
+      Line 135:     if (partToDelete) {
+      Line 136:       deleteSparePart(partToDelete);
+      Line 137:       setPartToDelete(null);
+      Line 379:                             onClick={() => handleDelete(p.id)}
+      Line 533:         isOpen={!!partToDelete}
+      Line 536:         onConfirm={confirmDeletePart}
+      Line 537:         onClose={() => setPartToDelete(null)}
+    
+    .\Bookings.tsx:
+      Line 60:   const [bookingToDelete, setBookingToDelete] = useState<{ id: string; queueNumber: string } | null>(null);
+      Line 393:                         onClick={() => setBookingToDelete({ id: b.id, queueNumber: b.queueNumber })}
+      Line 654:         isOpen={!!bookingToDelete}
+      Line 656:         message={`Apakah Anda yakin ingin menghapus antrean booking ${bookingToDelete?.queueNumber || ''}?`}
+      Line 658:           if (bookingToDelete) {
+      Line 659:             deleteBooking(bookingToDelete.id);
+      Line 660:             setBookingToDelete(null);
+      Line 663:         onClose={() => setBookingToDelete(null)}
+    
+    .\Mechanics.tsx:
+      Line 52:   const [mechanicToDelete, setMechanicToDelete] = useState<string | null>(null);
+      Line 89:   const handleDelete = (id: string) => {
+      Line 90:     setMechanicToDelete(id);
+      Line 93:   const confirmDeleteMechanic = () => {
+      Line 94:     if (mechanicToDelete) {
+      Line 95:       deleteMechanic(mechanicToDelete);
+      Line 96:       setMechanicToDelete(null);
+      Line 239:                   onClick={() => handleDelete(m.id)}
+      Line 395:         isOpen={!!mechanicToDelete}
+      Line 398:         onConfirm={confirmDeleteMechanic}
+      Line 399:         onClose={() => setMechanicToDelete(null)}
+    
+    .\Vehicles.tsx:
+      Line 57:   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
+      Line 214:   const handleDelete = (id: string, e?: React.MouseEvent) => {
+      Line 216:     setVehicleToDelete(id);
+      Line 219:   const confirmDelete = () => {
+      Line 220:     if (vehicleToDelete) {
+      Line 221:       deleteVehicle(vehicleToDelete);
+      Line 222:       if (selectedVehicle?.id === vehicleToDelete) {
+      Line 223:         const remaining = vehicles.filter((v) => v.id !== vehicleToDelete);
+      Line 226:       setVehicleToDelete(null);
+      Line 312:                         onClick={(e) => handleDelete(v.id, e)}
+      Line 343:                     onClick={() => handleDelete(selectedVehicle.id)}
+      Line 718:         isOpen={!!vehicleToDelete}
+      Line 721:         onConfirm={confirmDelete}
+      Line 722:         onClose={() => setVehicleToDelete(null)}
+    
+    .\WorkOrders.tsx:
+      Line 99:   const [woToDelete, setWoToDelete] = useState<string | null>(null);
+      Line 368:   const handleDeleteWorkOrder = (id: string, e?: React.MouseEvent) => {
+      Line 370:     setWoToDelete(id);
+      Line 373:   const confirmDeleteWO = () => {
+      Line 374:     if (woToDelete) {
+      Line 375:       deleteWorkOrder(woToDelete);
+      Line 376:       if (editingWO?.id === woToDelete) {
+      Line 379:       setWoToDelete(null);
+      Line 653:                             onClick={(e) => handleDeleteWorkOrder(wo.id, e)}
+      Line 957:                   onClick={() => handleDeleteWorkOrder(editingWO.id)}
+      Line 1173:         isOpen={!!woToDelete}
+      Line 1175:         message={`Apakah Anda yakin ingin menghapus perintah kerja (SPK) ${woToDelete || ''}?`}
+      Line 1176:         onConfirm={confirmDeleteWO}
+      Line 1177:         onClose={() => setWoToDelete(null)}
+message: "Exit code: 0"
+```
+
+> _Reasoning_
+> No role guards on delete yet. Let me check Payments.tsx for delete too, and check if there's any existing "approval" mechanism. Also check the LoginScreen online indicator.
+
+**🛠 Code Search**
+
+```json
+{
+  "pattern": "delete|Delete",
+  "cwd": "src/pages/Payments.tsx",
+  "maxResults": 15
+}
+```
+
+```
+Failed to execute ripgrep: ENOENT: no such file or directory, uv_spawn 'C:\Users\Razan\.config\manicode\rg.exe'. Vendored ripgrep not found; ensure @codebuff/sdk is up-to-date or set CODEBUFF_RG_PATH.
+```
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "src/components/LoginScreen.tsx",
+      "limit": 120
+    }
+  ]
+}
+```
+
+```
+
+- path: src\components\LoginScreen.tsx
+  content: |
+      /**
+       * @license
+       * SPDX-License-Identifier: Apache-2.0
+       */
+      
+      import React, { useState, useEffect, useRef } from 'react';
+      import { useWorkshop } from '../context/WorkshopContext';
+      import { Shield, ArrowRight, UserPlus, Loader2, Sparkles, CheckCircle2, Globe, Users } from 'lucide-react';
+      
+      declare global {
+        interface Window {
+          google?: {
+            accounts?: {
+              id?: {
+                initialize: (config: any) => void;
+                prompt: (callback?: (notification: any) => void) => void;
+                renderButton: (parent: HTMLElement, options: any) => void;
+                disableAutoSelect: () => void;
+              };
+            };
+          };
+        }
+      }
+      
+      export const LoginScreen: React.FC = () => {
+        const { setIsAuthenticated, setCurrentRole, setCurrentUserName, setCurrentUserId, showToast, shopInfo, language, t } = useWorkshop();
+        const [activeMode, setActiveMode] = useState<'signin' | 'register'>('signin');
+        const [username, setUsername] = useState('');
+        const [password, setPassword] = useState('');
+        const [fullName, setFullName] = useState('');
+        const [phone, setPhone] = useState('');
+        
+        // Google OAuth state
+        const [showGoogleModal, setShowGoogleModal] = useState(false);
+        const [loginError, setLoginError] = useState<string | null>(null);
+        const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+        const [customGoogleEmail, setCustomGoogleEmail] = useState('');
+        const [customGoogleName, setCustomGoogleName] = useState('');
+        const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
+        const [googleButtonRendered, setGoogleButtonRendered] = useState(false);
+      
+        const googleBtnRef = useRef<HTMLDivElement>(null);
+        const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
+        const isGoogleConfigured = Boolean(
+          googleClientId &&
+          !googleClientId.includes('YOUR_') &&
+          !googleClientId.includes('MY_') &&
+          googleClientId.includes('.apps.googleusercontent.com')
+        );
+      
+        // Demo accounts data
+        const demoAccounts = [
+          { label: 'Shop Owner', username: 'owner', password: '123', desc: 'Full administration & revenue charts' },
+          { label: 'Admin Desk', username: 'admin', password: '123', desc: 'Schedule appointments & update inventory' },
+          { label: 'Lead Mechanic', username: 'mechanic', password: '123', desc: 'Diagnose bikes & advance work orders' },
+          { label: 'Store Cashier', username: 'cashier', password: '123', desc: 'Process billing invoices & checkout' },
+          { label: 'Regular Client', username: 'customer', password: '123', desc: 'Book orders & track motorcycle status' }
+        ];
+      
+        // Initialize Google Identity Services SDK
+        useEffect(() => {
+          if (!isGoogleConfigured) return;
+      
+          let isMounted = true;
+      
+          const setupGoogle = () => {
+            if (!isMounted || !window.google?.accounts?.id) return;
+            try {
+              window.google.accounts.id.initialize({
+                client_id: googleClientId,
+                callback: handleGoogleCredentialResponse,
+                auto_select: false,
+                cancel_on_tap_outside: true,
+              });
+      
+              if (googleBtnRef.current) {
+                googleBtnRef.current.innerHTML = '';
+                const containerWidth = googleBtnRef.current.parentElement?.clientWidth || 360;
+                window.google.accounts.id.renderButton(googleBtnRef.current, {
+                  theme: 'outline',
+                  size: 'large',
+                  type: 'standard',
+                  text: language === 'id' ? 'continue_with' : 'continue_with',
+                  shape: 'rectangular',
+                  logo_alignment: 'left',
+                  width: Math.min(420, Math.max(280, containerWidth)),
+                });
+                setGoogleButtonRendered(true);
+              }
+            } catch (err) {
+              console.warn('Google Identity Services init notice:', err);
+            }
+          };
+      
+          setupGoogle();
+          const timer = setInterval(() => {
+            if (window.google?.accounts?.id) {
+              setupGoogle();
+              clearInterval(timer);
+            }
+          }, 400);
+      
+          return () => {
+            isMounted = false;
+            clearInterval(timer);
+          };
+        }, [googleClientId, isGoogleConfigured, language]);
+      
+        const handleGoogleCredentialResponse = async (response: any) => {
+          if (!response?.credential) {
+            showToast('Token autentikasi Google tidak ditemukan.', 'error');
+            return;
+          }
+          setIsGoogleLoading(true);
+          setLoginError(null);
+          try {
+            const res = await fetch('/api/auth/google', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ credential: response.credential }),
+      
+      [read_files: showing lines 1-120 of 696. Use code_search to locate the part you need and read a window around it, or call read_files again with offset=121 to continue.]
+  referencedBy: {}
+```
+
+**🛠 Code Search**
+
+```json
+{
+  "pattern": "delete",
+  "cwd": "src/pages/Payments.tsx",
+  "maxResults": 15
+}
+```
+
+```
+Failed to execute ripgrep: ENOENT: no such file or directory, uv_spawn 'C:\Users\Razan\.config\manicode\rg.exe'. Vendored ripgrep not found; ensure @codebuff/sdk is up-to-date or set CODEBUFF_RG_PATH.
+```
+
+**🛠 Code Search**
+
+```json
+{
+  "pattern": "online|Online|health|api/health",
+  "maxResults": 30
+}
+```
+
+```
+stdout: |
+    Found 8 matches
+    .\server.ts:
+      Line 133: app.get('/api/health', async (_req, res) => { await query('SELECT 1'); res.json({ ok: true }); });
+    
+    .\scratch\test_checkout.cjs:
+      Line 4:   console.log('Testing server health & checkout endpoint...');
+      Line 5:   const res = await fetch('http://localhost:3000/api/health');
+    
+    .\scratch\test_auth_endpoints.cjs:
+      Line 63:   const health = await getJson('/api/health');
+      Line 64:   console.log('Health:', health);
+    
+    .\src\utils\translations.ts:
+      Line 118:       subtitle: "Kelola reservasi jadwal servis online dan kedatangan kendaraan pelanggan.",
+    
+    .\src\pages\Bookings.tsx:
+      Line 191:               : 'Daftarkan pelanggan Walk-In, kelola jadwal booking online, dan atur tiket antrean.'}
+    
+    .\src\pages\Dashboard.tsx:
+      Line 973:                   {language === 'id' ? 'Stok suku cadang aman' : 'All spare parts healthy'}
+message: "Exit code: 0"
+```
+
+> _Reasoning_
+> The rg tool failed once for Payments.tsx (weird, transient). Let me retry. Also there's no "online indicator" in LoginScreen found by search? The search for "online" didn't show LoginScreen. Maybe the indicator is called something else — maybe "status server", "koneksi". Let me search LoginScreen for status indicators like "Server", "Connected", "Terhubung", "Dot".
+
+**🛠 Code Search**
+
+```json
+{
+  "pattern": "Delete|delete",
+  "cwd": "src/pages/Payments.tsx",
+  "maxResults": 15
+}
+```
+
+```
+Failed to execute ripgrep: ENOENT: no such file or directory, uv_spawn 'C:\Users\Razan\.config\manicode\rg.exe'. Vendored ripgrep not found; ensure @codebuff/sdk is up-to-date or set CODEBUFF_RG_PATH.
+```
+
+**🛠 Code Search**
+
+```json
+{
+  "pattern": "server|terhubung|terputus|connected|offline|dot|pulse|green",
+  "flags": "-i",
+  "cwd": "src/components/LoginScreen.tsx",
+  "maxResults": 30
+}
+```
+
+```
+Failed to execute ripgrep: ENOENT: no such file or directory, uv_spawn 'C:\Users\Razan\.config\manicode\rg.exe'. Vendored ripgrep not found; ensure @codebuff/sdk is up-to-date or set CODEBUFF_RG_PATH.
+```
+
+> _Reasoning_
+> The ripgrep binary is missing now. It worked before... transient error. Let me try again, or use grep via terminal.
+
+Tool search-nya sempat error, aku pakai grep lewat terminal:
+
+**🛠 Run Terminal Command**
+
+```json
+{
+  "command": "grep -inE \"delete\" src/pages/Payments.tsx | head -20; echo \"---\"; grep -inE \"server|terhubung|terputus|connected|offline|online|pulse|status\" src/components/LoginScreen.tsx | head -30",
+  "process_type": "SYNC",
+  "timeout_seconds": 30
+}
+```
+
+```
+---
+57:    { label: 'Regular Client', username: 'customer', password: '123', desc: 'Book orders & track motorcycle status' }
+236:      showToast(`Selamat datang, ${user.name}! Akun Google terhubung.`, 'success');
+292:            Active Service Bay: ONLINE
+568:                {/* Status Mode Badge */}
+571:                  <span>{language === 'id' ? 'Autentikasi Terhubung ke MySQL' : 'Connected to MySQL Database'}</span>
+
+```
+
+> _Reasoning_
+> Payments.tsx has no delete. Good.
+> 
+> LoginScreen line 292: "Active Service Bay: ONLINE" and line 568-571: Status Mode Badge "Connected to MySQL Database" — these are hardcoded, not real health checks. That's the user's complaint.
+> 
+> Now let me look at the delete buttons in pages to see if any role guards exist. Let me check a couple of pages around the delete buttons, e.g., Customers.tsx lines 250-280 and Inventory 370-390. Also check whether there's any "approval" mechanism (pending deletions). Let me search for "approv" across the project.
+
+**🛠 Run Terminal Command**
+
+```json
+{
+  "command": "grep -rinE \"approv|pending_delete|deletion\" src/ server.ts | head -30",
+  "process_type": "SYNC",
+  "timeout_seconds": 30
+}
+```
+
+```
+command: grep -rinE "approv|pending_delete|deletion" src/ server.ts | head -30
+stdout: 
+exitCode: 0
+```
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "src/pages/Customers.tsx",
+      "offset": 240,
+      "limit": 60
+    }
+  ]
+}
+```
+
+```
+
+- path: src\pages\Customers.tsx
+  content: |
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+      
+              {/* Right Grid: Selected Profile Details View */}
+              <div className="lg:col-span-2">
+                {selectedCustomer ? (
+                  <div className="space-y-6">
+                    {/* Profile Card Summary */}
+                    <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 flex gap-2">
+                        <button
+                          onClick={() => handleOpenEditModal(selectedCustomer)}
+                          className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-700 cursor-pointer border border-slate-200 font-bold text-xs rounded-xl transition-colors"
+                          title="Edit Data Pelanggan"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(selectedCustomer.id)}
+                          className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-xl transition-colors"
+                          title="Hapus Pelanggan"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+      
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center font-bold text-lg">
+                          {selectedCustomer.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-900 uppercase tracking-tight">{selectedCustomer.name}</h2>
+                          <p className="text-[10px] text-slate-400 mt-0.5 font-mono">ID Pelanggan: {selectedCustomer.id}</p>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 mt-4 text-xs text-slate-700 font-medium">
+                            <span className="flex items-center gap-1.5">
+                              <Phone className="w-4 h-4 text-slate-400" />
+                              {selectedCustomer.phone}
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <MapPin className="w-4 h-4 text-slate-400" />
+                              {selectedCustomer.address}
+                            </span>
+                            <span className="flex items-center gap-1.5 font-mono text-[11px] text-slate-500">
+                              <Calendar className="w-4 h-4 text-slate-400" />
+                              TERDAFTAR: {new Date(selectedCustomer.createdAt).toLocaleDateString('id-ID')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+      
+                    {/* Vehicles Grid Section */}
+                    <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                      <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+      
+      [read_files: showing lines 240-299 of 558. Use code_search to locate the part you need and read a window around it, or call read_files again with offset=300 to continue.]
+  referencedBy: {}
+```
+
+> _Reasoning_
+> Confirmed: no approval mechanism exists, and delete buttons are unguarded. The AI before made little progress (maybe none on these tasks).
+> 
+> Plan:
+> 1. Create a permission helper, e.g. `src/utils/permissions.ts` with `canDelete(role)` → only 'owner' returns true... wait but admin CAN delete with owner approval. So:
+>    - owner: delete directly
+>    - admin: delete request → needs owner approval → then executed + logged
+>    - mechanic/cashier/user: no delete button at all
+>    - admin: Settings tab hidden (App.tsx line 110 currently includes 'admin')
+> 
+> 2. For the approval flow: this is a frontend+backend app (server.ts with MySQL). Simplest robust approach: implement pending deletion requests. But how complex should we go? The app has server.ts with API endpoints and a WorkshopContext that manages data (with mockData fallback?). Let me check how deletes work — does deleteCustomer call an API or just local state? Let me check WorkshopContext.
+> 
+> Also need "HARUS ADA LOG" — there's activity_logs table and AuditLog component; server has log() function.
+> 
+> Let me read WorkshopContext to understand data layer.
+
+Progress dari AI sebelumnya ternyata **belum ada sama sekali** untuk tugas ini — tidak ada guard role di tombol delete, tidak ada mekanisme approval, dan indikator "online" di login screen masih hard-coded. Aku lanjut kerjakan dari awal. Cek dulu cara kerja data layer-nya:
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "src/context/WorkshopContext.tsx",
+      "offset": 1,
+      "limit": 320
+    }
+  ]
+}
+```
+
+```
+
+- path: src\context\WorkshopContext.tsx
+  content: |
+      /**
+       * @license
+       * SPDX-License-Identifier: Apache-2.0
+       */
+      
+      import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+      import {
+        Customer,
+        Vehicle,
+        Booking,
+        WorkOrder,
+        SparePart,
+        Mechanic,
+        ServiceItem,
+        ToastMessage,
+        UserRole,
+        ShopInfo,
+        WorkOrderStatus,
+        WorkOrderSparePart,
+        WorkOrderService,
+        AuditLog,
+        AuditLogCategory,
+        NotificationHistoryItem
+      } from '../types';
+      import { Language, translations } from '../utils/translations';
+      
+      interface WorkshopContextType {
+        language: Language;
+        setLanguage: (lang: Language) => void;
+        t: typeof translations['id'];
+        shopInfo: ShopInfo;
+        setShopInfo: React.Dispatch<React.SetStateAction<ShopInfo>>;
+        currentRole: UserRole;
+        setCurrentRole: (role: UserRole) => void;
+        currentUserName: string;
+        setCurrentUserName: (name: string) => void;
+        currentUserId: string;
+        setCurrentUserId: (id: string) => void;
+        isAuthenticated: boolean;
+        setIsAuthenticated: (val: boolean) => void;
+        customers: Customer[];
+        vehicles: Vehicle[];
+        bookings: Booking[];
+        workOrders: WorkOrder[];
+        spareParts: SparePart[];
+        mechanics: Mechanic[];
+        serviceItems: ServiceItem[];
+        salesHistory: { id: string; date: string; amount: number; count: number }[];
+        toasts: ToastMessage[];
+        notificationHistory: NotificationHistoryItem[];
+        clearNotificationHistory: () => void;
+        markNotificationsAsRead: () => void;
+        auditLogs: AuditLog[];
+        addAuditLog: (action: string, details: string, category: AuditLogCategory) => void;
+        formatRupiah: (amount: number) => string;
+      
+        // Toast notifications
+        showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+        dismissToast: (id: string) => void;
+      
+        // Customers
+        addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Promise<Customer>;
+        updateCustomer: (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => void;
+        deleteCustomer: (id: string) => void;
+      
+        // Vehicles
+        addVehicle: (vehicle: Omit<Vehicle, 'id' | 'customerName'>) => Vehicle;
+        updateVehicle: (id: string, updated: Omit<Vehicle, 'id' | 'customerId' | 'customerName'>) => void;
+        deleteVehicle: (id: string) => void;
+      
+        // Bookings
+        addBooking: (booking: Omit<Booking, 'id' | 'queueNumber' | 'status' | 'createdAt' | 'customerName' | 'licensePlate' | 'vehicleModel'>) => Booking;
+        updateBookingStatus: (id: string, status: Booking['status']) => void;
+        deleteBooking: (id: string) => void;
+      
+        // Work Orders
+        quickCheckIn: (payload: {
+          plateNumber: string;
+          customerName: string;
+          phone: string;
+          brand: string;
+          model: string;
+          year?: number;
+          complaint: string;
+          mechanicId: string;
+          services?: { serviceId: string; price: number }[];
+          spareParts?: { partId: string; quantity: number; pricePerUnit: number }[];
+          estimatedCompletionTime?: string;
+          notes?: string;
+        }) => Promise<{ id: string }>;
+        createWorkOrder: (wo: Omit<WorkOrder, 'id' | 'status' | 'paymentStatus' | 'createdAt' | 'costs'>) => WorkOrder;
+        updateWorkOrderStatus: (id: string, status: WorkOrderStatus) => void;
+        updateWorkOrder: (id: string, updated: Partial<WorkOrder>) => void;
+        deleteWorkOrder: (id: string) => void;
+        checkoutWorkOrder: (id: string, discount: number, paymentMethod?: WorkOrder['paymentMethod'], cashTendered?: number, changeAmount?: number) => void;
+      
+        // Spare Parts
+        addSparePart: (part: Omit<SparePart, 'id'>) => void;
+        updateSparePart: (id: string, updated: Omit<SparePart, 'id'>) => void;
+        deleteSparePart: (id: string) => void;
+        restockSparePart: (id: string, quantity: number) => void;
+      
+        // Mechanics
+        addMechanic: (mechanic: Omit<Mechanic, 'id' | 'assignedJobsCount' | 'completedJobsCount' | 'rating'>) => void;
+        updateMechanic: (id: string, updated: Partial<Mechanic>) => void;
+        deleteMechanic: (id: string) => void;
+      
+        // Database JSON Operations
+        exportDatabaseJSON: () => void;
+        importDatabaseJSON: (jsonData: string) => boolean;
+        resetDatabaseToDefault: () => void;
+      }
+      
+      const WorkshopContext = createContext<WorkshopContextType | undefined>(undefined);
+      
+      async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+        const response = await fetch(path, {
+          headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+          ...options
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message || 'Gagal terhubung ke server database.');
+        }
+        return response.status === 204 ? (undefined as T) : response.json();
+      }
+      
+      export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+        // Language state (permanently Indonesian 'id')
+        const [language, setLanguageState] = useState<Language>('id');
+      
+        const setLanguage = (_lang: Language) => {
+          setLanguageState('id');
+        };
+      
+        const t = translations['id'];
+      
+        // All operational data comes from /api/bootstrap (MySQL), never browser storage.
+        const [shopInfo, setShopInfoState] = useState<ShopInfo>({ name: 'BR Motor', address: '', phone: '', email: '', taxRate: 0, currency: 'Rp' });
+        // Authentication status persisted in localStorage.
+        const [isAuthenticated, setIsAuthenticatedState] = useState<boolean>(() => {
+          return localStorage.getItem('br_motor_auth') === 'true';
+        });
+        const [currentRole, setCurrentRoleState] = useState<UserRole>(() => {
+          return (localStorage.getItem('br_motor_role') as UserRole) || 'user';
+        });
+        const [currentUserName, setCurrentUserNameState] = useState<string>(() => {
+          return localStorage.getItem('br_motor_username') || '';
+        });
+        const [currentUserId, setCurrentUserIdState] = useState<string>(() => {
+          return localStorage.getItem('br_motor_userid') || '';
+        });
+      
+        const setIsAuthenticated = (val: boolean) => {
+          setIsAuthenticatedState(val);
+          localStorage.setItem('br_motor_auth', String(val));
+          if (!val) {
+            localStorage.removeItem('br_motor_auth');
+            localStorage.removeItem('br_motor_role');
+            localStorage.removeItem('br_motor_username');
+            localStorage.removeItem('br_motor_userid');
+          }
+        };
+      
+        const setCurrentRole = (role: UserRole) => {
+          setCurrentRoleState(role);
+          localStorage.setItem('br_motor_role', role);
+          showToast(`Switched user profile to ${role.toUpperCase()}`, 'info');
+        };
+      
+        const setCurrentUserName = (name: string) => {
+          setCurrentUserNameState(name);
+          localStorage.setItem('br_motor_username', name);
+        };
+      
+        const setCurrentUserId = (id: string) => {
+          setCurrentUserIdState(id);
+          localStorage.setItem('br_motor_userid', id);
+        };
+        const [customers, setCustomers] = useState<Customer[]>([]);
+        const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+        const [bookings, setBookings] = useState<Booking[]>([]);
+        const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+        const [spareParts, setSpareParts] = useState<SparePart[]>([]);
+        const [mechanics, setMechanics] = useState<Mechanic[]>([]);
+        const [serviceItems, setServiceItems] = useState<ServiceItem[]>([]);
+        const [salesHistory, setSalesHistory] = useState<{ id: string; date: string; amount: number; count: number }[]>([]);
+        const [toasts, setToasts] = useState<ToastMessage[]>([]);
+        const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+      
+        const refreshDatabase = useCallback(async () => {
+          const data = await api<{
+            shopInfo: ShopInfo; customers: Customer[]; vehicles: Vehicle[]; bookings: Booking[];
+            workOrders: WorkOrder[]; spareParts: SparePart[]; mechanics: Mechanic[];
+            serviceItems: ServiceItem[]; salesHistory: { id: string; date: string; amount: number; count: number }[]; auditLogs: AuditLog[];
+          }>('/api/bootstrap');
+          setShopInfoState(data.shopInfo); setCustomers(data.customers); setVehicles(data.vehicles);
+          setBookings(data.bookings); setWorkOrders(data.workOrders); setSpareParts(data.spareParts);
+          setMechanics(data.mechanics); setServiceItems(data.serviceItems); setSalesHistory(data.salesHistory); setAuditLogs(data.auditLogs);
+      
+          // Auto-detect and sync currentUserId and currentUserName
+          const storedUserId = localStorage.getItem('br_motor_userid');
+          const storedUsername = localStorage.getItem('br_motor_username');
+          if (storedUserId) {
+            const match = data.customers.find(c => String(c.id) === String(storedUserId));
+            if (match && match.name && match.name !== storedUsername) {
+              setCurrentUserNameState(match.name);
+              localStorage.setItem('br_motor_username', match.name);
+            }
+          } else if (storedUsername) {
+            const match = data.customers.find(c => c.name.toLowerCase() === storedUsername.toLowerCase());
+            if (match?.id) {
+              setCurrentUserIdState(match.id);
+              localStorage.setItem('br_motor_userid', match.id);
+            }
+          }
+        }, []);
+      
+        useEffect(() => {
+          refreshDatabase().catch((error) => showToast(error.message, 'error'));
+        }, [refreshDatabase]);
+      
+        // Notification History
+        const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() => {
+          try {
+            const saved = localStorage.getItem('br_motor_notif_history');
+            return saved ? JSON.parse(saved) : [];
+          } catch {
+            return [];
+          }
+        });
+      
+        const clearNotificationHistory = () => {
+          setNotificationHistory([]);
+          try {
+            localStorage.removeItem('br_motor_notif_history');
+          } catch {}
+        };
+      
+        const markNotificationsAsRead = () => {
+          setNotificationHistory((prev) => {
+            const updated = prev.map((n) => ({ ...n, read: true }));
+            try {
+              localStorage.setItem('br_motor_notif_history', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        };
+      
+        // Show Toast Alert Helper with auto-dismiss after 3.5s & history recording
+        const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info') => {
+          const id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
+          setToasts((prev) => [...prev.slice(-2), { id, message, type }]);
+      
+          const historyItem: NotificationHistoryItem = {
+            id,
+            message,
+            type,
+            timestamp: new Date().toISOString(),
+            read: false
+          };
+      
+          setNotificationHistory((prev) => {
+            const updated = [historyItem, ...prev].slice(0, 50);
+            try {
+              localStorage.setItem('br_motor_notif_history', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+      
+          setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== id));
+          }, 3500);
+        };
+      
+        const dismissToast = (id: string) => {
+          setToasts((prev) => prev.filter((t) => t.id !== id));
+        };
+      
+        const addAuditLog = (action: string, details: string, category: AuditLogCategory) => {
+          const newLog: AuditLog = {
+            id: `log-${Math.random().toString(36).substring(2, 7)}`,
+            action,
+            details,
+            timestamp: new Date().toISOString(),
+            userRole: currentRole,
+            category
+          };
+          setAuditLogs((prev) => [newLog, ...prev]);
+        };
+      
+        const setShopInfo = (value: React.SetStateAction<ShopInfo>) => {
+          setShopInfoState((prev) => {
+            const next = typeof value === 'function' ? (value as Function)(prev) : value;
+            void api('/api/settings', { method: 'PUT', body: JSON.stringify(next) })
+              .then(refreshDatabase)
+              .catch((error) => showToast(error.message, 'error'));
+            return next;
+          });
+        };
+      
+      
+      
+        // --- CUSTOMER CRUD ---
+        const addCustomer = async (customer: Omit<Customer, 'id' | 'createdAt'>): Promise<Customer> => {
+          try {
+            const result = await api<{ id: string }>('/api/customers', { method: 'POST', body: JSON.stringify(customer) });
+            const newCustomer: Customer = {
+              ...customer,
+              id: result.id,
+              createdAt: new Date().toISOString()
+            };
+            setCustomers((prev) => [newCustomer, ...prev]);
+            await refreshDatabase();
+            showToast(`Customer "${customer.name}" registered successfully`, 'success');
+            addAuditLog("Customer Registered", `Registered customer "${newCustomer.name}" (${newCustomer.phone})`, 'customer');
+            return newCustomer;
+          } catch (error: any) {
+            showToast(error.message, 'error');
+            throw error;
+      
+      [read_files: showing lines 1-320 of 932. Use code_search to locate the part you need and read a window around it, or call read_files again with offset=321 to continue.]
+  referencedBy: {}
+```
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "src/context/WorkshopContext.tsx",
+      "offset": 320,
+      "limit": 320
+    }
+  ]
+}
+```
+
+```
+
+- path: src\context\WorkshopContext.tsx
+  content: |
+            throw error;
+          }
+        };
+      
+        const updateCustomer = (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => {
+          if (String(id) === String(currentUserId) || String(id) === localStorage.getItem('br_motor_userid')) {
+            setCurrentUserNameState(updated.name);
+            localStorage.setItem('br_motor_username', updated.name);
+          }
+      
+          setCustomers((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, ...updated } : c))
+          );
+          // Update customerName in vehicles and workOrders / bookings denormalized strings
+          setVehicles((prev) =>
+            prev.map((v) => (v.customerId === id ? { ...v, customerName: updated.name } : v))
+          );
+          setBookings((prev) =>
+            prev.map((b) => (b.customerId === id ? { ...b, customerName: updated.name } : b))
+          );
+          setWorkOrders((prev) =>
+            prev.map((wo) => (wo.customerId === id ? { ...wo, customerName: updated.name } : wo))
+          );
+          void api(`/api/customers/${id}`, { method: 'PUT', body: JSON.stringify(updated) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast("Customer details updated", "success");
+          addAuditLog("Customer Updated", `Updated details for customer "${updated.name}" (ID: ${id})`, 'customer');
+        };
+      
+        const deleteCustomer = (id: string) => {
+          const target = customers.find((c) => c.id === id);
+          setCustomers((prev) => prev.filter((c) => c.id !== id));
+          // Also remove customer's vehicles to preserve relations
+          setVehicles((prev) => prev.filter((v) => v.customerId !== id));
+      
+          void api(`/api/customers/${id}`, { method: 'DELETE' })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+      
+          showToast("Customer removed from database", "warning");
+          addAuditLog("Customer Deleted", `Removed customer "${target?.name || id}" and linked vehicles`, 'customer');
+        };
+      
+        // --- VEHICLE CRUD ---
+        const addVehicle = (vehicle: Omit<Vehicle, 'id' | 'customerName'>) => {
+          const customer = customers.find((c) => c.id === vehicle.customerId);
+          const newVehicle: Vehicle = {
+            ...vehicle,
+            id: `v-${Math.random().toString(36).substring(2, 7)}`,
+            customerName: customer ? customer.name : "Unknown Customer"
+          };
+          setVehicles((prev) => [...prev, newVehicle]);
+          void api('/api/vehicles', { method: 'POST', body: JSON.stringify(vehicle) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast(`Vehicle ${vehicle.licensePlate} (${vehicle.brand}) registered`, 'success');
+          addAuditLog("Vehicle Registered", `Registered vehicle ${newVehicle.brand} ${newVehicle.model} [${newVehicle.licensePlate}] for ${newVehicle.customerName}`, 'customer');
+          return newVehicle;
+        };
+      
+        const updateVehicle = (id: string, updated: Omit<Vehicle, 'id' | 'customerId' | 'customerName'>) => {
+          setVehicles((prev) =>
+            prev.map((v) => (v.id === id ? { ...v, ...updated } : v))
+          );
+          // Also update model & plate in bookings & work orders
+          setBookings((prev) =>
+            prev.map((b) => (b.vehicleId === id ? { ...b, licensePlate: updated.licensePlate, vehicleModel: `${updated.brand} ${updated.model}` } : b))
+          );
+          setWorkOrders((prev) =>
+            prev.map((wo) => (wo.vehicleId === id ? { ...wo, licensePlate: updated.licensePlate, vehicleModel: `${updated.brand} ${updated.model}` } : wo))
+          );
+          void api(`/api/vehicles/${id}`, { method: 'PUT', body: JSON.stringify(updated) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast("Vehicle record updated", "success");
+          addAuditLog("Vehicle Updated", `Updated vehicle record [${updated.licensePlate}] (${updated.brand} ${updated.model})`, 'customer');
+        };
+      
+        const deleteVehicle = (id: string) => {
+          const target = vehicles.find((v) => v.id === id);
+          setVehicles((prev) => prev.filter((v) => v.id !== id));
+          void api(`/api/vehicles/${id}`, { method: 'DELETE' })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast("Vehicle record removed", "warning");
+          addAuditLog("Vehicle Deleted", `Removed vehicle [${target?.licensePlate || id}] from database`, 'customer');
+        };
+      
+        // --- BOOKING ENGINE ---
+        const addBooking = (booking: Omit<Booking, 'id' | 'queueNumber' | 'status' | 'createdAt' | 'customerName' | 'licensePlate' | 'vehicleModel'>) => {
+          const customer = customers.find((c) => c.id === booking.customerId);
+          const vehicle = vehicles.find((v) => v.id === booking.vehicleId);
+      
+          // Generate Queue Number (e.g. Q-005)
+          const todayBookingsCount = bookings.filter((b) => b.date === booking.date).length;
+          const nextNum = (todayBookingsCount + 1).toString().padStart(3, '0');
+          const queueNumber = `Q-${nextNum}`;
+      
+          const newBooking: Booking = {
+            ...booking,
+            id: `b-${Math.random().toString(36).substring(2, 7)}`,
+            customerName: customer ? customer.name : "Unknown Customer",
+            licensePlate: vehicle ? vehicle.licensePlate : "N/A",
+            vehicleModel: vehicle ? `${vehicle.brand} ${vehicle.model}` : "Unknown Vehicle",
+            queueNumber,
+            status: 'pending',
+            createdAt: new Date().toISOString()
+          };
+      
+          setBookings((prev) => [...prev, newBooking]);
+          void api<{id: string}>('/api/bookings', { method: 'POST', body: JSON.stringify(booking) })
+            .then((result) => {
+              // Immediately replace temp fake ID with real DB numeric ID so UI actions work correctly
+              if (result?.id) {
+                setBookings((prev) => prev.map((b) => b.id === newBooking.id ? { ...b, id: result.id } : b));
+              }
+              return refreshDatabase();
+            })
+            .catch((error) => showToast(error.message, 'error'));
+          showToast(`Booking ${queueNumber} registered for ${newBooking.customerName}`, 'success');
+          addAuditLog("Booking Scheduled", `Registered ${newBooking.type} booking ${queueNumber} for ${newBooking.customerName}`, 'booking');
+          return newBooking;
+        };
+      
+        const updateBookingStatus = (id: string, status: Booking['status']) => {
+          const target = bookings.find((b) => b.id === id);
+          setBookings((prev) =>
+            prev.map((b) => (b.id === id ? { ...b, status } : b))
+          );
+          void api(`/api/bookings/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast(`Booking marked as ${status}`, 'info');
+          addAuditLog("Booking Updated", `Booking ${target?.queueNumber || id} for ${target?.customerName || 'customer'} marked as ${status.toUpperCase()}`, 'booking');
+        };
+      
+        const deleteBooking = (id: string) => {
+          const target = bookings.find((b) => b.id === id);
+          setBookings((prev) => prev.filter((b) => b.id !== id));
+          void api(`/api/bookings/${id}`, { method: 'DELETE' })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast("Data booking berhasil dihapus", "warning");
+          addAuditLog("Booking Deleted", `Dihapus booking ${target?.queueNumber || id}`, 'booking');
+        };
+      
+        // --- WORK ORDER PROCESS ENGINE ---
+        const quickCheckIn = async (payload: {
+          plateNumber: string;
+          customerName: string;
+          phone: string;
+          brand: string;
+          model: string;
+          year?: number;
+          complaint: string;
+          mechanicId: string;
+          services?: { serviceId: string; price: number }[];
+          spareParts?: { partId: string; quantity: number; pricePerUnit: number }[];
+          estimatedCompletionTime?: string;
+          notes?: string;
+        }) => {
+          try {
+            const res = await api<{ id: string }>('/api/quick-checkin', {
+              method: 'POST',
+              body: JSON.stringify(payload)
+            });
+            await refreshDatabase();
+            showToast(`Motor ${payload.plateNumber.toUpperCase()} berhasil didaftarkan ke antrean servis!`, 'success');
+            addAuditLog("Quick Check-in", `Servis cepat untuk ${payload.plateNumber.toUpperCase()} (${payload.customerName || 'Walk-in'})`, 'work_order');
+            return res;
+          } catch (err: any) {
+            showToast(err.message || 'Gagal mendaftarkan servis', 'error');
+            throw err;
+          }
+        };
+      
+        const createWorkOrder = (wo: Omit<WorkOrder, 'id' | 'status' | 'paymentStatus' | 'createdAt' | 'costs'>) => {
+          // Generate order ID
+          const newId = `wo-${1000 + workOrders.length + 1}`;
+      
+          // Calculate Costs
+          const serviceCost = wo.services.reduce((acc, curr) => acc + curr.price, 0);
+          const sparePartCost = wo.sparePartsUsed.reduce((acc, curr) => acc + curr.totalPrice, 0);
+          const total = serviceCost + sparePartCost;
+      
+          const newWorkOrder: WorkOrder = {
+            ...wo,
+            id: newId,
+            status: 'waiting',
+            paymentStatus: 'unpaid',
+            createdAt: new Date().toISOString(),
+            costs: {
+              serviceCost,
+              sparePartCost,
+              discount: 0,
+              total
+            }
+          };
+      
+          setWorkOrders((prev) => [newWorkOrder, ...prev]);
+          void api<{id: string}>('/api/work-orders', { method: 'POST', body: JSON.stringify(wo) })
+            .then((result) => {
+              // Immediately replace temp fake ID (e.g. wo-1002) with real DB numeric ID
+              if (result?.id) {
+                setWorkOrders((prev) => prev.map((w) => w.id === newWorkOrder.id ? { ...w, id: result.id } : w));
+              }
+              return refreshDatabase();
+            })
+            .catch((error) => showToast(error.message, 'error'));
+      
+          // Update mechanic status to 'busy' if assigned
+          if (wo.assignedMechanicId) {
+            setMechanics((prev) =>
+              prev.map((m) =>
+                m.id === wo.assignedMechanicId ? { ...m, status: 'busy', assignedJobsCount: m.assignedJobsCount + 1 } : m
+              )
+            );
+          }
+      
+          // Update booking status if this came from a booking
+          if (wo.bookingId) {
+            setBookings((prev) =>
+              prev.map((b) => (b.id === wo.bookingId ? { ...b, status: 'checked-in' } : b))
+            );
+          }
+      
+          showToast(`Work Order ${newId} created! Mechanic assigned.`, 'success');
+          addAuditLog("Work Order Created", `Created Work Order ${newId} for ${newWorkOrder.customerName} (${newWorkOrder.vehicleModel})`, 'work_order');
+          return newWorkOrder;
+        };
+      
+        const updateWorkOrderStatus = (id: string, status: WorkOrderStatus) => {
+          const targetWo = workOrders.find((w) => w.id === id);
+          if (!targetWo) return;
+      
+          setWorkOrders((prev) =>
+            prev.map((wo) => {
+              if (wo.id === id) {
+                const updates: Partial<WorkOrder> = { status };
+                if (status === 'completed') {
+                  updates.completedAt = new Date().toISOString();
+                } else if (status === 'picked_up') {
+                  updates.pickedUpAt = new Date().toISOString();
+                }
+                return { ...wo, ...updates };
+              }
+              return wo;
+            })
+          );
+          void api(`/api/work-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+      
+          // Update Mechanic's workload if status changes
+          if (status === 'completed' || status === 'picked_up') {
+            // Release mechanic back to available
+            setMechanics((prev) =>
+              prev.map((m) => {
+                if (m.id === targetWo.assignedMechanicId) {
+                  // Only decrease assigned jobs if positive
+                  const activeJobs = Math.max(0, m.assignedJobsCount - 1);
+                  return {
+                    ...m,
+                    status: activeJobs === 0 ? 'available' : m.status,
+                    assignedJobsCount: activeJobs,
+                    completedJobsCount: m.completedJobsCount + 1
+                  };
+                }
+                return m;
+              })
+            );
+          } else if (status === 'waiting_parts') {
+            // Mechanic is technically still holding it but waiting
+            showToast(`Work Order ${id} waiting for spare parts stock`, 'warning');
+            addAuditLog("Work Order Delayed", `Work Order ${id} marked as WAITING PARTS due to parts shortage`, 'work_order');
+            return;
+          }
+      
+          showToast(`Work Order ${id} is now [${status.toUpperCase().replace('_', ' ')}]`, 'success');
+          addAuditLog("Work Order Updated", `Work Order ${id} status set to ${status.toUpperCase().replace('_', ' ')}`, 'work_order');
+        };
+      
+        const updateWorkOrder = (id: string, updated: Partial<WorkOrder>) => {
+          setWorkOrders((prev) =>
+            prev.map((wo) => {
+              if (wo.id === id) {
+                const merged = { ...wo, ...updated };
+                // Recalculate costs if services or parts changed
+                const serviceCost = merged.services.reduce((acc, curr) => acc + curr.price, 0);
+                const sparePartCost = merged.sparePartsUsed.reduce((acc, curr) => acc + curr.totalPrice, 0);
+                const discount = merged.costs?.discount || 0;
+                merged.costs = {
+                  serviceCost,
+                  sparePartCost,
+                  discount,
+                  total: Math.max(0, serviceCost + sparePartCost - discount)
+                };
+                return merged;
+              }
+              return wo;
+            })
+          );
+          const current = workOrders.find((wo) => wo.id === id);
+          if (current) {
+            void api(`/api/work-orders/${id}`, { method: 'PUT', body: JSON.stringify({ ...current, ...updated }) })
+              .then(refreshDatabase)
+              .catch((error) => showToast(error.message, 'error'));
+          }
+          showToast("Work Order updated successfully", "success");
+          addAuditLog("Work Order Modified", `Work Order ${id} services, spare parts, or mechanic specs were modified`, 'work_order');
+        };
+      
+        const deleteWorkOrder = (id: string) => {
+          const target = workOrders.find((wo) => wo.id === id);
+          setWorkOrders((prev) => prev.filter((wo) => wo.id !== id));
+          void api(`/api/work-orders/${id}`, { method: 'DELETE' })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast("Perintah kerja / SPK berhasil dihapus", "warning");
+      
+      [read_files: showing lines 320-639 of 932. Use code_search to locate the part you need and read a window around it, or call read_files again with offset=640 to continue.]
+  referencedBy: {}
+```
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "src/context/WorkshopContext.tsx",
+      "offset": 639,
+      "limit": 300
+    }
+  ]
+}
+```
+
+```
+
+- path: src\context\WorkshopContext.tsx
+  content: |
+          showToast("Perintah kerja / SPK berhasil dihapus", "warning");
+          addAuditLog("Work Order Deleted", `Dihapus perintah kerja ${target?.id || id}`, 'work_order');
+        };
+      
+        const checkoutWorkOrder = (
+          id: string,
+          discount: number,
+          paymentMethod: WorkOrder['paymentMethod'] = 'cash',
+          cashTendered?: number,
+          changeAmount?: number
+        ) => {
+          const targetWo = workOrders.find((w) => w.id === id);
+          if (!targetWo) return;
+      
+          // Deduct stock of spare parts used
+          targetWo.sparePartsUsed.forEach((usedPart) => {
+            setSpareParts((prev) =>
+              prev.map((part) => {
+                if (part.id === usedPart.partId) {
+                  const finalStock = Math.max(0, part.currentStock - usedPart.quantity);
+                  if (finalStock <= part.minimumStock) {
+                    // Trigger a warning toast if stock hits warning threshold
+                    setTimeout(() => {
+                      showToast(`Low stock warning: ${part.name} is down to ${finalStock} items!`, 'warning');
+                    }, 1000);
+                  }
+                  return { ...part, currentStock: finalStock };
+                }
+                return part;
+              })
+            );
+          });
+      
+          // Mark as Paid
+          setWorkOrders((prev) =>
+            prev.map((wo) => {
+              if (wo.id === id) {
+                const serviceCost = wo.costs.serviceCost;
+                const sparePartCost = wo.costs.sparePartCost;
+                const finalTotal = Math.max(0, serviceCost + sparePartCost - discount);
+                return {
+                  ...wo,
+                  paymentStatus: 'paid',
+                  paymentMethod,
+                  cashTendered,
+                  changeAmount,
+                  status: wo.status === 'picked_up' ? wo.status : 'picked_up', // auto progress to picked up if checked out
+                  pickedUpAt: wo.pickedUpAt || new Date().toISOString(),
+                  costs: {
+                    serviceCost,
+                    sparePartCost,
+                    discount,
+                    total: finalTotal
+                  }
+                };
+              }
+              return wo;
+            })
+          );
+          void api(`/api/work-orders/${id}/checkout`, {
+            method: 'POST', body: JSON.stringify({ discount, paymentMethod, cashTendered, changeAmount })
+          }).then(refreshDatabase).catch((error) => showToast(error.message, 'error'));
+      
+          // Update Daily Sales Ledger
+          const todayStr = new Date().toISOString().split('T')[0];
+          const finalAmount = Math.max(0, (targetWo.costs.serviceCost + targetWo.costs.sparePartCost) - discount);
+      
+          setSalesHistory((prev) => {
+            const existingIdx = prev.findIndex((s) => s.date === todayStr);
+            if (existingIdx !== -1) {
+              return prev.map((item, idx) =>
+                idx === existingIdx
+                  ? { ...item, amount: item.amount + finalAmount, count: item.count + 1 }
+                  : item
+              );
+            } else {
+              return [
+                ...prev,
+                { id: `sale-${Math.random().toString(36).substring(2, 7)}`, date: todayStr, amount: finalAmount, count: 1 }
+              ];
+            }
+          });
+      
+          showToast(
+            language === 'id'
+              ? `Pembayaran berhasil! Total ${shopInfo.currency} ${finalAmount.toLocaleString('id-ID')} (${paymentMethod?.toUpperCase()})`
+              : `Payment completed for ${targetWo.id}! Total ${shopInfo.currency} ${finalAmount.toLocaleString('id-ID')}`,
+            'success'
+          );
+          addAuditLog("Billing Invoice Settled", `Payment of ${shopInfo.currency} ${finalAmount.toLocaleString('id-ID')} via ${paymentMethod} received for Work Order ${id}. Discount applied: ${shopInfo.currency} ${discount.toLocaleString('id-ID')}`, 'payment');
+        };
+      
+        // --- SPARE PARTS INVENTORY CRUD ---
+        const addSparePart = (part: Omit<SparePart, 'id'>) => {
+          const newPart: SparePart = {
+            ...part,
+            id: `p-${Math.random().toString(36).substring(2, 7)}`
+          };
+          setSpareParts((prev) => [...prev, newPart]);
+          void api('/api/spare-parts', { method: 'POST', body: JSON.stringify(part) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast(`Spare Part "${part.name}" added to inventory`, 'success');
+          addAuditLog("Inventory Part Registered", `Added spare part "${part.name}" (SKU: ${part.sku.toUpperCase()}) to catalog`, 'inventory');
+        };
+      
+        const updateSparePart = (id: string, updated: Omit<SparePart, 'id'>) => {
+          setSpareParts((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, ...updated } : p))
+          );
+          void api(`/api/spare-parts/${id}`, { method: 'PUT', body: JSON.stringify(updated) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast(`Spare Part details updated`, 'success');
+          addAuditLog("Inventory Part Updated", `Updated details/prices for part "${updated.name}" (SKU: ${updated.sku.toUpperCase()})`, 'inventory');
+        };
+      
+        const deleteSparePart = (id: string) => {
+          const target = spareParts.find((p) => p.id === id);
+          setSpareParts((prev) => prev.filter((p) => p.id !== id));
+          void api(`/api/spare-parts/${id}`, { method: 'DELETE' })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast("Spare part removed from inventory", "warning");
+          addAuditLog("Inventory Part Deleted", `Removed part "${target?.name || id}" (SKU: ${target?.sku || 'N/A'}) from catalog`, 'inventory');
+        };
+      
+        const restockSparePart = (id: string, quantity: number) => {
+          setSpareParts((prev) =>
+            prev.map((p) => (p.id === id ? { ...p, currentStock: p.currentStock + quantity } : p))
+          );
+          void api(`/api/spare-parts/${id}/restock`, { method: 'PATCH', body: JSON.stringify({ quantity }) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          const target = spareParts.find((p) => p.id === id);
+          showToast(`Added +${quantity} units to ${target?.name || 'item'}`, 'success');
+          addAuditLog("Inventory Restocked", `Restocked +${quantity} units for "${target?.name || id}"`, 'inventory');
+        };
+      
+        // --- MECHANICS MANAGEMENT ---
+        const addMechanic = (mechanic: Omit<Mechanic, 'id' | 'assignedJobsCount' | 'completedJobsCount' | 'rating'>) => {
+          const newMech: Mechanic = {
+            ...mechanic,
+            id: `m-${Math.random().toString(36).substring(2, 7)}`,
+            assignedJobsCount: 0,
+            completedJobsCount: 0,
+            rating: 5.0
+          };
+          setMechanics((prev) => [...prev, newMech]);
+          void api('/api/mechanics', { method: 'POST', body: JSON.stringify(mechanic) })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast(`Mechanic "${mechanic.name}" joined the shop staff`, 'success');
+          addAuditLog("Staff Registered", `Hired technician "${mechanic.name}" as "${mechanic.position}"`, 'staff');
+        };
+      
+        const updateMechanic = (id: string, updated: Partial<Mechanic>) => {
+          setMechanics((prev) =>
+            prev.map((m) => (m.id === id ? { ...m, ...updated } : m))
+          );
+          const current = mechanics.find((m) => m.id === id);
+          if (current) {
+            void api(`/api/mechanics/${id}`, { method: 'PUT', body: JSON.stringify({ ...current, ...updated }) })
+              .then(refreshDatabase)
+              .catch((error) => showToast(error.message, 'error'));
+          }
+          showToast(`Mechanic record updated`, 'success');
+          const target = mechanics.find((m) => m.id === id);
+          addAuditLog("Staff Record Updated", `Updated active background file for technician "${target?.name || id}"`, 'staff');
+        };
+      
+        const deleteMechanic = (id: string) => {
+          const target = mechanics.find((m) => m.id === id);
+          setMechanics((prev) => prev.filter((m) => m.id !== id));
+          void api(`/api/mechanics/${id}`, { method: 'DELETE' })
+            .then(refreshDatabase)
+            .catch((error) => showToast(error.message, 'error'));
+          showToast("Mechanic removed from shop database", "warning");
+          addAuditLog("Staff Record Removed", `Dismissed technician "${target?.name || id}" from active store registry`, 'staff');
+        };
+      
+        // --- DATABASE JSON OPERATIONS ---
+        const exportDatabaseJSON = () => {
+          const dbExport = {
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+            shopInfo,
+            customers,
+            vehicles,
+            bookings,
+            workOrders,
+            spareParts,
+            mechanics,
+            salesHistory,
+            auditLogs
+          };
+      
+          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dbExport, null, 2));
+          const downloadAnchor = document.createElement('a');
+          downloadAnchor.setAttribute("href", dataStr);
+          downloadAnchor.setAttribute("download", `database-bengkel-${shopInfo.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.json`);
+          document.body.appendChild(downloadAnchor);
+          downloadAnchor.click();
+          downloadAnchor.remove();
+      
+          showToast(language === 'id' ? 'Database JSON berhasil diunduh!' : 'Database JSON exported successfully!', 'success');
+        };
+      
+        const importDatabaseJSON = (jsonData: string): boolean => {
+          void jsonData;
+          showToast('Impor JSON dinonaktifkan. Data aplikasi sekarang dikelola oleh MySQL.', 'warning');
+          return false;
+        };
+      
+        const resetDatabaseToDefault = () => {
+          showToast('Reset dari browser dinonaktifkan untuk melindungi data MySQL.', 'warning');
+        };
+      
+        const formatRupiah = (amount: number): string => {
+          return `Rp ${(amount || 0).toLocaleString('id-ID')}`;
+        };
+      
+        return (
+          <WorkshopContext.Provider
+            value={{
+              language,
+              setLanguage,
+              t,
+              shopInfo,
+              setShopInfo,
+              currentRole,
+              setCurrentRole,
+              currentUserName,
+              setCurrentUserName,
+              currentUserId,
+              setCurrentUserId,
+              isAuthenticated,
+              setIsAuthenticated,
+              customers,
+              vehicles,
+              bookings,
+              workOrders,
+              spareParts,
+              mechanics,
+              serviceItems,
+              salesHistory,
+              toasts,
+              notificationHistory,
+              clearNotificationHistory,
+              markNotificationsAsRead,
+              auditLogs,
+              addAuditLog,
+              formatRupiah,
+              showToast,
+              dismissToast,
+              addCustomer,
+              updateCustomer,
+              deleteCustomer,
+              addVehicle,
+              updateVehicle,
+              deleteVehicle,
+              addBooking,
+              updateBookingStatus,
+              deleteBooking,
+              quickCheckIn,
+              createWorkOrder,
+              updateWorkOrderStatus,
+              updateWorkOrder,
+              deleteWorkOrder,
+              checkoutWorkOrder,
+              addSparePart,
+              updateSparePart,
+              deleteSparePart,
+              restockSparePart,
+              addMechanic,
+              updateMechanic,
+              deleteMechanic,
+              exportDatabaseJSON,
+              importDatabaseJSON,
+              resetDatabaseToDefault
+            }}
+          >
+            {children}
+          </WorkshopContext.Provider>
+        );
+      };
+      
+      export const useWorkshop = () => {
+        const context = useContext(WorkshopContext);
+        if (context === undefined) {
+          throw new Error('useWorkshop must be used within a WorkshopProvider');
+        }
+        return context;
+      };
+      
+      [read_files: showing lines 639-932 of 932.]
+  referencedBy: {}
+```
+
+> _Reasoning_
+> Now I understand the architecture. Deletes go through the frontend calling API endpoints. There's an audit log system (activity_logs in DB, surfaced via /api/bootstrap as auditLogs).
+> 
+> Plan for implementation:
+> 
+> 1. **Permission helper** (`src/utils/permissions.ts`):
+>    - `canDelete(role)`: owner → direct delete; admin → request approval; mechanic/cashier/user → no delete.
+>    
+> 2. **Frontend guards on delete buttons**: In each page (Customers, Vehicles, Bookings, Inventory, Mechanics, WorkOrders), hide/disable the delete button for mechanic & cashier; for admin, clicking delete creates a "pending deletion request" that needs owner approval.
+> 
+> 3. **Approval flow for admin deletes**: Simplest robust approach given this app's architecture: add a `deletion_requests` table? That's heavier. Alternative: since the app is single-session local (Laragon), a simpler approach: when admin clicks delete, show modal saying "requires owner approval" and create a pending request stored... where? Owner needs to see it. Options:
+>    - Store in DB via server endpoint (`/api/deletion-requests`) — proper.
+>    - Store in localStorage — hacky, but works if same browser.
+> 
+>    The user said "delete harus ada approve dari owner dan HARUS ADA LOG". Given there's a real MySQL backend, I'll do it properly: new table + endpoints + UI panel for owner to approve/reject, plus logging into activity_logs.
+> 
+> 4. **Admin can't access Settings**: remove 'admin' from Settings roles in App.tsx, and guard the Settings page itself.
+> 
+> 5. **Login screen online indicator**: replace hard-coded "Connected to MySQL Database" badge with actual health check polling `/api/health` (which exists in server.ts). Show green when healthy, red/offline state when not.
+> 
+> Let me check the server.ts structure to add endpoints, check App.tsx nav, and check where audit log categories exist (AuditLogCategory type). Also check ConfirmModal usage.
+> 
+> Let me read server.ts fully-ish. It's probably big. Let me read key parts: beginning, DELETE endpoints, log function, bootstrap.
+
+Sekarang aku sudah paham arsitekturnya. Cek struktur `server.ts` dan `types.ts` untuk menambahkan mekanisme approval:
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "server.ts",
+      "offset": 1,
+      "limit": 140
+    },
+    {
+      "path": "src/types.ts",
+      "offset": 1,
+      "limit": 200
+    }
+  ]
+}
+```
+
+```
+
+- path: server.ts
+  content: |
+      import 'dotenv/config';
+      import express from 'express';
+      import bcrypt from 'bcryptjs';
+      import mysql, { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+      
+      const app = express();
+      const port = Number(process.env.API_PORT || 4000);
+      const pool = mysql.createPool({
+        host: process.env.DB_HOST || '127.0.0.1',
+        port: Number(process.env.DB_PORT || 3306),
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_DATABASE || 'br_motor',
+        waitForConnections: true,
+        connectionLimit: 10,
+        decimalNumbers: true,
+        dateStrings: true,
+      });
+      
+      // Vehicle photos are currently stored as data URLs, so the request can be
+      // larger than Express's default 100 KB JSON body limit.
+      app.use(express.json({ limit: '2mb' }));
+      
+      const query = async <T = RowDataPacket[]>(sql: string, params: unknown[] = []): Promise<T> => {
+        const [rows] = await pool.query(sql, params);
+        return rows as T;
+      };
+      
+      const roleFromDb = (role: string) => (role === 'customer' ? 'user' : role);
+      const mechanicStatus = (status: string) => status === 'inactive' ? 'inactive' : status === 'on_leave' ? 'busy' : 'available';
+      const dbWorkOrderStatus = (status: string) => status === 'quality_control' ? 'qc' : status;
+      const uiWorkOrderStatus = (status: string) => status === 'qc' ? 'quality_control' : status;
+      const id = (value: unknown) => String(value);
+      
+      async function log(action: string, details: string, category: string, userRole = 'admin', userId = 1) {
+        await query<ResultSetHeader>(
+          'INSERT INTO activity_logs (user_id, activity, details, user_role, category, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+          [userId, action, details, userRole, category],
+        );
+      }
+      
+      async function readWorkOrders() {
+        const orders = await query(`
+          SELECT w.*, v.plate_number, v.brand, v.model, c.id AS customer_id, c.name AS customer_name,
+                 m.name AS mechanic_name, i.id AS invoice_id, i.payment_status, i.payment_method,
+                 i.subtotal_services, i.subtotal_spareparts, i.discount, i.grand_total,
+                 i.cash_tendered, i.change_amount, i.updated_at AS paid_at
+          FROM work_orders w
+          JOIN vehicles v ON v.id = w.vehicle_id
+          JOIN customers c ON c.id = v.customer_id
+          JOIN mechanics m ON m.id = w.mechanic_id
+          LEFT JOIN invoices i ON i.work_order_id = w.id
+          ORDER BY w.created_at DESC, w.id DESC
+        `);
+        if (!orders.length) return [];
+        const orderIds = orders.map((row: any) => row.id);
+        const placeholders = orderIds.map(() => '?').join(',');
+        const details = await query(`
+          SELECT sd.*, s.name AS service_name, sp.name AS part_name
+          FROM service_details sd
+          LEFT JOIN services s ON s.id = sd.service_id
+          LEFT JOIN spareparts sp ON sp.id = sd.sparepart_id
+          WHERE sd.work_order_id IN (${placeholders})
+        `, orderIds);
+        return orders.map((row: any) => {
+          const orderDetails = details.filter((detail: any) => Number(detail.work_order_id) === Number(row.id));
+          const services = orderDetails.filter((detail: any) => detail.service_id).map((detail: any) => ({
+            serviceId: id(detail.service_id), name: detail.service_name, price: Number(detail.price),
+          }));
+          const sparePartsUsed = orderDetails.filter((detail: any) => detail.sparepart_id).map((detail: any) => ({
+            partId: id(detail.sparepart_id), name: detail.part_name, quantity: Number(detail.quantity),
+            pricePerUnit: Number(detail.price), totalPrice: Number(detail.price) * Number(detail.quantity),
+          }));
+          const serviceCost = row.invoice_id ? Number(row.subtotal_services) : services.reduce((sum: number, item: any) => sum + item.price, 0);
+          const sparePartCost = row.invoice_id ? Number(row.subtotal_spareparts) : sparePartsUsed.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+          const discount = row.invoice_id ? Number(row.discount) : 0;
+          return {
+            id: id(row.id), bookingId: row.booking_id ? id(row.booking_id) : undefined,
+            customerId: id(row.customer_id), customerName: row.customer_name,
+            vehicleId: id(row.vehicle_id), licensePlate: row.plate_number, vehicleModel: `${row.brand} ${row.model}`,
+            complaint: row.complaint, diagnosis: row.diagnosis || '', assignedMechanicId: id(row.mechanic_id),
+            assignedMechanicName: row.mechanic_name, services, sparePartsUsed,
+            estimatedCompletionTime: row.estimated_completion_time ? String(row.estimated_completion_time).slice(0, 5) : '13:30',
+            notes: row.notes || '', status: uiWorkOrderStatus(row.status), paymentStatus: row.payment_status || 'unpaid',
+            paymentMethod: row.payment_method || undefined, cashTendered: row.cash_tendered ?? undefined,
+            changeAmount: row.change_amount ?? undefined, createdAt: row.created_at, completedAt: row.completed_at || undefined,
+            pickedUpAt: row.picked_up_at || undefined,
+            costs: { serviceCost, sparePartCost, discount, total: row.invoice_id ? Number(row.grand_total) : Math.max(0, serviceCost + sparePartCost - discount) },
+          };
+        });
+      }
+      
+      async function bootstrap() {
+        const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders] = await Promise.all([
+          query('SELECT * FROM shop_settings WHERE id = 1'),
+          query('SELECT id, name, phone, address, email, username, created_at FROM customers ORDER BY name'),
+          query('SELECT v.*, c.name AS customer_name FROM vehicles v JOIN customers c ON c.id = v.customer_id ORDER BY v.id DESC'),
+          query(`SELECT b.*, c.id AS customer_id, c.name AS customer_name, v.plate_number, v.brand, v.model
+                 FROM bookings b JOIN vehicles v ON v.id=b.vehicle_id JOIN customers c ON c.id=v.customer_id ORDER BY b.scheduled_date DESC, b.scheduled_time DESC`),
+          query(`SELECT m.*, COUNT(CASE WHEN w.status NOT IN ('completed','picked_up') THEN 1 END) AS assigned_jobs_count,
+                 COUNT(CASE WHEN w.status IN ('completed','picked_up') THEN 1 END) AS completed_jobs_count
+                 FROM mechanics m LEFT JOIN work_orders w ON w.mechanic_id=m.id GROUP BY m.id ORDER BY m.name`),
+          query('SELECT * FROM services ORDER BY name'),
+          query('SELECT sp.*, s.name AS supplier_name FROM spareparts sp LEFT JOIN suppliers s ON s.id=sp.supplier_id ORDER BY sp.name'),
+          query('SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 100'),
+          query(`SELECT DATE(updated_at) AS date, SUM(grand_total) AS amount, COUNT(*) AS count
+                 FROM invoices WHERE payment_status='paid' GROUP BY DATE(updated_at) ORDER BY date`),
+          readWorkOrders(),
+        ]);
+        const settings: any = settingsRows[0] || { name: 'BR Motor', address: '', phone: '', email: '', tax_rate: 0, currency: 'IDR' };
+        return {
+          shopInfo: { name: settings.name, address: settings.address, phone: settings.phone, email: settings.email, taxRate: Number(settings.tax_rate), currency: 'Rp' },
+          customers: customers.map((row: any) => ({
+            id: id(row.id),
+            name: row.name,
+            phone: row.phone,
+            address: row.address || '',
+            email: row.email || '',
+            username: row.username || undefined,
+            createdAt: row.created_at
+          })),
+          vehicles: vehicles.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), customerName: row.customer_name, licensePlate: row.plate_number, brand: row.brand, model: row.model, year: Number(row.year), imageUrl: row.image_url || undefined })),
+          bookings: bookings.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), vehicleId: id(row.vehicle_id), customerName: row.customer_name, licensePlate: row.plate_number, vehicleModel: `${row.brand} ${row.model}`, type: 'scheduled', date: String(row.scheduled_date || '').slice(0, 10), time: String(row.scheduled_time).slice(0, 5), queueNumber: row.queue_number || row.booking_code, status: row.status === 'confirmed' ? 'checked-in' : row.status, notes: row.complaint, estimatedDurationMinutes: row.estimated_duration_minutes, createdAt: row.created_at })),
+          mechanics: mechanics.map((row: any) => ({ id: id(row.id), name: row.name, position: row.specialization || 'Mekanik', phone: row.phone, status: mechanicStatus(row.status), assignedJobsCount: Number(row.assigned_jobs_count), completedJobsCount: Number(row.completed_jobs_count), rating: 5 })),
+          serviceItems: services.map((row: any) => ({ id: id(row.id), name: row.name, price: Number(row.price), estimatedMinutes: Number(row.estimated_duration) })),
+          spareParts: parts.map((row: any) => ({ id: id(row.id), name: row.name, sku: row.sku, category: 'Umum', purchasePrice: Number(row.purchase_price), sellingPrice: Number(row.sell_price), currentStock: Number(row.stock), minimumStock: Number(row.min_stock), supplier: row.supplier_name || '-' })),
+          workOrders,
+          salesHistory: salesHistory.map((row: any) => ({ id: `sale-${row.date}`, date: String(row.date).slice(0, 10), amount: Number(row.amount), count: Number(row.count) })),
+          auditLogs: logs.map((row: any) => ({ id: id(row.id), action: row.activity, details: row.details || row.activity, timestamp: row.created_at, userRole: row.user_role || 'admin', category: row.category || 'work_order' })),
+        };
+      }
+      
+      app.get('/api/health', async (_req, res) => { await query('SELECT 1'); res.json({ ok: true }); });
+      app.get('/api/bootstrap', async (_req, res, next) => { try { res.json(await bootstrap()); } catch (error) { next(error); } });
+      
+      app.post('/api/auth/login', async (req, res, next) => {
+        try {
+          const loginInput = String(req.body.username || '').trim().toLowerCase();
+          const password = String(req.body.password || '');
+      
+      
+      [read_files: showing lines 1-140 of 435. Use code_search to locate the part you need and read a window around it, or call read_files again with offset=141 to continue.]
+  referencedBy: {}
+- path: src\types.ts
+  content: |
+      /**
+       * @license
+       * SPDX-License-Identifier: Apache-2.0
+       */
+      
+      export type UserRole = 'owner' | 'admin' | 'mechanic' | 'cashier' | 'user';
+      
+      export interface Customer {
+        id: string;
+        name: string;
+        phone: string;
+        address: string;
+        email?: string;
+        username?: string;
+        createdAt: string;
+      }
+      
+      export interface Vehicle {
+        id: string;
+        customerId: string;
+        customerName: string; // denormalized for easy display
+        licensePlate: string;
+        brand: string;
+        model: string;
+        year: number;
+        imageUrl?: string;
+      }
+      
+      export type BookingType = 'walk-in' | 'scheduled';
+      export type BookingStatus = 'pending' | 'checked-in' | 'cancelled';
+      
+      export interface Booking {
+        id: string;
+        customerId: string;
+        vehicleId: string;
+        customerName: string;
+        licensePlate: string;
+        vehicleModel: string;
+        type: BookingType;
+        date: string;
+        time: string;
+        queueNumber: string;
+        status: BookingStatus;
+        notes: string;
+        estimatedDurationMinutes: number;
+        createdAt: string;
+      }
+      
+      export type WorkOrderStatus =
+        | 'waiting'
+        | 'in_progress'
+        | 'waiting_parts'
+        | 'quality_control'
+        | 'completed'
+        | 'picked_up';
+      
+      export interface WorkOrderSparePart {
+        partId: string;
+        name: string;
+        quantity: number;
+        pricePerUnit: number;
+        totalPrice: number;
+      }
+      
+      export interface WorkOrderService {
+        serviceId: string;
+        name: string;
+        price: number;
+      }
+      
+      export interface WorkOrder {
+        id: string;
+        bookingId?: string;
+        customerId: string;
+        customerName: string;
+        vehicleId: string;
+        licensePlate: string;
+        vehicleModel: string;
+        complaint: string;
+        diagnosis: string;
+        assignedMechanicId: string;
+        assignedMechanicName: string;
+        services: WorkOrderService[];
+        sparePartsUsed: WorkOrderSparePart[];
+        estimatedCompletionTime: string;
+        notes: string;
+        status: WorkOrderStatus;
+        paymentStatus: 'unpaid' | 'paid';
+        paymentMethod?: 'cash' | 'transfer' | 'qris' | 'card';
+        cashTendered?: number;
+        changeAmount?: number;
+        createdAt: string;
+        completedAt?: string;
+        pickedUpAt?: string;
+        // Cost breakdown
+        costs: {
+          serviceCost: number;
+          sparePartCost: number;
+          discount: number;
+          total: number;
+        };
+      }
+      
+      export interface SparePart {
+        id: string;
+        name: string;
+        sku: string;
+        category: string;
+        purchasePrice: number;
+        sellingPrice: number;
+        currentStock: number;
+        minimumStock: number;
+        supplier: string;
+      }
+      
+      export type MechanicStatus = 'available' | 'busy' | 'inactive';
+      
+      export interface Mechanic {
+        id: string;
+        name: string;
+        position: string;
+        phone: string;
+        status: MechanicStatus;
+        assignedJobsCount: number;
+        completedJobsCount: number;
+        rating: number; // For professional appearance
+      }
+      
+      export interface ServiceItem {
+        id: string;
+        name: string;
+        price: number;
+        estimatedMinutes: number;
+      }
+      
+      export interface ToastMessage {
+        id: string;
+        message: string;
+        type: 'success' | 'error' | 'warning' | 'info';
+      }
+      
+      export interface ShopInfo {
+        name: string;
+        address: string;
+        phone: string;
+        email: string;
+        taxRate: number; // percentage, e.g. 10 for 10%
+        currency: string; // e.g. "$"
+      }
+      
+      export type AuditLogCategory =
+        | 'work_order'
+        | 'payment'
+        | 'booking'
+        | 'customer'
+        | 'inventory'
+        | 'staff'
+        | 'shop_settings';
+      
+      export interface AuditLog {
+        id: string;
+        action: string;
+        details: string;
+        timestamp: string;
+        userRole: UserRole;
+        category: AuditLogCategory;
+      }
+      
+      export interface NotificationHistoryItem {
+        id: string;
+        message: string;
+        type: 'success' | 'error' | 'warning' | 'info';
+        timestamp: string;
+        read: boolean;
+      }
+      
+      
+  referencedBy: {}
+```
+
+> _Reasoning_
+> Now let me look at the rest of server.ts (lines 140-435) to see DELETE endpoints and where to add new endpoints. Also check App.tsx nav and Settings guard, and the ConfirmModal component.
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "server.ts",
+      "offset": 140,
+      "limit": 300
+    }
+  ]
+}
+```
+
+```
+
+- path: server.ts
+  content: |
+      
+          if (!loginInput || !password) {
+            return res.status(400).json({ message: 'Username dan password wajib diisi.' });
+          }
+      
+          // 1. Check in staff table (Internal Employees: Owner, Admin, Mechanic, Cashier)
+          const staffRows = await query(
+            'SELECT * FROM staff WHERE LOWER(username) = ? OR LOWER(email) = ? LIMIT 1',
+            [loginInput, loginInput]
+          );
+          if (staffRows.length > 0) {
+            const staff: any = staffRows[0];
+            const valid = await bcrypt.compare(password, staff.password);
+            if (valid) {
+              await log('Login Staf Sukses', `Staf ${staff.name} (${staff.role}) berhasil masuk.`, 'auth', staff.role, staff.id);
+              return res.json({ id: id(staff.id), name: staff.name, role: staff.role });
+            }
+            return res.status(401).json({ message: 'Password salah untuk akun staf.' });
+          }
+      
+          // 2. Check in customers table (Clients / Customers)
+          const custRows = await query(
+            'SELECT * FROM customers WHERE (LOWER(username) = ? OR LOWER(email) = ? OR phone = ?) AND password IS NOT NULL LIMIT 1',
+            [loginInput, loginInput, loginInput]
+          );
+          if (custRows.length > 0) {
+            const cust: any = custRows[0];
+            const valid = await bcrypt.compare(password, cust.password);
+            if (valid) {
+              await log('Login Pelanggan Sukses', `Pelanggan ${cust.name} berhasil masuk.`, 'auth', 'user', cust.id);
+              return res.json({ id: id(cust.id), name: cust.name, role: 'user' });
+            }
+            return res.status(401).json({ message: 'Password salah untuk akun pelanggan.' });
+          }
+      
+          return res.status(401).json({ message: 'Username atau password tidak ditemukan.' });
+        } catch (error) { next(error); }
+      });
+      
+      app.post('/api/auth/register', async (req, res, next) => {
+        try {
+          const { username, password, fullName, phone, address = '' } = req.body;
+          const cleanUsername = String(username).trim().toLowerCase();
+          const cleanEmail = `${cleanUsername}@brmotor.local`;
+      
+          // Check uniqueness across staff and customer usernames
+          const existsStaff = await query('SELECT id FROM staff WHERE LOWER(username) = ?', [cleanUsername]);
+          const existsCust = await query('SELECT id FROM customers WHERE LOWER(username) = ? OR phone = ?', [cleanUsername, phone]);
+          if (existsStaff.length > 0 || existsCust.length > 0) {
+            return res.status(409).json({ message: 'Username atau nomor telepon sudah terdaftar.' });
+          }
+      
+          const hash = await bcrypt.hash(String(password), 12);
+          const result = await query<ResultSetHeader>(
+            'INSERT INTO customers (name, phone, email, username, password, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
+            [fullName, phone, cleanEmail, cleanUsername, hash, address]
+          );
+      
+          await log('Pelanggan Baru Terdaftar', `Akun pelanggan ${fullName} berhasil dibuat.`, 'customer', 'user', result.insertId);
+          res.status(201).json({ id: id(result.insertId), name: fullName, role: 'user' });
+        } catch (error) { next(error); }
+      });
+      
+      async function syncGoogleUser(email: string, name: string, phone = '081234567890') {
+        const cleanEmail = email.trim().toLowerCase();
+        const cleanUsername = cleanEmail.split('@')[0];
+      
+        // 1. Check in staff table first
+        const staff = await query(
+          'SELECT * FROM staff WHERE LOWER(email) = ? OR LOWER(username) = ? LIMIT 1',
+          [cleanEmail, cleanUsername]
+        );
+        if (staff.length > 0) {
+          const s: any = staff[0];
+          await log('Login Akun Google Staf', `Staf ${s.name} (${cleanEmail}) masuk via Google.`, 'auth', s.role, s.id);
+          return { id: id(s.id), name: s.name, role: s.role, email: s.email };
+        }
+      
+        // 2. Check in customers table
+        const cust = await query(
+          'SELECT * FROM customers WHERE LOWER(email) = ? OR LOWER(username) = ? LIMIT 1',
+          [cleanEmail, cleanUsername]
+        );
+        if (cust.length > 0) {
+          const c: any = cust[0];
+          await log('Login Akun Google Pelanggan', `Pelanggan ${c.name} (${cleanEmail}) masuk via Google.`, 'auth', 'user', c.id);
+          return { id: id(c.id), name: c.name, role: 'user', email: c.email };
+        }
+      
+        // 3. Create new customer entry directly
+        const randomPass = Math.random().toString(36).slice(-8) + Date.now();
+        const hash = await bcrypt.hash(randomPass, 10);
+        const displayName = name.trim() || cleanUsername;
+      
+        const result = await query<ResultSetHeader>(
+          'INSERT INTO customers (name, phone, email, username, password, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, \'\', NOW(), NOW())',
+          [displayName, phone, cleanEmail, cleanUsername, hash]
+        );
+        const customerId = result.insertId;
+      
+        await log('Pelanggan Google Terdaftar', `Akun baru ${displayName} (${cleanEmail}) terdaftar via Google.`, 'customer', 'user', customerId);
+        return { id: id(customerId), name: displayName, role: 'user', email: cleanEmail };
+      }
+      
+      app.post('/api/auth/google', async (req, res, next) => {
+        try {
+          const { credential } = req.body;
+          if (!credential) {
+            return res.status(400).json({ message: 'Token credential Google tidak ditemukan.' });
+          }
+      
+          // Verify token with Google's tokeninfo API
+          const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+          if (!verifyRes.ok) {
+            return res.status(401).json({ message: 'Verifikasi token Google gagal atau token telah kadaluarsa.' });
+          }
+      
+          const payload = (await verifyRes.json()) as { email?: string; name?: string };
+          if (!payload.email) {
+            return res.status(400).json({ message: 'Email tidak ditemukan dari akun Google.' });
+          }
+      
+          const user = await syncGoogleUser(payload.email, payload.name || payload.email.split('@')[0]);
+          res.json(user);
+        } catch (error) { next(error); }
+      });
+      
+      app.post('/api/auth/google-demo', async (req, res, next) => {
+        try {
+          const { email, name, phone } = req.body;
+          if (!email) {
+            return res.status(400).json({ message: 'Email akun Google wajib diisi.' });
+          }
+          const cleanEmail = String(email).trim().toLowerCase();
+          const cleanName = String(name || cleanEmail.split('@')[0]).trim();
+          const cleanPhone = String(phone || '081234567890').trim();
+      
+          const user = await syncGoogleUser(cleanEmail, cleanName, cleanPhone);
+          res.json(user);
+        } catch (error) { next(error); }
+      });
+      
+      app.post('/api/customers', async (req, res, next) => {
+        try {
+          const { name, phone, address = '', email = '', username = null, password = null } = req.body;
+          let hash = null;
+          if (password) {
+            hash = await bcrypt.hash(String(password), 10);
+          }
+          const r = await query<ResultSetHeader>(
+            'INSERT INTO customers (name, phone, address, email, username, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
+            [name, phone, address, email, username, hash]
+          );
+          await log('Pelanggan dibuat', req.body.name, 'customer');
+          res.json({ id: id(r.insertId) });
+        } catch (e) { next(e); }
+      });
+      
+      app.put('/api/customers/:id', async (req, res, next) => {
+        try {
+          const { name, phone, address = '', email = '', username = undefined, password = undefined } = req.body;
+          
+          if (password && String(password).trim().length > 0) {
+            const hash = await bcrypt.hash(String(password).trim(), 12);
+            await query(
+              'UPDATE customers SET name=?, phone=?, address=?, email=?, username=COALESCE(?, username), password=?, updated_at=NOW() WHERE id=?',
+              [name, phone, address, email, username || null, hash, req.params.id]
+            );
+          } else if (username !== undefined) {
+            await query(
+              'UPDATE customers SET name=?, phone=?, address=?, email=?, username=?, updated_at=NOW() WHERE id=?',
+              [name, phone, address, email, username || null, req.params.id]
+            );
+          } else {
+            await query(
+              'UPDATE customers SET name=?, phone=?, address=?, email=?, updated_at=NOW() WHERE id=?',
+              [name, phone, address, email, req.params.id]
+            );
+          }
+          await log('Profil Pelanggan Diperbarui', `Data profil pelanggan ${name} diperbarui.`, 'customer');
+          res.sendStatus(204);
+        } catch (e) { next(e); }
+      });
+      
+      app.delete('/api/customers/:id', async (req, res, next) => {
+        try {
+          await query('DELETE FROM customers WHERE id=?', [req.params.id]);
+          res.sendStatus(204);
+        } catch (e) { next(e); }
+      });
+      
+      app.post('/api/vehicles', async (req, res, next) => { try { const v=req.body; const r=await query<ResultSetHeader>('INSERT INTO vehicles (customer_id,plate_number,brand,model,year,image_url,created_at,updated_at) VALUES (?,?,?,?,?,?,NOW(),NOW())',[v.customerId,v.licensePlate,v.brand,v.model,v.year,v.imageUrl||null]); res.json({id:id(r.insertId)}); } catch(e){next(e);} });
+      app.put('/api/vehicles/:id', async (req, res, next) => { try { const v=req.body; await query('UPDATE vehicles SET plate_number=?,brand=?,model=?,year=?,image_url=?,updated_at=NOW() WHERE id=?',[v.licensePlate,v.brand,v.model,v.year,v.imageUrl||null,req.params.id]);res.sendStatus(204);}catch(e){next(e);} });
+      app.delete('/api/vehicles/:id', async (req,res,next)=>{try{await query('DELETE FROM vehicles WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      
+      app.post('/api/bookings', async (req,res,next)=>{try{const b=req.body; const count:any=await query('SELECT COUNT(*) AS total FROM bookings WHERE scheduled_date=?',[b.date]); const q=`Q-${String(Number(count[0].total)+1).padStart(3,'0')}`; const code=`BKG-${Date.now()}`; const r=await query<ResultSetHeader>('INSERT INTO bookings (vehicle_id,booking_code,scheduled_date,scheduled_time,complaint,estimated_duration_minutes,status,queue_number,created_at,updated_at) VALUES (?,?,?,?,?,? ,\'pending\',?,NOW(),NOW())',[b.vehicleId,code,b.date,b.time,b.notes||'',b.estimatedDurationMinutes||60,q]);res.json({id:id(r.insertId)});}catch(e){next(e);}});
+      app.patch('/api/bookings/:id/status', async(req,res,next)=>{try{const status=req.body.status==='checked-in'?'confirmed':req.body.status;await query('UPDATE bookings SET status=?,updated_at=NOW() WHERE id=?',[status,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      app.delete('/api/bookings/:id',async(req,res,next)=>{try{await query('DELETE FROM bookings WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      
+      async function replaceDetails(connection: mysql.PoolConnection, orderId: number, services: any[], parts: any[]) {
+        await connection.query('DELETE FROM service_details WHERE work_order_id=?', [orderId]);
+        for (const service of services) {
+          let dbServiceId = service.serviceId;
+          // If the serviceId is a non-numeric string (e.g. from QuickCheckIn 'qs-oli-mesin'),
+          // look up or auto-create a matching row in the `services` table.
+          if (typeof dbServiceId === 'string' && !/^\d+$/.test(dbServiceId)) {
+            const serviceName = service.name || dbServiceId;
+            const [existing]: any = await connection.query('SELECT id FROM services WHERE name=? LIMIT 1', [serviceName]);
+            if (existing.length > 0) {
+              dbServiceId = existing[0].id;
+            } else {
+              const [created]: any = await connection.query(
+                'INSERT INTO services (name,price,estimated_duration,description,created_at,updated_at) VALUES (?,?,30,?,NOW(),NOW())',
+                [serviceName, service.price || 0, `Auto-created from quick check-in`]
+              );
+              dbServiceId = created.insertId;
+            }
+          }
+          await connection.query('INSERT INTO service_details (work_order_id,service_id,quantity,price,created_at,updated_at) VALUES (?,?,1,?,NOW(),NOW())',[orderId, dbServiceId, service.price]);
+        }
+        for (const part of parts) await connection.query('INSERT INTO service_details (work_order_id,sparepart_id,quantity,price,created_at,updated_at) VALUES (?,?,?, ?,NOW(),NOW())',[orderId,part.partId,part.quantity,part.pricePerUnit]);
+      }
+      
+      app.post('/api/quick-checkin', async (req, res, next) => {
+        const c = await pool.getConnection();
+        try {
+          const { plateNumber, customerName, phone, brand, model, year, complaint, mechanicId, services = [], spareParts = [], estimatedCompletionTime = '13:30', notes = '' } = req.body;
+          await c.beginTransaction();
+      
+          let customerId: number | null = null;
+          if (customerName) {
+            const [existingCust]: any = await c.query('SELECT id FROM customers WHERE LOWER(name) = ? OR (phone != \'\' AND phone = ?) LIMIT 1', [customerName.toLowerCase().trim(), phone?.trim() || '__none__']);
+            if (existingCust.length > 0) {
+              customerId = existingCust[0].id;
+              if (phone) await c.query('UPDATE customers SET phone=? WHERE id=?', [phone, customerId]);
+            } else {
+              const [custRes]: any = await c.query('INSERT INTO customers (name, phone, address, created_at, updated_at) VALUES (?, ?, \'\', NOW(), NOW())', [customerName.trim(), phone || '08123456789']);
+              customerId = custRes.insertId;
+            }
+          }
+      
+          const cleanPlate = String(plateNumber || '').trim().toUpperCase();
+          let vehicleId: number | null = null;
+          const [existingVeh]: any = await c.query('SELECT id, customer_id FROM vehicles WHERE UPPER(plate_number) = ? LIMIT 1', [cleanPlate]);
+          if (existingVeh.length > 0) {
+            vehicleId = existingVeh[0].id;
+            if (customerId && (!existingVeh[0].customer_id || existingVeh[0].customer_id === 1)) {
+              await c.query('UPDATE vehicles SET customer_id=? WHERE id=?', [customerId, vehicleId]);
+            }
+          } else {
+            const [vehRes]: any = await c.query('INSERT INTO vehicles (customer_id, plate_number, brand, model, year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())', [customerId || 1, cleanPlate, brand || 'Motor', model || 'Umum', Number(year) || new Date().getFullYear()]);
+            vehicleId = vehRes.insertId;
+          }
+      
+          const number = `WO-${Date.now()}`;
+          const [woRes]: any = await c.query('INSERT INTO work_orders (vehicle_id, mechanic_id, wo_number, complaint, diagnosis, estimated_completion_time, notes, status, priority, start_time, created_at, updated_at) VALUES (?, ?, ?, ?, \'\', ?, ?, \'waiting\', \'normal\', NOW(), NOW(), NOW())', [vehicleId, mechanicId || 1, number, complaint || 'Servis rutin', estimatedCompletionTime, notes]);
+          const workOrderId = woRes.insertId;
+      
+          await replaceDetails(c, workOrderId, services, spareParts);
+          await log('Servis Baru Masuk', `Pendaftaran motor ${cleanPlate} (${customerName || 'Walk-in'})`, 'work_order');
+      
+          await c.commit();
+          res.status(201).json({ id: id(workOrderId), vehicleId: id(vehicleId), customerId: id(customerId) });
+        } catch (e) {
+          await c.rollback();
+          next(e);
+        } finally {
+          c.release();
+        }
+      });
+      
+      app.post('/api/work-orders',async(req,res,next)=>{const c=await pool.getConnection();try{const w=req.body;await c.beginTransaction();const number=`WO-${Date.now()}`;const [r]:any=await c.query('INSERT INTO work_orders (vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?, ?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',[w.vehicleId,w.assignedMechanicId,w.bookingId||null,number,w.complaint,w.diagnosis||'',w.estimatedCompletionTime,w.notes||'']);await replaceDetails(c,r.insertId,w.services,w.sparePartsUsed);if(w.bookingId)await c.query("UPDATE bookings SET status='confirmed',updated_at=NOW() WHERE id=?",[w.bookingId]);await c.commit();res.json({id:id(r.insertId)});}catch(e){await c.rollback();next(e);}finally{c.release();}});
+      app.put('/api/work-orders/:id',async(req,res,next)=>{const c=await pool.getConnection();try{const w=req.body;await c.beginTransaction();await c.query('UPDATE work_orders SET mechanic_id=?,complaint=?,diagnosis=?,estimated_completion_time=?,notes=?,updated_at=NOW() WHERE id=?',[w.assignedMechanicId,w.complaint,w.diagnosis||'',w.estimatedCompletionTime,w.notes||'',req.params.id]);await replaceDetails(c,Number(req.params.id),w.services,w.sparePartsUsed);await c.commit();res.sendStatus(204);}catch(e){await c.rollback();next(e);}finally{c.release();}});
+      app.patch('/api/work-orders/:id/status',async(req,res,next)=>{try{const status=dbWorkOrderStatus(req.body.status);const timestamps=status==='completed'?', completed_at=NOW(), end_time=NOW()':status==='picked_up'?', picked_up_at=NOW()':'';await query(`UPDATE work_orders SET status=?, updated_at=NOW()${timestamps} WHERE id=?`,[status,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      app.delete('/api/work-orders/:id',async(req,res,next)=>{try{await query('DELETE FROM work_orders WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      app.post('/api/work-orders/:id/checkout',async(req,res,next)=>{const c=await pool.getConnection();try{const {discount=0,paymentMethod='cash',cashTendered=null,changeAmount=null}=req.body;await c.beginTransaction();const [details]:any=await c.query(`SELECT sd.*, s.name AS service_name, sp.name AS part_name FROM service_details sd LEFT JOIN services s ON s.id=sd.service_id LEFT JOIN spareparts sp ON sp.id=sd.sparepart_id WHERE sd.work_order_id=?`,[req.params.id]);const serviceCost=details.filter((d:any)=>d.service_id).reduce((x:number,d:any)=>x+Number(d.price),0);const partCost=details.filter((d:any)=>d.sparepart_id).reduce((x:number,d:any)=>x+Number(d.price)*Number(d.quantity),0);const total=Math.max(0,serviceCost+partCost-Number(discount));const [cashiers]:any=await c.query("SELECT id FROM staff WHERE role='cashier' OR role='admin' ORDER BY id LIMIT 1");const cashierId=cashiers[0]?.id||1;const inv=`INV-${Date.now()}`;await c.query("INSERT INTO invoices (work_order_id,cashier_user_id,invoice_number,subtotal_services,subtotal_spareparts,discount,tax,grand_total,payment_method,payment_status,cash_tendered,change_amount,created_at,updated_at) VALUES (?,?,?,?,?,?,0,?,?, 'paid',?,?,NOW(),NOW())",[req.params.id,cashierId,inv,serviceCost,partCost,discount,total,paymentMethod,cashTendered,changeAmount]);for(const d of details.filter((x:any)=>x.sparepart_id)){await c.query('UPDATE spareparts SET stock=GREATEST(0,stock-?) WHERE id=?',[d.quantity,d.sparepart_id]);await c.query("INSERT INTO stock_transactions (sparepart_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?, 'stock_out', ?, ?, 'Checkout work order', NOW())",[d.sparepart_id,d.quantity,req.params.id]);}await c.query("UPDATE work_orders SET status='picked_up',picked_up_at=NOW(),updated_at=NOW() WHERE id=?",[req.params.id]);await c.commit();res.sendStatus(204);}catch(e){await c.rollback();next(e);}finally{c.release();}});
+      
+      app.post('/api/mechanics',async(req,res,next)=>{try{const m=req.body;const r=await query<ResultSetHeader>('INSERT INTO mechanics (name,phone,status,specialization,created_at,updated_at) VALUES (?, ?,\'active\',?,NOW(),NOW())',[m.name,m.phone,m.position]);res.json({id:id(r.insertId)});}catch(e){next(e);}});
+      app.put('/api/mechanics/:id',async(req,res,next)=>{try{const m=req.body;const status=m.status==='available'?'active':m.status==='busy'?'on_leave':m.status;await query('UPDATE mechanics SET name=?,phone=?,status=?,specialization=?,updated_at=NOW() WHERE id=?',[m.name,m.phone,status,m.position,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      app.delete('/api/mechanics/:id',async(req,res,next)=>{try{await query('DELETE FROM mechanics WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      
+      app.post('/api/spare-parts',async(req,res,next)=>{try{const p=req.body;let suppliers:any=await query('SELECT id FROM suppliers WHERE name=?',[p.supplier]);let supplierId=suppliers[0]?.id;if(!supplierId){const r=await query<ResultSetHeader>('INSERT INTO suppliers (name,phone,address,created_at,updated_at) VALUES (?, \'-\', \'-\', NOW(), NOW())',[p.supplier]);supplierId=r.insertId;}const r=await query<ResultSetHeader>('INSERT INTO spareparts (supplier_id,sku,name,purchase_price,sell_price,stock,min_stock,unit,created_at,updated_at) VALUES (?,?,?,?,?,?,?,\'pcs\',NOW(),NOW())',[supplierId,p.sku,p.name,p.purchasePrice,p.sellingPrice,p.currentStock,p.minimumStock]);res.json({id:id(r.insertId)});}catch(e){next(e);}});
+      app.put('/api/spare-parts/:id',async(req,res,next)=>{try{const p=req.body;await query('UPDATE spareparts SET sku=?,name=?,purchase_price=?,sell_price=?,stock=?,min_stock=?,updated_at=NOW() WHERE id=?',[p.sku,p.name,p.purchasePrice,p.sellingPrice,p.currentStock,p.minimumStock,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      app.patch('/api/spare-parts/:id/restock',async(req,res,next)=>{try{const qty=Number(req.body.quantity||0);await query('UPDATE spareparts SET stock=stock+?,updated_at=NOW() WHERE id=?',[qty,req.params.id]);const parts:any=await query('SELECT supplier_id FROM spareparts WHERE id=?',[req.params.id]);const supplierId=parts[0]?.supplier_id||null;await query("INSERT INTO stock_transactions (sparepart_id,supplier_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?,?,'stock_in',?,'MANUAL-RESTOCK','Penambahan stok manual',NOW())",[req.params.id,supplierId,qty]);res.sendStatus(204);}catch(e){next(e);}});
+      app.delete('/api/spare-parts/:id',async(req,res,next)=>{try{await query('DELETE FROM spareparts WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+      
+      app.put('/api/settings',async(req,res,next)=>{try{const s=req.body;await query('UPDATE shop_settings SET name=?,address=?,phone=?,email=?,tax_rate=?,currency=\'IDR\',updated_at=NOW(3) WHERE id=1',[s.name,s.address,s.phone,s.email,s.taxRate]);res.sendStatus(204);}catch(e){next(e);}});
+      
+      app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+        console.error(error);
+        if (error.type === 'entity.too.large') {
+          return res.status(413).json({ message: 'Ukuran foto motor terlalu besar. Gunakan gambar maksimal 2 MB.' });
+        }
+        return res.status(500).json({ message: error.message || 'Server database error' });
+      });
+      app.listen(port, () => console.log(`BR Motor API running at http://localhost:${port}`));
+      
+      [read_files: showing lines 140-435 of 435.]
+  referencedBy: {}
+```
+
+> _Reasoning_
+> Now I have the full picture. Let me plan the implementation:
+> 
+> ## Design
+> 
+> ### 1. Permission helper: `src/utils/permissions.ts`
+> ```ts
+> import { UserRole } from '../types';
+> export const canDirectDelete = (role: UserRole) => role === 'owner';
+> export const canRequestDelete = (role: UserRole) => role === 'owner' || role === 'admin';
+> export const canAccessSettings = (role: UserRole) => role === 'owner';
+> ```
+> 
+> ### 2. Server-side deletion approval
+> Add a `deletion_requests` table (migration 009) + endpoints:
+> - `GET /api/deletion-requests` — list pending
+> - `POST /api/deletion-requests` — admin creates request `{ entityType, entityId, entityLabel, requestedBy }`
+> - `POST /api/deletion-requests/:id/approve` — owner approves → server performs actual delete + logs "Delete approved by owner"
+> - `POST /api/deletion-requests/:id/reject` — owner rejects + log
+> - Log everything into activity_logs.
+> 
+> Include in bootstrap? Better to fetch separately and poll in the UI. Simpler: include `deletionRequests` in bootstrap payload, and context refreshes after actions.
+> 
+> Server delete execution: map entityType → DELETE endpoint logic:
+> - 'customer': delete customer (+ vehicles?) — frontend deleteCustomer also removes vehicles locally; server DELETE customers only deletes customer row. I'll do same as existing endpoints.
+> - 'vehicle', 'booking', 'work_order', 'sparepart', 'mechanic'.
+> 
+> ### 3. Frontend changes
+> **WorkshopContext**: 
+> - Add `deletionRequests` state, loaded from bootstrap.
+> - Add `requestDelete(entityType, entityId, label)` — calls POST /api/deletion-requests, refreshes, toast "menunggu persetujuan owner".
+> - Add `approveDeletion(id)` / `rejectDeletion(id)` for owner — calls API then refreshDatabase.
+> - Guard delete functions: if currentRole is mechanic/cashier/user, block with warning toast (defense in depth).
+> 
+> **Pages** (Customers, Vehicles, Bookings, Inventory/SpareParts, Mechanics, WorkOrders):
+> - Hide delete buttons when role is mechanic/cashier (and 'user').
+> - For admin: clicking delete calls requestDelete instead of deleting directly. Show confirm modal with text "akan dikirim ke owner untuk approval".
+> - Owner: unchanged direct delete flow.
+> 
+> Implementation approach per page: add a helper like:
+> ```ts
+> const canDelete = ['owner','admin'].includes(currentRole);
+> ```
+> and wrap onClick: if owner → old handleDelete; if admin → requestDelete(...).
+> 
+> Simplest: modify each page's handleDelete function to branch on role, and hide buttons for non-delete roles.
+> 
+> Also there's Settings access: remove 'admin' from nav roles in App.tsx line 110, plus guard inside Settings.tsx (show "no access" panel if currentRole !== 'owner'). Also the role switcher in Settings page... that's within settings so owner only anyway.
+> 
+> **Login screen health check**: replace hard-coded badge with real polling of `/api/health`. Let me view lines 280-300 & 560-580 of LoginScreen.
+> 
+> Let me also check App.tsx around lines 99-130 and where AuditLog lives (Reports page?). And check migration folder naming: database/migrations/009_*.sql next.
+> 
+> Let me read LoginScreen relevant sections and App.tsx.
+
+Semua sudah jelas. Sekarang aku lihat bagian badge di LoginScreen dan navigasi di App.tsx:
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "src/components/LoginScreen.tsx",
+      "offset": 270,
+      "limit": 40
+    },
+    {
+      "path": "src/components/LoginScreen.tsx",
+      "offset": 555,
+      "limit": 30
+    },
+    {
+      "path": "src/App.tsx",
+      "offset": 90,
+      "limit": 60
+    }
+  ]
+}
+```
+
+```
+
+- path: src\components\LoginScreen.tsx
+  content: |
+                        <span className="text-[10px] text-slate-400 font-mono tracking-widest uppercase mt-1 block">{t.console}</span>
+                      </div>
+                    </div>
+                  </div>
+      
+                  <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-tight mb-6 uppercase">
+                    {language === 'id' ? (
+                      <>SERVIS TERPERCAYA.<br />BENGKEL MOTOR HANDAL.</>
+                    ) : (
+                      <>GENUINE SERVICE.<br />HONEST WORKSHOP.</>
+                    )}
+                  </h1>
+                  
+                  <p className="text-sm font-normal text-slate-300 max-w-sm leading-relaxed">
+                    {language === 'id'
+                      ? "Manajemen antrean servis, stok suku cadang, dan pencatatan riwayat perawatan kendaraan motor Anda."
+                      : "Clean diagnostic tracking, stock management, and precise scheduling for your motorcycles."}
+                  </p>
+                </div>
+      
+                <div className="text-xs font-mono font-medium tracking-wider text-slate-400 flex items-center gap-2 mt-8">
+                  <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full inline-block animate-ping" />
+                  Active Service Bay: ONLINE
+                </div>
+              </div>
+      
+              {/* Right Side: Interactive Authentication Form */}
+              <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center bg-white">
+                <div className="mb-6 flex gap-4 border-b border-slate-200 pb-2">
+                  <button
+                    onClick={() => {
+                      setActiveMode('signin');
+                      setLoginError(null);
+                    }}
+                    className={`pb-2 text-xs uppercase font-bold tracking-wider cursor-pointer transition-colors ${
+                      activeMode === 'signin' ? 'border-b-2 border-slate-900 text-slate-900' : 'text-slate-400 hover:text-slate-700'
+                    }`}
+                  >
+                    Sign In
+                  </button>
+      
+      [read_files: showing lines 270-309 of 696. Use code_search to locate the part you need and read a window around it, or call read_files again with offset=310 to continue.]
+      
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
+                      </svg>
+                      <h3 className="font-sans font-bold text-base text-slate-800">
+                        {language === 'id' ? 'Masuk dengan Akun Google' : 'Sign in with Google'}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {language === 'id' ? 'Lanjutkan masuk ke ' : 'Continue to '}
+                        <span className="font-semibold text-slate-700">{shopInfo.name}</span>
+                      </p>
+      
+                      {/* Status Mode Badge */}
+                      <div className="mt-3 flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold rounded-full">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{language === 'id' ? 'Autentikasi Terhubung ke MySQL' : 'Connected to MySQL Database'}</span>
+                      </div>
+                    </div>
+      
+                    {/* Account choices */}
+                    <div className="py-4 space-y-2">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        {language === 'id' ? 'Pilih Akun untuk Masuk' : 'Choose an account'}
+                      </p>
+                      
+                      <button
+                        disabled={isGoogleLoading}
+                        onClick={() => selectGoogleAccount('sarah.jenkins@gmail.com', 'Sarah Jenkins')}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 border border-slate-200 transition-colors text-left rounded-2xl cursor-pointer group disabled:opacity-50"
+      
+      [read_files: showing lines 555-584 of 696. Use code_search to locate the part you need and read a window around it, or call read_files again with offset=585 to continue.]
+  referencedBy: {}
+- path: src\App.tsx
+  content: |
+          second: '2-digit'
+        });
+      
+        const formattedDate = currentTime.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        });
+      
+        // Navigation tabs configuration with explicit role assignments
+        const navItems = [
+          { name: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
+          { name: 'Customers', icon: Users, roles: ['owner', 'admin', 'cashier'] },
+          { name: 'Vehicles', icon: Bike, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
+          { name: 'Bookings', icon: Calendar, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
+          { name: 'Work Orders', icon: Wrench, roles: ['owner', 'admin', 'mechanic', 'cashier'] },
+          { name: 'Mechanics', icon: Users, roles: ['owner', 'admin'] },
+          { name: 'Inventory', icon: Package, roles: ['owner', 'admin', 'mechanic'] },
+          { name: 'Payments', icon: CreditCard, roles: ['owner', 'admin', 'cashier'] },
+          { name: 'Reports', icon: TrendingUp, roles: ['owner', 'admin'] },
+          { name: 'Settings', icon: SettingsIcon, roles: ['owner', 'admin'] }
+        ].filter(item => item.roles.includes(currentRole));
+      
+        // Auto-redirect if role switcher makes activeTab illegal
+        useEffect(() => {
+          const isAccessible = navItems.some(item => item.name === activeTab);
+          if (!isAccessible && navItems.length > 0) {
+            setActiveTab(navItems[0].name);
+          }
+        }, [currentRole]);
+      
+        // Callback to handle booking check-in routing
+        const handleCheckInDirect = (booking: Booking) => {
+          updateBookingStatus(booking.id, 'checked-in');
+          setPrefilledBooking(booking);
+          setActiveTab('Work Orders');
+          showToast(`Berhasil check-in ${booking.customerName}. Membuka form SPK.`, 'info');
+        };
+      
+        const handleClearPrefilled = () => {
+          setPrefilledBooking(null);
+        };
+      
+        // Render proper subpage component
+        const renderActivePage = () => {
+          switch (activeTab) {
+            case 'Dashboard':
+              return <Dashboard setActiveTab={setActiveTab} />;
+            case 'Customers':
+              return <Customers />;
+            case 'Vehicles':
+              return <Vehicles />;
+            case 'Bookings':
+              return <Bookings onCheckInDirect={handleCheckInDirect} />;
+            case 'Work Orders':
+              return (
+                <WorkOrders
+                  prefilledBooking={prefilledBooking}
+                  clearPrefilledBooking={handleClearPrefilled}
+                />
+      
+      [read_files: showing lines 90-149 of 406. Use code_search to locate the part you need and read a window around it, or call read_files again with offset=150 to continue.]
+  referencedBy: {}
+```
+
+> _Reasoning_
+> Now I have everything. Implementation plan:
+> 
+> 1. **`src/utils/permissions.ts`** — helper.
+> 2. **Migration `database/migrations/009_create_deletion_requests.sql`** — table.
+> 3. **server.ts** — deletion request endpoints + include in bootstrap + logging. Note: server port is 4000, vite proxies /api presumably (vite.config). Health endpoint exists at /api/health — good for login screen.
+> 4. **WorkshopContext.tsx**:
+>    - `deletionRequests` state from bootstrap
+>    - `requestDelete(entityType, entityId, label)` 
+>    - `approveDeletion(id)`, `rejectDeletion(id)`
+>    - Role guard inside delete functions: mechanic/cashier/user → toast warning & return.
+> 5. **Pages**: hide delete buttons unless owner/admin; admin click → requestDelete flow via confirm modal text change.
+> 6. **App.tsx**: Settings roles → only owner; also add "Approvals" indicator? Owner approval UI — where to put? Options: in Settings page or a dedicated modal in header. Simplest good UX: add a `DeletionApprovalsModal` component opened from the topbar bell/badge visible to owner. Or put approvals panel in Settings page (owner-only anyway). I'll put it in Settings page as a section, plus a badge count on the nav? Keep it simpler: add a section in Settings page listing pending requests with approve/reject buttons. But admin can't access settings now, that's fine — only owner approves.
+> 
+> Actually a more discoverable place: App.tsx header with an inbox icon showing pending count for owner. Let me check App.tsx header area... That adds complexity. I'll do both minimal: Settings page section + a small badge in nav? Keep scope controlled: Settings page section.
+> 
+> Hmm, but user said "delete harus ada approve dari owner dan HARUS ADA LOG". Logs go into activity_logs automatically via log() calls and appear in AuditLog component (Reports page?). Where's AuditLog rendered? Probably Reports. Fine.
+> 
+> 7. **LoginScreen**: health check polling `/api/health` every ~10s, update "Active Service Bay: ONLINE" line and Google badge to reflect actual status.
+> 
+> Let me check where AuditLog component is used, and check ConfirmModal props. Also check vite config port proxying to be sure /api/health works from frontend.
+
+Semua konteks sudah lengkap. Rencana implementasiku:
+
+- **permissions util** baru + guard di semua tombol delete (mekanik/kasir tidak lihat tombol delete)
+- **Admin delete → approval queue**: tabel baru `deletion_requests` + endpoint di `server.ts`, owner approve/reject di halaman Settings, semua kejadian dicatat ke `activity_logs`
+- **Settings hanya untuk owner**
+- **Login screen**: indikator online diubah jadi health check nyata ke `/api/health`
+
+**🛠 Write Todos**
+
+```json
+{
+  "todos": [
+    {
+      "task": "Audit implementasi hak akses role saat ini",
+      "completed": true
+    },
+    {
+      "task": "Buat permissions util + migrasi tabel deletion_requests",
+      "completed": false
+    },
+    {
+      "task": "Tambah endpoint deletion requests + log di server.ts",
+      "completed": false
+    },
+    {
+      "task": "WorkshopContext: state approval + guard role di fungsi delete",
+      "completed": false
+    },
+    {
+      "task": "Guard tombol delete di 6 halaman (owner langsung, admin minta approve, lainnya hidden)",
+      "completed": false
+    },
+    {
+      "task": "Admin tidak bisa akses Settings (nav + guard page)",
+      "completed": false
+    },
+    {
+      "task": "UI approval untuk owner + login screen health check",
+      "completed": false
+    },
+    {
+      "task": "Verifikasi typecheck/build",
+      "completed": false
+    }
+  ]
+}
+```
+
+```
+message: Todos written
+```
+
+**🛠 Read Files**
+
+```json
+{
+  "paths": [
+    {
+      "path": "src/components/ConfirmModal.tsx"
+    },
+    {
+      "path": "vite.config.ts"
+    }
+  ]
+}
+```
+
+```
+
+- path: src\components\ConfirmModal.tsx
+  content: |
+      import React from 'react';
+      import { AlertTriangle, Trash2, X } from 'lucide-react';
+      
+      interface ConfirmModalProps {
+        isOpen: boolean;
+        title?: string;
+        message: string;
+        confirmText?: string;
+        cancelText?: string;
+        type?: 'danger' | 'warning' | 'info';
+        onConfirm: () => void;
+        onClose: () => void;
+      }
+      
+      export const ConfirmModal: React.FC<ConfirmModalProps> = ({
+        isOpen,
+        title = 'Konfirmasi Hapus',
+        message,
+        confirmText = 'Hapus',
+        cancelText = 'Batal',
+        type = 'danger',
+        onConfirm,
+        onClose,
+      }) => {
+        if (!isOpen) return null;
+      
+        return (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fade-in">
+            <div className="bg-white border border-slate-200 w-full max-w-sm rounded-2xl p-5 shadow-2xl space-y-4 text-slate-900 animate-scale-up">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl border ${
+                    type === 'danger' 
+                      ? 'bg-rose-50 border-rose-200 text-rose-600' 
+                      : 'bg-amber-50 border-amber-200 text-amber-600'
+                  }`}>
+                    {type === 'danger' ? <Trash2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900">{title}</h3>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">{message}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+      
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition-colors"
+                >
+                  {cancelText}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onConfirm();
+                    onClose();
+                  }}
+                  className={`px-4 py-2 text-white font-bold text-xs rounded-xl cursor-pointer shadow-sm transition-colors ${
+                    type === 'danger'
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-amber-600 hover:bg-amber-700'
+                  }`}
+                >
+                  {confirmText}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+      
+  referencedBy: {}
+- path: vite.config.ts
+  content: |
+      import tailwindcss from '@tailwindcss/vite';
+      import react from '@vitejs/plugin-react';
+      import path from 'path';
+      import {defineConfig} from 'vite';
+      
+      export default defineConfig(() => {
+        return {
+          plugins: [react(), tailwindcss()],
+          resolve: {
+            alias: {
+              '@': path.resolve(__dirname, '.'),
+            },
+          },
+          server: {
+            proxy: {
+              '/api': 'http://localhost:4000',
+            },
+            // HMR is disabled in AI Studio via DISABLE_HMR env var.
+            // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+            hmr: process.env.DISABLE_HMR !== 'true',
+            // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
+            watch: process.env.DISABLE_HMR === 'true' ? null : {},
+          },
+        };
+      });
+      
+  referencedBy: {}
+```
+
+> _Reasoning_
+> Good. Now implement. Start with permissions util + migration + server changes.
+> 
+> **server.ts additions:**
+> 
+> ```ts
+> // --- DELETION APPROVAL WORKFLOW (admin deletes require owner approval) ---
+> const deletionTargets: Record<string, string> = {
+>   customer: 'customers',
+>   vehicle: 'vehicles',
+>   booking: 'bookings',
+>   work_order: 'work_orders',
+>   sparepart: 'spareparts',
+>   mechanic: 'mechanics',
+> };
+> 
+> async function readDeletionRequests() {
+>   const rows = await query('SELECT * FROM deletion_requests ORDER BY created_at DESC LIMIT 100');
+>   return rows.map((row: any) => ({ id, entityType, entityId, entityLabel, requestedBy (name), requestedByRole, status, createdAt, reviewedBy?, reviewedAt? }));
+> }
+> ```
+> 
+> Endpoints:
+> - GET /api/deletion-requests
+> - POST /api/deletion-requests {entityType, entityId, entityLabel} → insert pending; log "Permintaan hapus dibuat"
+> - POST /api/deletion-requests/:id/approve {reviewedBy?} → fetch request, ensure pending, delete row from target table, update request status='approved', log both approval and actual deletion.
+> - POST /api/deletion-requests/:id/reject → status='rejected', log.
+> 
+> Also add `deletionRequests` to bootstrap payload. And migration SQL file 009.
+> 
+> Note the server has no auth at all (roles are client-side), so enforcement is frontend-level mostly — consistent with existing app design. I'll still enforce in delete endpoints minimally? Without sessions there's no way to know the role server-side. The frontend sends role... could accept a header but that's trivially spoofable anyway. Given the app's architecture (demo app, no real auth tokens), I'll keep enforcement at frontend + approval workflow in DB. That matches user expectations for this project.
+> 
+> **types.ts**: add `DeletionRequest` interface + maybe extend AuditLogCategory? Categories used: 'work_order','payment','booking','customer','inventory','staff','shop_settings'. Server also uses 'auth' category! And AuditLog type category is AuditLogCategory which doesn't include 'auth'. Existing logs from server with category 'auth' would just not match filters nicely but it's typed as any from API. For deletion logs I'll use the entity's own category to stay compatible with AuditLog filter UI.
+> 
+> **WorkshopContext**: 
+> - import DeletionRequest type
+> - state deletionRequests
+> - refreshDatabase: also setDeletionRequests(data.deletionRequests)
+> - requestDelete(entityType, entityId, label): POST, then log locally via audit? Server logs already; after success call refreshDatabase and showToast 'menunggu persetujuan Owner'
+> - approveDeletion(id): POST approve then refreshDatabase, toast
+> - rejectDeletion(id)
+> - Guard each delete fn: if (!['owner','admin'].includes(currentRole)) { showToast('Role Anda tidak memiliki izin menghapus data', 'error'); return; }
+> 
+> **Pages**: For each page:
+> - Get currentRole (already have).
+> - compute `const canDelete = currentRole === 'owner' || currentRole === 'admin';`
+> - Hide delete buttons when !canDelete.
+> - In handleDelete/confirm flow: if owner → direct delete as before; if admin → call requestDelete instead.
+> 
+> Implementation per page: modify handleDelete functions:
+> 
+> Customers.tsx handleDelete currently sets customerToDelete. Simplest: keep modal, change confirm handler:
+> ```ts
+> const confirmDeleteCustomer = () => {
+>   if (customerToDelete) {
+>     if (currentRole === 'owner') {
+>       deleteCustomer(customerToDelete);
+>     } else {
+>       requestDelete('customer', customerToDelete, selectedCustomer?.name || ...);
+>     }
+>     ...
+> ```
+> But wait, admin's confirm message should say "akan dikirim ke Owner untuk persetujuan". ConfirmModal message is static prop; can make dynamic based on role.
+> 
+> Also hide delete button when !canDelete.
+> 
+> Let me check each page's delete button locations & context. I'll do edits one by one. Also need to hide for 'user' role too — Vehicles page shows delete to users? Line 312 delete on cards; user role sees their vehicles... spec says only owner/admin can delete anything, so hide for mechanic/cashier/user everywhere.
+> 
+> Bookings line 446: `{['owner','admin','cashier'].includes(currentRole) && (` — need to see what that renders (maybe action buttons incl. delete). Delete button at line 393. Let me view context around those lines when editing.
+> 
+> Settings page guard: wrap content: if currentRole !== 'owner' show access denied panel. Note Settings page includes role switcher ("Quick Switch User role") used for testing — owner only now, fine.
+> 
+> App.tsx nav: Settings roles ['owner'] only. But wait — the auto-redirect effect depends on [currentRole] only, fine.
+> 
+> Where does AuditLog component get rendered? Probably Reports. Not critical.
+> 
+> LoginScreen health check:
+> ```ts
+> const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+> useEffect(() => {
+>   let cancelled = false;
+>   const check = async () => {
+>     try {
+>       const res = await fetch('/api/health', { cache: 'no-store' });
+>       if (!cancelled) setServerOnline(res.ok);
+>     } catch {
+>       if (!cancelled) setServerOnline(false);
+>     }
+>   };
+>   check();
+>   const timer = setInterval(check, 10000);
+>   return () => { cancelled = true; clearInterval(timer); };
+> }, []);
+> ```
+> Then update the "Active Service Bay: ONLINE" indicator and Google badge accordingly.
+> 
+> Now write files. Start with permissions util, types addition, migration, server edits.
+
+Sekarang mulai implementasi. Pertama: permissions util, tipe data, dan migrasi DB:
+
+**🛠 Write File**
+
+```json
+{
+  "path": "src/utils/permissions.ts",
+  "instructions": "Add central role permission helpers for delete and settings access.",
+  "content": "/**\n * @license\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport { UserRole } from '../types';\n\n/**\n * Aturan hak akses:\n * - owner  : semuanya, termasuk delete langsung tanpa persetujuan.\n * - admin  : tidak bisa akses Settings; delete harus melalui persetujuan owner.\n * - mechanic / cashier : tidak bisa delete sama sekali, sisanya sesuai menu masing-masing.\n */\nexport const canDirectDelete = (role: UserRole): boolean => role === 'owner';\n\nexport const canRequestDelete = (role: UserRole): boolean =>\n  role === 'owner' || role === 'admin';\n\nexport const canAccessSettings = (role: UserRole): boolean => role === 'owner';\n"
+}
+```
+
+```
+file: src\utils\permissions.ts
+message: Created file successfully.
+```
+
+**🛠 Write File**
+
+```json
+{
+  "path": "database/migrations/009_create_deletion_requests.sql",
+  "instructions": "Create deletion_requests table for owner-approval workflow of admin deletions.",
+  "content": "-- Migration 009: Deletion requests (admin deletes require owner approval)\nCREATE TABLE IF NOT EXISTS deletion_requests (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  entity_type ENUM('customer','vehicle','booking','work_order','sparepart','mechanic') NOT NULL,\n  entity_id VARCHAR(50) NOT NULL,\n  entity_label VARCHAR(255) NOT NULL DEFAULT '',\n  requested_by_name VARCHAR(120) NOT NULL DEFAULT '',\n  requested_by_role VARCHAR(20) NOT NULL DEFAULT 'admin',\n  status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',\n  reviewed_by_name VARCHAR(120) NULL,\n  reviewed_at DATETIME NULL,\n  created_at DATETIME NOT NULL,\n  updated_at DATETIME NOT NULL,\n  INDEX idx_deletion_status (status)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n"
+}
+```
+
+```
+file: database\migrations\009_create_deletion_requests.sql
+message: Created file successfully.
+```
+
+**🛠 Str Replace**
+
+```json
+{
+  "path": "src/types.ts",
+  "replacements": [
+    {
+      "oldString": "export interface NotificationHistoryItem {",
+      "newString": "export type DeletableEntityType =\n  | 'customer'\n  | 'vehicle'\n  | 'booking'\n  | 'work_order'\n  | 'sparepart'\n  | 'mechanic';\n\nexport interface DeletionRequest {\n  id: string;\n  entityType: DeletableEntityType;\n  entityId: string;\n  entityLabel: string;\n  requestedByName: string;\n  requestedByRole: UserRole;\n  status: 'pending' | 'approved' | 'rejected';\n  reviewedByName?: string;\n  reviewedAt?: string;\n  createdAt: string;\n}\n\nexport interface NotificationHistoryItem {",
+      "allowMultiple": false
+    }
+  ]
+}
+```
+
+```
+file: src\types.ts
+message: String replace applied successfully.
+```
+
+Sekarang tambahkan endpoint deletion requests di `server.ts` + sertakan dalam bootstrap:
+
+**🛠 Str Replace**
+
+```json
+{
+  "path": "server.ts",
+  "replacements": [
+    {
+      "oldString": "app.get('/api/health', async (_req, res) => { await query('SELECT 1'); res.json({ ok: true }); });",
+      "newString": "// --- DELETION APPROVAL WORKFLOW ---\n// Admin cannot delete directly: they file a request that an owner must approve.\nconst DELETION_TARGETS: Record<string, string> = {\n  customer: 'customers',\n  vehicle: 'vehicles',\n  booking: 'bookings',\n  work_order: 'work_orders',\n  sparepart: 'spareparts',\n  mechanic: 'mechanics',\n};\n\nasync function readDeletionRequests() {\n  const rows = await query('SELECT * FROM deletion_requests ORDER BY created_at DESC LIMIT 100');\n  return rows.map((row: any) => ({\n    id: id(row.id),\n    entityType: row.entity_type,\n    entityId: id(row.entity_id),\n    entityLabel: row.entity_label || '',\n    requestedByName: row.requested_by_name || 'admin',\n    requestedByRole: row.requested_by_role || 'admin',\n    status: row.status,\n    reviewedByName: row.reviewed_by_name || undefined,\n    reviewedAt: row.reviewed_at || undefined,\n    createdAt: row.created_at,\n  }));\n}\n\napp.get('/api/deletion-requests', async (_req, res, next) => {\n  try { res.json(await readDeletionRequests()); } catch (error) { next(error); }\n});\n\napp.post('/api/deletion-requests', async (req, res, next) => {\n  try {\n    const { entityType, entityId, entityLabel = '', requestedByName = 'admin', requestedByRole = 'admin' } = req.body;\n    if (!DELETION_TARGETS[entityType] || !entityId) {\n      return res.status(400).json({ message: 'entityType atau entityId tidak valid.' });\n    }\n    const dupes: any = await query(\n      \"SELECT id FROM deletion_requests WHERE entity_type=? AND entity_id=? AND status='pending' LIMIT 1\",\n      [entityType, entityId],\n    );\n    if (dupes.length > 0) {\n      return res.status(409).json({ message: 'Sudah ada permintaan hapus pending untuk data ini.' });\n    }\n    await query<ResultSetHeader>(\n      'INSERT INTO deletion_requests (entity_type,entity_id,entity_label,requested_by_name,requested_by_role,status,created_at,updated_at) VALUES (?,?,?,?,?,\\'pending\\',NOW(),NOW())',\n      [entityType, entityId, String(entityLabel).slice(0, 255), String(requestedByName).slice(0, 120), String(requestedByRole).slice(0, 20)],\n    );\n    await log(\n      'Permintaan Hapus Dibuat',\n      `${requestedByRole} ${requestedByName} meminta izin hapus ${entityType} \"${entityLabel}\" (ID: ${entityId}). Menunggu persetujuan owner.`,\n      entityType === 'mechanic' ? 'staff' : entityType,\n      requestedByRole,\n    );\n    res.status(201).json(await readDeletionRequests());\n  } catch (error) { next(error); }\n});\n\napp.post('/api/deletion-requests/:id/approve', async (req, res, next) => {\n  try {\n    const rows: any = await query('SELECT * FROM deletion_requests WHERE id=? LIMIT 1', [req.params.id]);\n    const request = rows[0];\n    if (!request) return res.status(404).json({ message: 'Permintaan hapus tidak ditemukan.' });\n    if (request.status !== 'pending') return res.status(409).json({ message: 'Permintaan ini sudah diproses.' });\n\n    const table = DELETION_TARGETS[request.entity_type];\n    if (!table) return res.status(400).json({ message: 'Tipe data tidak dikenal.' });\n\n    await query(`DELETE FROM ${table} WHERE id=?`, [request.entity_id]);\n    await query(\n      'UPDATE deletion_requests SET status=\\'approved\\', reviewed_by_name=?, reviewed_at=NOW(), updated_at=NOW() WHERE id=?',\n      [String(req.body?.reviewedByName || 'owner').slice(0, 120), req.params.id],\n    );\n    await log(\n      'Hapus Disetujui Owner',\n      `Owner menyetujui permintaan hapus ${request.entity_type} \"${request.entity_label}\" (ID: ${request.entity_id}) dari ${request.requested_by_name}. Data telah dihapus permanen.`,\n      request.entity_type === 'mechanic' ? 'staff' : request.entity_type,\n      'owner',\n    );\n    res.json(await readDeletionRequests());\n  } catch (error) { next(error); }\n});\n\napp.post('/api/deletion-requests/:id/reject', async (req, res, next) => {\n  try {\n    const rows: any = await query('SELECT * FROM deletion_requests WHERE id=? LIMIT 1', [req.params.id]);\n    const request = rows[0];\n    if (!request) return res.status(404).json({ message: 'Permintaan hapus tidak ditemukan.' });\n    if (request.status !== 'pending') return res.status(409).json({ message: 'Permintaan ini sudah diproses.' });\n\n    await query(\n      'UPDATE deletion_requests SET status=\\'rejected\\', reviewed_by_name=?, reviewed_at=NOW(), updated_at=NOW() WHERE id=?',\n      [String(req.body?.reviewedByName || 'owner').slice(0, 120), req.params.id],\n    );\n    await log(\n      'Hapus Ditolak Owner',\n      `Owner menolak permintaan hapus ${request.entity_type} \"${request.entity_label}\" (ID: ${request.entity_id}) dari ${request.requested_by_name}.`,\n      request.entity_type === 'mechanic' ? 'staff' : request.entity_type,\n      'owner',\n    );\n    res.json(await readDeletionRequests());\n  } catch (error) { next(error); }\n});\n\napp.get('/api/health', async (_req, res) => { try { await query('SELECT 1'); res.json({ ok: true }); } catch (error) { next(error); } });",
+      "allowMultiple": false
+    },
+    {
+      "oldString": "    query('SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 100'),",
+      "newString": "    query('SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 100'),\n    readDeletionRequests(),",
+      "allowMultiple": false
+    },
+    {
+      "oldString": "  const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders] = await Promise.all([",
+      "newString": "  const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders, deletionRequests] = await Promise.all([",
+      "allowMultiple": false
+    },
+    {
+      "oldString": "    auditLogs: logs.map((row: any) => ({ id: id(row.id), action: row.activity, details: row.details || row.activity, timestamp: row.created_at, userRole: row.user_role || 'admin', category: row.category || 'work_order' })),\n  };",
+      "newString": "    auditLogs: logs.map((row: any) => ({ id: id(row.id), action: row.activity, details: row.details || row.activity, timestamp: row.created_at, userRole: row.user_role || 'admin', category: row.category || 'work_order' })),\n    deletionRequests,\n  };",
+      "allowMultiple": false
+    }
+  ]
+}
+```
+
+```
+file: server.ts
+message: String replace applied successfully.
+```
+
+> _Reasoning_
+> Wait — the health endpoint: I changed it to use `next` but `next` isn't in scope in that arrow function signature. Original: `app.get('/api/health', async (_req, res) => {...})`. My replacement references `next(error)` — need to add `_next` param. Fix that.
+> 
+> Also the bootstrap return object — deletionRequests is included but frontend api types will pick it up.
+
+**🛠 Str Replace**
+
+```json
+{
+  "path": "server.ts",
+  "replacements": [
+    {
+      "oldString": "app.get('/api/health', async (_req, res) => { try { await query('SELECT 1'); res.json({ ok: true }); } catch (error) { next(error); } });",
+      "newString": "app.get('/api/health', async (_req, res) => { await query('SELECT 1'); res.json({ ok: true }); });",
+      "allowMultiple": false
+    }
+  ]
+}
+```
+
+```
+file: server.ts
+message: String replace applied successfully.
+```
+
+Sekarang update `WorkshopContext.tsx` — tambah state approval, guard role di semua fungsi delete, dan aksi request/approve/reject:
+
+**🛠 Str Replace**
+
+```json
+{
+  "path": "src/context/WorkshopContext.tsx",
+  "replacements": [
+    {
+      "oldString": "  AuditLog,\n  AuditLogCategory,\n  NotificationHistoryItem\n} from '../types';",
+      "newString": "  AuditLog,\n  AuditLogCategory,\n  DeletionRequest,\n  DeletableEntityType,\n  NotificationHistoryItem\n} from '../types';\nimport { canRequestDelete } from '../utils/permissions';",
+      "allowMultiple": false
+    },
+    {
+      "oldString": "  auditLogs: AuditLog[];\n  addAuditLog: (action: string, details: string, category: AuditLogCategory) => void;",
+      "newString": "  auditLogs: AuditLog[];\n  addAuditLog: (action: string, details: string, category: AuditLogCategory) => void;\n  deletionRequests: DeletionRequest[];\n  pendingDeletionCount: number;\n  requestDelete: (entityType: DeletableEntityType, entityId: string, entityLabel: string) => Promise<void>;\n  approveDeletion: (requestId: string) => Promise<void>;\n  rejectDeletion: (requestId: string) => Promise<void>;",
+      "allowMultiple": false
+    },
+    {
+      "oldString": "  const [toasts, setToasts] = useState<ToastMessage[]>([]);\n  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);",
+      "newString": "  const [toasts, setToasts] = useState<ToastMessage[]>([]);\n  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);\n  const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);",
+      "allowMultiple": false
+    },
+    {
+      "oldString": "  const refreshDatabase = useCallback(async () => {\n    const data = await api<{\n      shopInfo: ShopInfo; customers: Customer[]; vehicles: Vehicle[]; bookings: Booking[];\n      workOrders: WorkOrder[]; spareParts: SparePart[]; mechanics: Mechanic[];\n      serviceItems: ServiceItem[]; salesHistory: { id: string; date: string; amount: number; count: number }[]; auditLogs: AuditLog[];\n    }>('/api/bootstrap');\n    setShopInfoState(data.shopInfo); setCustomers(data.customers); setVehicles(data.vehicles);\n    setBookings(data.bookings); setWorkOrders(data.workOrders); setSpareParts(data.spareParts);\n    setMechanics(data.mechanics); setServiceItems(data.serviceItems); setSalesHistory(data.salesHistory); setAuditLogs(data.auditLogs);",
+      "newString": "  const refreshDatabase = useCallback(async () => {\n    const data = await api<{\n      shopInfo: ShopInfo; customers: Customer[]; vehicles: Vehicle[]; bookings: Booking[];\n      workOrders: WorkOrder[]; spareParts: SparePart[]; mechanics: Mechanic[];\n      serviceItems: ServiceItem[]; salesHistory: { id: string; date: string; amount: number; count: number }[]; auditLogs: AuditLog[];\n      deletionRequests?: DeletionRequest[];\n    }>('/api/bootstrap');\n    setShopInfoState(data.shopInfo); setCustomers(data.customers); setVehicles(data.vehicles);\n    setBookings(data.bookings); setWorkOrders(data.workOrders); setSpareParts(data.spareParts);\n    setMechanics(data.mechanics); setServiceItems(data.serviceItems); setSalesHistory(data.salesHistory); setAuditLogs(data.auditLogs);\n    setDeletionRequests(data.deletionRequests || []);",
+      "allowMultiple": false
+    }
+  ]
+}
+```
+
+```
+file: src\context\WorkshopContext.tsx
+message: String replace applied successfully.
+```

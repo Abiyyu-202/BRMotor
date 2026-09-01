@@ -8,6 +8,7 @@ import { WorkshopProvider, useWorkshop } from './context/WorkshopContext';
 import { Booking, UserRole } from './types';
 import { Toasts } from './components/Toasts';
 import { LoginScreen } from './components/LoginScreen';
+import { LandingPage } from './pages/LandingPage';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
@@ -40,7 +41,9 @@ import {
   Shield,
   HelpCircle,
   Bell,
-  User as UserIcon
+  User as UserIcon,
+  Globe,
+  Home
 } from 'lucide-react';
 
 function AppContent() {
@@ -59,8 +62,13 @@ function AppContent() {
     t,
     notificationHistory,
     markNotificationsAsRead,
-    updateBookingStatus
+    updateBookingStatus,
+    pendingDeletionCount
   } = useWorkshop();
+
+  // Landing page or login screen view state when unauthenticated
+  const [unauthView, setUnauthView] = useState<'landing' | 'login'>('landing');
+  const [showLandingPreview, setShowLandingPreview] = useState(false);
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -107,7 +115,7 @@ function AppContent() {
     { name: 'Inventory', icon: Package, roles: ['owner', 'admin', 'mechanic'] },
     { name: 'Payments', icon: CreditCard, roles: ['owner', 'admin', 'cashier'] },
     { name: 'Reports', icon: TrendingUp, roles: ['owner', 'admin'] },
-    { name: 'Settings', icon: SettingsIcon, roles: ['owner', 'admin'] }
+    { name: 'Settings', icon: SettingsIcon, roles: ['owner'] }
   ].filter(item => item.roles.includes(currentRole));
 
   // Auto-redirect if role switcher makes activeTab illegal
@@ -164,11 +172,40 @@ function AppContent() {
   };
 
   if (!isAuthenticated) {
+    if (unauthView === 'landing') {
+      return (
+        <>
+          <LandingPage onOpenLogin={() => setUnauthView('login')} />
+          <Toasts />
+        </>
+      );
+    }
     return (
       <>
-        <LoginScreen />
+        <LoginScreen onBackToLanding={() => setUnauthView('landing')} />
         <Toasts />
       </>
+    );
+  }
+
+  if (showLandingPreview) {
+    return (
+      <div className="relative">
+        <div className="bg-slate-900 text-white text-xs font-bold py-2.5 px-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-50 shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span>Mode Pratinjau Website Landing Page • Masuk sebagai: <span className="uppercase text-white font-bold">{currentRole}</span> ({currentUserName || 'Staf'})</span>
+          </div>
+          <button
+            onClick={() => setShowLandingPreview(false)}
+            className="px-3.5 py-1.5 bg-white text-slate-900 hover:bg-slate-100 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm"
+          >
+            Kembali ke Konsol Bengkel →
+          </button>
+        </div>
+        <LandingPage onOpenLogin={() => setShowLandingPreview(false)} />
+        <Toasts />
+      </div>
     );
   }
 
@@ -183,17 +220,30 @@ function AppContent() {
       {/* 1. SIDEBAR NAVIGATION - DESKTOP */}
       <aside className="w-64 bg-white border-r border-slate-200 flex-col justify-between hidden lg:flex shrink-0 no-print">
         <div className="p-5">
-          {/* Workshop Brand Header */}
-          <div className="flex items-center gap-3 pb-5 border-b border-slate-200">
-            <img
-              src="/BR-Motor_Logo.png"
-              alt="BR Motor Logo"
-              className="w-10 h-10 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-sm shrink-0"
-            />
-            <div className="min-w-0">
-              <h1 className="font-bold text-sm text-slate-900 tracking-tight truncate">{shopInfo.name}</h1>
-              <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">Konsol Bengkel</p>
-            </div>
+          {/* Workshop Brand Header with Clickable Home Flow */}
+          <div className="flex items-center justify-between pb-5 border-b border-slate-200">
+            <button
+              onClick={() => setShowLandingPreview(true)}
+              title="Klik untuk melihat Website Beranda"
+              className="flex items-center gap-3 text-left group cursor-pointer transition-all hover:opacity-85"
+            >
+              <img
+                src="/BR-Motor_Logo.png"
+                alt="BR Motor Logo"
+                className="w-10 h-10 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-xs shrink-0 group-hover:border-slate-400 transition-colors"
+              />
+              <div className="min-w-0">
+                <h1 className="font-bold text-sm text-slate-900 tracking-tight truncate group-hover:text-slate-700 transition-colors">{shopInfo.name}</h1>
+                <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">Konsol Bengkel</p>
+              </div>
+            </button>
+            <button
+              onClick={() => setShowLandingPreview(true)}
+              title="Ke Website Beranda"
+              className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            >
+              <Home className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -215,14 +265,19 @@ function AppContent() {
                 >
                   <IconComponent className="w-4 h-4 shrink-0" />
                   {label}
+                  {item.name === 'Settings' && pendingDeletionCount > 0 && (
+                    <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-amber-500 text-white rounded-full leading-none">
+                      {pendingDeletionCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        {/* Sidebar Roster Access Indicator */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/50 space-y-3">
+        {/* Sidebar Sign Out */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50/50">
           <button
             onClick={() => {
               setIsAuthenticated(false);
@@ -242,14 +297,20 @@ function AppContent() {
             <div>
               {/* Brand Header */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4">
-                <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setShowLandingPreview(true);
+                    setMobileSidebarOpen(false);
+                  }}
+                  className="flex items-center gap-3 text-left"
+                >
                   <img
                     src="/BR-Motor_Logo.png"
                     alt="BR Motor Logo"
-                    className="w-9 h-9 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-sm shrink-0"
+                    className="w-9 h-9 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-xs shrink-0"
                   />
                   <span className="font-bold text-sm">{shopInfo.name}</span>
-                </div>
+                </button>
                 <button
                   onClick={() => setMobileSidebarOpen(false)}
                   className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-100 cursor-pointer"
@@ -286,15 +347,15 @@ function AppContent() {
               </nav>
             </div>
 
-            {/* Mobile Footer profile stats */}
-            <div className="space-y-2">
+            {/* Mobile Footer Sign out */}
+            <div>
               <button
                 onClick={() => {
                   setIsAuthenticated(false);
                   setMobileSidebarOpen(false);
                   showToast(language === 'id' ? 'Berhasil keluar dari sistem.' : 'Signed out successfully.', 'info');
                 }}
-                className="w-full text-center py-2 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
+                className="w-full text-center py-2.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer transition-colors"
               >
                 {t.signOut}
               </button>
@@ -326,6 +387,17 @@ function AppContent() {
 
           {/* Widgets */}
           <div className="flex items-center gap-3 text-xs font-semibold">
+            {/* View Landing Page Button */}
+            <button
+              type="button"
+              onClick={() => setShowLandingPreview(true)}
+              title="Buka Website Beranda"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 hover:text-slate-900 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs active:scale-95"
+            >
+              <Home className="w-3.5 h-3.5 text-slate-600" />
+              <span>Beranda</span>
+            </button>
+
             {/* User Profile Pill for Customer */}
             {currentRole === 'user' && (
               <button

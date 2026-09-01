@@ -6,6 +6,7 @@
 import React, { useState, useRef } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { UserRole } from '../types';
+import { DeletionApprovalPanel } from '../components/DeletionApprovalPanel';
 import {
   Settings as SettingsIcon,
   Store,
@@ -168,6 +169,21 @@ export const Settings: React.FC = () => {
       permissions: language === 'id' ? 'Meja Kasir + Cetak Struk' : 'Billing desks + Printed receipts'
     }
   ];
+
+  // Access control: only owner can access settings
+  if (currentRole !== 'owner') {
+    return (
+      <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm text-center max-w-lg mx-auto my-12 space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
+          <AlertTriangle className="w-6 h-6" />
+        </div>
+        <h2 className="text-base font-bold text-slate-900">Akses Dibatasi</h2>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Halaman Pengaturan Sistem hanya dapat diakses oleh akun dengan peran <strong>👑 Pemilik Bengkel (Owner)</strong>.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
@@ -619,6 +635,9 @@ export const Settings: React.FC = () => {
               })}
             </div>
           </div>
+
+          {/* Deletion Approval Panel (owner only) */}
+          <DeletionApprovalPanel />
         </div>
       </div>
     </div>
