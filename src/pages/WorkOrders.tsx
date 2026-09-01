@@ -312,9 +312,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
 
     let nextLabel = '';
     if (currentStatus === 'waiting') {
-      nextLabel = 'Dalam Pengerjaan';
+      if (!hasParts) {
+        nextLabel = 'Menunggu Part (Alokasi Suku Cadang)';
+      } else {
+        nextLabel = 'Dalam Pengerjaan (Mulai Servis)';
+      }
     } else if (currentStatus === 'waiting_parts') {
-      nextLabel = 'Dalam Pengerjaan';
+      if (!hasParts) {
+        showToast('SPK belum memiliki suku cadang/oli. Tambahkan suku cadang di menu Detail/Edit terlebih dahulu!', 'warning');
+        return;
+      }
+      nextLabel = 'Dalam Pengerjaan (Mulai Servis)';
     } else if (currentStatus === 'in_progress') {
       nextLabel = 'Quality Control (Uji Coba)';
     } else if (currentStatus === 'quality_control') {
@@ -334,10 +342,22 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
     if (!advancingWO) return;
     const { id, status } = advancingWO;
 
+    const wo = workOrders.find((w) => w.id === id);
+    const hasParts = Boolean(wo && wo.sparePartsUsed && wo.sparePartsUsed.length > 0);
+
     let next: WorkOrderStatus | undefined;
     if (status === 'waiting') {
-      next = 'in_progress';
+      if (!hasParts) {
+        next = 'waiting_parts';
+      } else {
+        next = 'in_progress';
+      }
     } else if (status === 'waiting_parts') {
+      if (!hasParts) {
+        showToast('Harap alokasikan minimal satu suku cadang terlebih dahulu sebelum memulai pengerjaan.', 'warning');
+        setAdvancingWO(null);
+        return;
+      }
       next = 'in_progress';
     } else if (status === 'in_progress') {
       next = 'quality_control';
@@ -348,7 +368,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
     if (next) {
       updateWorkOrderStatus(id, next);
       if (next === 'waiting_parts') {
-        showToast(`SPK ${id} belum memilih suku cadang/oli. Otomatis masuk ke tahap Menunggu Suku Cadang.`, 'warning');
+        showToast(`SPK ${id} belum memilih suku cadang. Masuk ke tahap Menunggu Part terlebih dahulu.`, 'warning');
       } else {
         showToast(`SPK ${id} berhasil dipindahkan ke tahap ${advancingWO.label}`, 'success');
       }
@@ -597,22 +617,49 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ prefilledBooking, clearP
                       <div className="space-y-2 border-t border-slate-100 pt-3 mt-3">
                         {/* Primary Progression Button */}
                         {wo.status !== 'completed' ? (
-                          <button
-                            type="button"
-                            onClick={() => promptNextStatus(wo.id, wo.status)}
-                            className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm active:scale-98"
-                          >
-                            <span>
-                              {wo.status === 'waiting'
-                                ? 'Mulai Dikerjakan'
-                                : wo.status === 'waiting_parts'
-                                ? 'Lanjut Pengerjaan'
-                                : wo.status === 'in_progress'
-                                ? 'Uji Kelaikan (QC)'
-                                : 'Selesai & Siap Ambil'}
-                            </span>
-                            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-                          </button>
+                          <>
+                            {/* If in waiting_parts stage and NO parts allocated yet, show quick add parts button & disable next */}
+                            {wo.status === 'waiting_parts' && (!wo.sparePartsUsed || wo.sparePartsUsed.length === 0) ? (
+                              <div className="space-y-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditModal(wo)}
+                                  className="w-full py-2 px-3 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider border border-amber-300 shadow-2xs active:scale-95"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  + Tambah Suku Cadang
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="w-full py-2 px-3 bg-slate-100 border border-slate-200 text-slate-400 font-bold text-[10px] rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed uppercase tracking-wider"
+                                  title="Tambahkan suku cadang terlebih dahulu untuk melanjutkan pengerjaan"
+                                >
+                                  <span>Lanjut Pengerjaan (Terkunci)</span>
+                                  <ArrowRight className="w-3.5 h-3.5 shrink-0 opacity-40" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => promptNextStatus(wo.id, wo.status)}
+                                className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm active:scale-98"
+                              >
+                                <span>
+                                  {wo.status === 'waiting'
+                                    ? (!wo.sparePartsUsed || wo.sparePartsUsed.length === 0
+                                        ? 'Menunggu Part'
+                                        : 'Mulai Dikerjakan')
+                                    : wo.status === 'waiting_parts'
+                                    ? 'Lanjut Pengerjaan'
+                                    : wo.status === 'in_progress'
+                                    ? 'Uji Kelaikan (QC)'
+                                    : 'Selesai & Siap Ambil'}
+                                </span>
+                                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <button
                             type="button"

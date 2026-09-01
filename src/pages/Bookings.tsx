@@ -178,6 +178,10 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
   const pendingCount = allowedBookings.filter((b) => isMatchingDate(b.date) && b.status === 'pending').length;
   const cancelledCount = allowedBookings.filter((b) => isMatchingDate(b.date) && b.status === 'cancelled').length;
 
+  const pendingOtherDatesCount = allowedBookings.filter(
+    (b) => b.status === 'pending' && (dateFilter ? normalizeDate(b.date) !== normalizeDate(dateFilter) : false)
+  ).length;
+
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
       {/* Header Panel */}
@@ -348,6 +352,25 @@ export const Bookings: React.FC<{ onCheckInDirect: (booking: Booking) => void }>
           </div>
         </div>
       </div>
+
+      {/* Other Dates Alert Banner */}
+      {currentRole !== 'user' && pendingOtherDatesCount > 0 && (
+        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 animate-fade-in shadow-2xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Terdapat <strong>{pendingOtherDatesCount} antrean booking pending</strong> pada tanggal lain (seperti booking online untuk besok).
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDateFilter('')}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] rounded-lg transition-colors cursor-pointer shrink-0"
+          >
+            Tampilkan Semua Tanggal →
+          </button>
+        </div>
+      )}
 
       {/* Bookings Queue Cards Grid */}
       {filteredBookings.length === 0 ? (

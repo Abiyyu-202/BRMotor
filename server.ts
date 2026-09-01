@@ -121,7 +121,7 @@ async function bootstrap() {
       createdAt: row.created_at
     })),
     vehicles: vehicles.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), customerName: row.customer_name, licensePlate: row.plate_number, brand: row.brand, model: row.model, year: Number(row.year), imageUrl: row.image_url || undefined })),
-    bookings: bookings.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), vehicleId: id(row.vehicle_id), customerName: row.customer_name, licensePlate: row.plate_number, vehicleModel: `${row.brand} ${row.model}`, type: 'scheduled', date: String(row.scheduled_date || '').slice(0, 10), time: String(row.scheduled_time).slice(0, 5), queueNumber: row.queue_number || row.booking_code, status: row.status === 'confirmed' ? 'checked-in' : row.status, notes: row.complaint, estimatedDurationMinutes: row.estimated_duration_minutes, createdAt: row.created_at })),
+    bookings: bookings.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id || 1), vehicleId: id(row.vehicle_id || 1), customerName: row.customer_name || 'Pelanggan Umum', licensePlate: row.plate_number || 'N/A', vehicleModel: `${row.brand || 'Motor'} ${row.model || ''}`.trim(), type: 'scheduled', date: String(row.scheduled_date || '').slice(0, 10), time: String(row.scheduled_time || '09:00').slice(0, 5), queueNumber: row.queue_number || row.booking_code || `Q-${row.id}`, status: row.status === 'confirmed' ? 'checked-in' : (row.status || 'pending'), notes: row.complaint || '', estimatedDurationMinutes: row.estimated_duration_minutes || 60, createdAt: row.created_at })),
     mechanics: mechanics.map((row: any) => ({ id: id(row.id), name: row.name, position: row.specialization || 'Mekanik', phone: row.phone, status: mechanicStatus(row.status), assignedJobsCount: Number(row.assigned_jobs_count), completedJobsCount: Number(row.completed_jobs_count), rating: 5 })),
     serviceItems: services.map((row: any) => ({ id: id(row.id), name: row.name, price: Number(row.price), estimatedMinutes: Number(row.estimated_duration) })),
     spareParts: parts.map((row: any) => ({ id: id(row.id), name: row.name, sku: row.sku, category: 'Umum', purchasePrice: Number(row.purchase_price), sellingPrice: Number(row.sell_price), currentStock: Number(row.stock), minimumStock: Number(row.min_stock), supplier: row.supplier_name || '-' })),
@@ -640,6 +640,94 @@ app.delete('/api/work-orders/:id', async (req, res, next) => {
     c.release();
   }
 });
+
+app.post('/api/quick-checkin', async (req, res, next) => {
+  const c = await pool.getConnection();
+  try {
+    const {
+      plateNumber,
+      customerName = 'Pelanggan Umum',
+      phone = '',
+      brand = 'Honda',
+      model = 'Motor Matic',
+      year = new Date().getFullYear(),
+      complaint = 'Servis berkala',
+      mechanicId,
+      services = [],
+      spareParts = [],
+      estimatedCompletionTime = '14:30',
+      notes = ''
+    } = req.body;
+
+    await c.beginTransaction();
+
+    // 1. Customer
+    const cleanPhone = String(phone).trim();
+    const cleanName = String(customerName).trim() || 'Pelanggan Umum';
+    let cId: number;
+    const [existingCust]: any = await c.query(
+      'SELECT id FROM customers WHERE (phone != "" AND phone = ?) OR LOWER(name) = ? LIMIT 1',
+      [cleanPhone, cleanName.toLowerCase()]
+    );
+    if (existingCust.length > 0) {
+      cId = existingCust[0].id;
+    } else {
+      const [custRes]: any = await c.query(
+        'INSERT INTO customers (name, phone, address, created_at, updated_at) VALUES (?, ?, "", NOW(), NOW())',
+        [cleanName, cleanPhone]
+      );
+      cId = custRes.insertId;
+    }
+
+    // 2. Vehicle
+    const cleanPlate = String(plateNumber).trim().toUpperCase();
+    let vId: number;
+    const [existingVeh]: any = await c.query(
+      'SELECT id FROM vehicles WHERE UPPER(REPLACE(plate_number, " ", "")) = ? LIMIT 1',
+      [cleanPlate.replace(/\s+/g, '')]
+    );
+    if (existingVeh.length > 0) {
+      vId = existingVeh[0].id;
+    } else {
+      const [vehRes]: any = await c.query(
+        'INSERT INTO vehicles (customer_id, plate_number, brand, model, year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+        [cId, cleanPlate, brand, model, Number(year) || new Date().getFullYear()]
+      );
+      vId = vehRes.insertId;
+    }
+
+    // 3. Work Order - starts in 'waiting' queue
+    const woNumber = `WO-${Date.now()}`;
+    const [woRes]: any = await c.query(
+      'INSERT INTO work_orders (vehicle_id, mechanic_id, wo_number, complaint, estimated_completion_time, notes, status, priority, start_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, "waiting", "normal", NOW(), NOW(), NOW())',
+      [vId, mechanicId || 1, woNumber, complaint, estimatedCompletionTime, notes]
+    );
+
+    const formattedServices = (services || []).map((s: any) => ({
+      serviceId: s.serviceId || s.id,
+      name: s.name,
+      price: s.price
+    }));
+
+    const formattedParts = (spareParts || []).map((p: any) => ({
+      partId: p.partId || p.id,
+      name: p.name,
+      quantity: p.quantity || 1,
+      pricePerUnit: p.pricePerUnit || 0,
+      totalPrice: (p.pricePerUnit || 0) * (p.quantity || 1)
+    }));
+
+    await replaceDetails(c, woRes.insertId, formattedServices, formattedParts);
+    await c.commit();
+    res.json({ id: id(woRes.insertId) });
+  } catch (e) {
+    await c.rollback();
+    next(e);
+  } finally {
+    c.release();
+  }
+});
+
 app.post('/api/work-orders/:id/checkout', async (req, res, next) => {
   const c = await pool.getConnection();
   try {

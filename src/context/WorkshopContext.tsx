@@ -61,6 +61,7 @@ interface WorkshopContextType {
   approveDeletion: (requestId: string) => Promise<void>;
   rejectDeletion: (requestId: string) => Promise<void>;
   formatRupiah: (amount: number) => string;
+  refreshDatabase: () => Promise<void>;
 
   // Toast notifications
   showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -998,7 +999,8 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         rejectDeletion,
         exportDatabaseJSON,
         importDatabaseJSON,
-        resetDatabaseToDefault
+        resetDatabaseToDefault,
+        refreshDatabase
       }}
     >
       {children}

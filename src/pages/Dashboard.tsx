@@ -35,6 +35,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [inputAddress, setInputAddress] = useState('');
+  const [hoveredPoint, setHoveredPoint] = useState<{ date: string; amount: number; x: number; y: number } | null>(null);
 
   const {
     workOrders,
@@ -580,6 +581,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
   const activeWorkOrders = workOrders.filter(
     (wo) => wo.status !== 'picked_up' && wo.status !== 'completed'
   );
+  const pendingBookings = bookings.filter((b) => b.status === 'pending');
 
   const lowStockParts = spareParts.filter((p) => p.currentStock <= p.minimumStock);
 
@@ -598,9 +600,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
   // SVG Chart Dimensions & Computations
   const chartWidth = 500;
   const chartHeight = 160;
-  const padding = 25;
+  const padding = 20;
 
-  const maxAmount = Math.max(...salesHistory.map((s) => s.amount), 500);
+  const maxAmount = Math.max(...salesHistory.map((s) => s.amount), 100000);
 
   const points = salesHistory
     .map((s, index) => {
@@ -610,43 +612,42 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
     })
     .join(' ');
 
-  const [hoveredPoint, setHoveredPoint] = useState<{ date: string; amount: number; x: number; y: number } | null>(null);
-
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
-      {/* Welcome Banner */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+      {/* Top Banner Header with Quick Action Buttons */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2 uppercase">
-            {language === 'id' ? `DASHBOARD BENGKEL ${shopInfo.name}` : `WELCOME TO ${shopInfo.name.toUpperCase()}`}
-          </h1>
-          <p className="text-slate-500 mt-1 text-xs font-medium">
-            {t.dashboard.subtitle}
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight">
+              {t.dashboard.title}
+            </h1>
+            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-lg border border-slate-200 uppercase">
+              {currentRole.toUpperCase()}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1 font-medium">
+            {language === 'id'
+              ? `Selamat datang kembali, ${currentUserName || 'Mekanik & Staf BR Motor'}! Pantau performa bengkel hari ini.`
+              : `Welcome back, ${currentUserName || 'Mechanic & Staff'}! Real-time operations ledger.`}
           </p>
         </div>
+
+        {/* Global Action Modals Trigger */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
             onClick={() => setIsQuickCheckInOpen(true)}
-            className="px-4 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer border border-amber-300 active:scale-95"
+            className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer transition-all shadow-sm active:scale-95"
           >
             <Sparkles className="w-4 h-4" />
-            + Catat Motor Masuk
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('Bookings')}
-            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
-          >
-            <Calendar className="w-4 h-4 text-slate-300" />
-            {t.dashboard.newBooking}
+            Check-In Motor Cepat
           </button>
           <button
             type="button"
             onClick={() => setIsReminderOpen(true)}
-            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 cursor-pointer transition-all shadow-2xs active:scale-95"
+            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer transition-all shadow-2xs active:scale-95"
           >
-            <Bell className="w-4 h-4 text-amber-500" />
+            <Bell className="w-4 h-4 text-slate-500" />
             Pengingat WA
           </button>
           <button
@@ -660,90 +661,109 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         </div>
       </div>
 
-      {/* Grid Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Metric 1 */}
+      {/* Grid Metrics (6 Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+        {/* Metric 1: Revenue */}
         <button
           type="button"
-          className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-4 cursor-pointer text-left w-full"
+          className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
           onClick={() => setActiveTab('Payments')}
         >
-          <div className="p-3 bg-slate-900 text-white rounded-xl shrink-0">
-            <DollarSign className="w-5 h-5" />
+          <div className="p-2.5 bg-slate-900 text-white rounded-xl shrink-0">
+            <DollarSign className="w-4 h-4" />
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.dashboard.revenueToday}</p>
-            <h3 className="text-base font-extrabold text-slate-900 mt-1">
+            <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
               Rp {todayRevenue.toLocaleString('id-ID')}
             </h3>
           </div>
         </button>
 
-        {/* Metric 2 */}
+        {/* Metric 2: Active Work Orders */}
         <button
           type="button"
-          className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-4 cursor-pointer text-left w-full"
+          className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
           onClick={() => setActiveTab('Work Orders')}
         >
-          <div className="p-3 bg-slate-900 text-white rounded-xl shrink-0">
-            <Wrench className="w-5 h-5" />
+          <div className="p-2.5 bg-slate-900 text-white rounded-xl shrink-0">
+            <Wrench className="w-4 h-4" />
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.dashboard.activeWorkOrders}</p>
-            <h3 className="text-base font-extrabold text-slate-900 mt-1">
+            <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
               {activeWorkOrders.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'SPK' : 'orders'}</span>
             </h3>
           </div>
         </button>
 
-        {/* Metric 3 */}
+        {/* Metric 3: Incoming Bookings */}
         <button
           type="button"
-          className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-4 cursor-pointer text-left w-full"
-          onClick={() => setActiveTab('Customers')}
+          className={`p-4 rounded-2xl bg-white border shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full ${
+            pendingBookings.length > 0 ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200'
+          }`}
+          onClick={() => setActiveTab('Bookings')}
         >
-          <div className="p-3 bg-slate-900 text-white rounded-xl shrink-0">
-            <Users className="w-5 h-5" />
+          <div className={`p-2.5 rounded-xl shrink-0 ${pendingBookings.length > 0 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-800'}`}>
+            <Calendar className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.customers.totalCustomers}</p>
-            <h3 className="text-base font-extrabold text-slate-900 mt-1">
-              {customers.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'orang' : 'accounts'}</span>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Booking Masuk</p>
+            <h3 className={`text-sm font-extrabold mt-0.5 ${pendingBookings.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+              {pendingBookings.length} <span className="text-[10px] font-normal text-slate-400">antrean</span>
             </h3>
           </div>
         </button>
 
-        {/* Metric 4 */}
+        {/* Metric 4: Total Customers */}
         <button
           type="button"
-          className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-4 cursor-pointer text-left w-full"
-          onClick={() => setActiveTab('Vehicles')}
+          className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
+          onClick={() => setActiveTab('Customers')}
         >
-          <div className="p-3 bg-slate-900 text-white rounded-xl shrink-0">
-            <FileText className="w-5 h-5" />
+          <div className="p-2.5 bg-slate-900 text-white rounded-xl shrink-0">
+            <Users className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{language === 'id' ? 'Total Motor' : 'Total Vehicles'}</p>
-            <h3 className="text-base font-extrabold text-slate-900 mt-1">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.customers.totalCustomers}</p>
+            <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
+              {customers.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'orang' : 'users'}</span>
+            </h3>
+          </div>
+        </button>
+
+        {/* Metric 5: Total Vehicles */}
+        <button
+          type="button"
+          className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
+          onClick={() => setActiveTab('Vehicles')}
+        >
+          <div className="p-2.5 bg-slate-900 text-white rounded-xl shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{language === 'id' ? 'Total Motor' : 'Vehicles'}</p>
+            <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
               {vehicles.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'unit' : 'units'}</span>
             </h3>
           </div>
         </button>
 
-        {/* Metric 5 */}
+        {/* Metric 6: Low Stock Parts */}
         <button
           type="button"
-          className={`p-5 rounded-2xl bg-white border shadow-sm hover:shadow-md transition-all flex items-center gap-4 cursor-pointer text-left w-full ${
-            lowStockParts.length > 0 ? 'border-amber-300' : 'border-slate-200'
+          className={`p-4 rounded-2xl bg-white border shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full ${
+            lowStockParts.length > 0 ? 'border-rose-300' : 'border-slate-200'
           }`}
           onClick={() => setActiveTab('Inventory')}
         >
-          <div className={`p-3 rounded-xl shrink-0 ${lowStockParts.length > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-800'}`}>
-            <AlertTriangle className="w-5 h-5" />
+          <div className={`p-2.5 rounded-xl shrink-0 ${lowStockParts.length > 0 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-800'}`}>
+            <AlertTriangle className="w-4 h-4" />
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.dashboard.lowStockAlerts}</p>
-            <h3 className={`text-base font-extrabold mt-1 ${lowStockParts.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+            <h3 className={`text-sm font-extrabold mt-0.5 ${lowStockParts.length > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
               {lowStockParts.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'item' : 'items'}</span>
             </h3>
           </div>
@@ -754,6 +774,91 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (2 Grid widths on LG) */}
         <div className="lg:col-span-2 space-y-6">
+
+          {/* Incoming Online Bookings Queue Card */}
+          <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-100 text-amber-900 rounded-xl">
+                  <Calendar className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                      Antrean & Booking Online Masuk
+                    </h2>
+                    {pendingBookings.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-mono text-[10px] font-bold">
+                        {pendingBookings.length} Baru
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Permintaan booking dari website landing page yang menunggu diproses
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('Bookings')}
+                className="text-xs text-slate-700 hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200"
+              >
+                Lihat di Menu Booking
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {pendingBookings.length === 0 ? (
+              <div className="py-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-1.5" />
+                <p className="text-xs font-bold text-slate-700">Semua Antrean Booking Sudah Diproses</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Belum ada booking online baru yang menunggu konfirmasi.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                {pendingBookings.slice(0, 5).map((b) => (
+                  <div
+                    key={b.id}
+                    className="p-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="px-2.5 py-1 bg-slate-900 text-white font-mono font-bold text-xs rounded-lg shrink-0">
+                        {b.queueNumber}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-bold text-slate-900">{b.customerName}</p>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-white text-slate-700 border border-slate-200">
+                            {b.licensePlate}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-medium">({b.vehicleModel})</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5">
+                          {b.notes || 'Servis Rutin'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200">
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-bold text-slate-700 block font-mono">{b.date}</span>
+                        <span className="text-[10px] font-mono text-slate-500">{b.time} WIB</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('Bookings')}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg transition-all cursor-pointer shadow-2xs"
+                      >
+                        Buka Booking
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Revenue Chart Section */}
           <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">

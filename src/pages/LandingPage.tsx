@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import {
   Wrench,
@@ -34,7 +34,9 @@ import {
   Gauge,
   Zap,
   Flame,
-  LogIn
+  LogIn,
+  Lock,
+  Check
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -42,7 +44,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
-  const { shopInfo, formatRupiah, serviceItems, spareParts, addBooking } = useWorkshop();
+  const { shopInfo, formatRupiah, serviceItems, spareParts, addBooking, bookings, refreshDatabase } = useWorkshop();
 
   // Mobile menu state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -53,22 +55,113 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
   const [trackResult, setTrackResult] = useState<any | null>(null);
   const [trackError, setTrackError] = useState<string | null>(null);
 
+  // Helper for today's local date string (YYYY-MM-DD)
+  const getTodayLocalDate = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = getTodayLocalDate();
+
+  // Track current hardware clock time in minutes from midnight (e.g. 14:30 -> 14*60 + 30 = 870)
+  const [currentTimeMinutes, setCurrentTimeMinutes] = useState(() => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  });
+
+  // Keep hardware clock updated every 30 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const d = new Date();
+      setCurrentTimeMinutes(d.getHours() * 60 + d.getMinutes());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Interactive Booking Form State
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
+  
+  // Indonesian License Plate 3-Part State with Word Limiter
+  const [platePrefix, setPlatePrefix] = useState('B');
   const [plateNumber, setPlateNumber] = useState('');
+  const [plateSuffix, setPlateSuffix] = useState('');
+
   const [brand, setBrand] = useState('Honda');
   const [model, setModel] = useState('');
   const [selectedService, setSelectedService] = useState('Servis Ringan / Tune-Up Engine');
-  const [bookingDate, setBookingDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-  });
+  
+  // Default booking date to today
+  const [bookingDate, setBookingDate] = useState(() => getTodayLocalDate());
   const [bookingTime, setBookingTime] = useState('09:00');
   const [complaintNotes, setComplaintNotes] = useState('');
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
   const [bookingSuccessData, setBookingSuccessData] = useState<any | null>(null);
+
+  // Available Time Slots for workshop operational hours
+  const timeSlots = [
+    { time: '08:30', period: 'Pagi' },
+    { time: '09:00', period: 'Pagi' },
+    { time: '09:30', period: 'Pagi' },
+    { time: '10:00', period: 'Pagi' },
+    { time: '10:30', period: 'Pagi' },
+    { time: '11:00', period: 'Pagi' },
+    { time: '11:30', period: 'Pagi' },
+    { time: '13:00', period: 'Siang' },
+    { time: '13:30', period: 'Siang' },
+    { time: '14:00', period: 'Siang' },
+    { time: '14:30', period: 'Siang' },
+    { time: '15:00', period: 'Sore' },
+    { time: '15:30', period: 'Sore' },
+    { time: '16:00', period: 'Sore' },
+    { time: '16:30', period: 'Sore' },
+  ];
+
+  // Helper to normalize date string to YYYY-MM-DD
+  const normalizeDate = (d: string) => {
+    if (!d) return '';
+    return d.slice(0, 10);
+  };
+
+  // Check booked slots for currently selected date
+  const bookedSlotsOnDate = bookings
+    ? bookings
+        .filter((b) => normalizeDate(b.date) === normalizeDate(bookingDate) && b.status !== 'cancelled')
+        .map((b) => b.time.slice(0, 5))
+    : [];
+
+  const isDateToday = normalizeDate(bookingDate) === todayStr;
+
+  // Check if a time slot has already passed based on local hardware clock
+  const isSlotPast = (slotTime: string) => {
+    if (!isDateToday) return false;
+    const [h, m] = slotTime.split(':').map(Number);
+    const slotMinutes = h * 60 + m;
+    return slotMinutes <= currentTimeMinutes;
+  };
+
+  const isSlotBooked = (slotTime: string) => {
+    return bookedSlotsOnDate.includes(slotTime);
+  };
+
+  const isSlotUnavailable = (slotTime: string) => {
+    return isSlotPast(slotTime) || isSlotBooked(slotTime);
+  };
+
+  const isCurrentTimeSlotUnavailable = isSlotUnavailable(bookingTime);
+
+  // Auto-switch to first available future slot if current slot becomes disabled
+  useEffect(() => {
+    if (isSlotUnavailable(bookingTime)) {
+      const firstAvailable = timeSlots.find((s) => !isSlotUnavailable(s.time));
+      if (firstAvailable) {
+        setBookingTime(firstAvailable.time);
+      }
+    }
+  }, [bookingDate, currentTimeMinutes, bookedSlotsOnDate]);
 
   // Interactive Cost Estimator State
   const [selectedServicesCalc, setSelectedServicesCalc] = useState<string[]>(['s-1']);
@@ -76,6 +169,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
 
   // FAQ Accordion State
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  // Handle service selection from cards & auto scroll to booking form
+  const handleSelectService = (serviceName: string) => {
+    setSelectedService(serviceName);
+    const bookingElement = document.getElementById('booking');
+    if (bookingElement) {
+      bookingElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   // Handle Live Track Status
   const handleTrackSubmit = async (queryToSearch?: string) => {
@@ -105,8 +207,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
   // Handle Online Booking Submission
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName.trim() || !phone.trim() || !plateNumber.trim() || !bookingDate) {
-      alert('Harap lengkapi semua kolom bertanda wajib.');
+    const fullPlateNumber = `${platePrefix.trim()} ${plateNumber.trim()} ${plateSuffix.trim()}`.trim().toUpperCase();
+
+    if (!customerName.trim() || !phone.trim() || !platePrefix.trim() || !plateNumber.trim() || !bookingDate) {
+      alert('Harap lengkapi nama, nomor telepon, dan plat nomor motor dengan benar.');
+      return;
+    }
+
+    if (isSlotPast(bookingTime)) {
+      alert(`Mohon maaf, jam ${bookingTime} WIB untuk hari ini sudah terlewat. Silakan pilih jam berikutnya yang masih tersedia.`);
+      return;
+    }
+
+    if (isSlotBooked(bookingTime)) {
+      alert(`Mohon maaf, jam ${bookingTime} WIB pada tanggal ${bookingDate} sudah dibooking oleh pelanggan lain. Silakan pilih jam yang masih tersedia.`);
       return;
     }
 
@@ -115,7 +229,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
       const payload = {
         customerName: customerName.trim(),
         phone: phone.trim(),
-        plateNumber: plateNumber.trim().toUpperCase(),
+        plateNumber: fullPlateNumber,
         brand,
         model: model.trim() || 'Motor',
         serviceType: selectedService,
@@ -133,6 +247,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
       if (res.ok) {
         const data = await res.json();
         setBookingSuccessData(data);
+        // Refresh full database context so dashboard immediately shows this booking
+        await refreshDatabase();
       } else {
         // Fallback to client context if server endpoint issue
         const bkg = addBooking({
@@ -149,12 +265,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
           bookingCode: `BKG-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
           queueNumber: bkg.queueNumber || 'Q-001',
           customerName,
-          plateNumber: plateNumber.toUpperCase(),
+          plateNumber: fullPlateNumber,
           vehicleModel: `${brand} ${model}`,
           date: bookingDate,
           time: bookingTime,
           serviceType: selectedService
         });
+        await refreshDatabase();
       }
     } catch (err: any) {
       console.error(err);
@@ -790,13 +907,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 <span className="text-[10px] text-slate-500 block font-mono">Biaya Jasa Mulai:</span>
                 <span className="text-xl font-black font-mono text-slate-900">Rp 50.000</span>
               </div>
-              <a
-                href="#booking"
+              <button
+                type="button"
+                onClick={() => handleSelectService('Servis Ringan / Tune-Up Engine')}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
               >
                 Pilih
                 <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              </button>
             </div>
           </div>
 
@@ -840,13 +958,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 <span className="text-[10px] text-slate-500 block font-mono">Biaya Jasa Mulai:</span>
                 <span className="text-xl font-black font-mono text-slate-900">Rp 65.000</span>
               </div>
-              <a
-                href="#booking"
+              <button
+                type="button"
+                onClick={() => handleSelectService('Servis CVT Lengkap & Pembersihan')}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
               >
                 Pilih
                 <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              </button>
             </div>
           </div>
 
@@ -890,13 +1009,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 <span className="text-[10px] text-slate-500 block font-mono">Biaya Jasa:</span>
                 <span className="text-xl font-black font-mono text-slate-900">Rp 25.000</span>
               </div>
-              <a
-                href="#booking"
+              <button
+                type="button"
+                onClick={() => handleSelectService('Ganti Oli Mesin & Filter')}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
               >
                 Pilih
                 <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              </button>
             </div>
           </div>
 
@@ -940,13 +1060,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 <span className="text-[10px] text-slate-500 block font-mono">Biaya Jasa Mulai:</span>
                 <span className="text-xl font-black font-mono text-slate-900">Rp 75.000</span>
               </div>
-              <a
-                href="#booking"
+              <button
+                type="button"
+                onClick={() => handleSelectService('Overhaul / Servis Rem Lengkap')}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
               >
                 Pilih
                 <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              </button>
             </div>
           </div>
 
@@ -990,13 +1111,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 <span className="text-[10px] text-slate-500 block font-mono">Biaya Jasa Mulai:</span>
                 <span className="text-xl font-black font-mono text-slate-900">Rp 85.000</span>
               </div>
-              <a
-                href="#booking"
+              <button
+                type="button"
+                onClick={() => handleSelectService('Diagnostik Injeksi & Kelistrikan')}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
               >
                 Pilih
                 <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              </button>
             </div>
           </div>
 
@@ -1044,13 +1166,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 <span className="text-[10px] text-slate-400 block font-mono">Paket Spesial:</span>
                 <span className="text-xl font-black font-mono text-white">Rp 150.000</span>
               </div>
-              <a
-                href="#booking"
+              <button
+                type="button"
+                onClick={() => handleSelectService('Paket Servis Rutin Lengkap')}
                 className="px-5 py-2.5 bg-white hover:bg-slate-100 text-slate-900 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-sm flex items-center gap-1.5 active:scale-95"
               >
                 Booking Paket
                 <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              </button>
             </div>
           </div>
 
@@ -1080,12 +1203,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                   {formatRupiah(grandEstimatedCost)}
                 </p>
               </div>
-              <a
-                href="#booking"
+              <button
+                type="button"
+                onClick={() => {
+                  const firstService = serviceItems.find((s) => selectedServicesCalc.includes(s.id));
+                  handleSelectService(firstService ? firstService.name : 'Servis Ringan / Tune-Up Engine');
+                }}
                 className="px-5 py-3 bg-white text-slate-900 hover:bg-slate-100 font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0 shadow-xs"
               >
                 Booking Estimasi Ini
-              </a>
+              </button>
             </div>
           </div>
 
@@ -1209,7 +1336,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 <div className="space-y-2">
                   <h3 className="text-2xl font-black text-slate-900 uppercase">Booking Servis Berhasil!</h3>
                   <p className="text-xs text-slate-500">
-                    Jadwal servis Anda telah terdaftar di sistem bengkel BR Motor.
+                    Jadwal servis Anda telah terdaftar langsung di sistem antrean bengkel BR Motor.
                   </p>
                 </div>
 
@@ -1256,7 +1383,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                       setBookingSuccessData(null);
                       setCustomerName('');
                       setPhone('');
+                      setPlatePrefix('B');
                       setPlateNumber('');
+                      setPlateSuffix('');
                       setModel('');
                       setComplaintNotes('');
                     }}
@@ -1282,9 +1411,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 {/* Form Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   
-                  {/* Customer Info */}
+                  {/* 1. Customer Info */}
                   <div className="space-y-4">
-                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 pb-1 border-b border-slate-100">
                       <Users className="w-4 h-4 text-slate-600" />
                       1. Data Pemilik
                     </h4>
@@ -1299,7 +1428,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                         placeholder="Contoh: Sarah Jenkins"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
                       />
                     </div>
 
@@ -1313,7 +1442,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                         placeholder="Contoh: 0812-3456-7890"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
                       />
                     </div>
 
@@ -1324,7 +1453,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                       <select
                         value={selectedService}
                         onChange={(e) => setSelectedService(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
                       >
                         <option value="Servis Ringan / Tune-Up Engine">Servis Ringan & Tune-Up Engine (Rp 50.000)</option>
                         <option value="Servis CVT Lengkap & Pembersihan">Servis CVT Lengkap & Pembersihan (Rp 65.000)</option>
@@ -1334,30 +1463,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                         <option value="Paket Servis Rutin Lengkap">Paket Servis Rutin Lengkap (Rp 150.000)</option>
                       </select>
                     </div>
-                  </div>
-
-                  {/* Vehicle Info & Schedule */}
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                      <Bike className="w-4 h-4 text-slate-600" />
-                      2. Data Motor & Jadwal
-                    </h4>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] uppercase font-bold text-slate-600 mb-1">
-                          Nomor Plat <span className="text-slate-900">*</span>
-                        </label>
-                        <input
-                          required
-                          type="text"
-                          placeholder="B 1234 BKM"
-                          value={plateNumber}
-                          onChange={(e) => setPlateNumber(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-mono uppercase"
-                        />
-                      </div>
-
                       <div>
                         <label className="block text-[11px] uppercase font-bold text-slate-600 mb-1">
                           Merk Motor
@@ -1365,7 +1472,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                         <select
                           value={brand}
                           onChange={(e) => setBrand(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
                         >
                           <option value="Honda">Honda</option>
                           <option value="Yamaha">Yamaha</option>
@@ -1376,54 +1483,194 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                           <option value="Lainnya">Lainnya</option>
                         </select>
                       </div>
+
+                      <div>
+                        <label className="block text-[11px] uppercase font-bold text-slate-600 mb-1">
+                          Tipe / Model Motor
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Vario 160, NMAX..."
+                          value={model}
+                          onChange={(e) => setModel(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Vehicle Plate & Schedule */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 pb-1 border-b border-slate-100">
+                      <Bike className="w-4 h-4 text-slate-600" />
+                      2. Plat Motor & Jadwal Servis
+                    </h4>
+
+                    {/* Indonesian Plate Input with Strict Word Limiter */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-[11px] uppercase font-bold text-slate-600">
+                          Plat Nomor Kendaraan <span className="text-slate-900">*</span>
+                        </label>
+                        <span className="text-[10px] font-mono text-slate-400">Format: XX 0000 XXX</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <input
+                            required
+                            type="text"
+                            maxLength={2}
+                            placeholder="B"
+                            value={platePrefix}
+                            onChange={(e) => setPlatePrefix(e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase())}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-3 text-center text-xs font-bold uppercase text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 font-mono transition-all"
+                          />
+                          <span className="text-[9px] text-slate-400 block text-center mt-0.5">Kode Depan</span>
+                        </div>
+
+                        <div>
+                          <input
+                            required
+                            type="text"
+                            maxLength={4}
+                            placeholder="1234"
+                            value={plateNumber}
+                            onChange={(e) => setPlateNumber(e.target.value.replace(/\D/g, ''))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-3 text-center text-xs font-bold text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 font-mono transition-all"
+                          />
+                          <span className="text-[9px] text-slate-400 block text-center mt-0.5">Nomor Polisi</span>
+                        </div>
+
+                        <div>
+                          <input
+                            type="text"
+                            maxLength={3}
+                            placeholder="BKM"
+                            value={plateSuffix}
+                            onChange={(e) => setPlateSuffix(e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase())}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-3 text-center text-xs font-bold uppercase text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 font-mono transition-all"
+                          />
+                          <span className="text-[9px] text-slate-400 block text-center mt-0.5">Kode Belakang</span>
+                        </div>
+                      </div>
+
+                      {/* Live License Plate Badge Preview */}
+                      <div className="mt-2.5 flex items-center justify-center">
+                        <div className="bg-slate-900 text-white font-mono px-5 py-1.5 rounded-lg border-2 border-slate-700 tracking-widest text-xs font-bold shadow-inner flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                          <span>
+                            {platePrefix.toUpperCase() || 'XX'} {plateNumber || '0000'} {plateSuffix.toUpperCase() || 'XXX'}
+                          </span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                        </div>
+                      </div>
                     </div>
 
+                    {/* Date Picker */}
                     <div>
                       <label className="block text-[11px] uppercase font-bold text-slate-600 mb-1">
-                        Tipe / Model Motor
+                        Pilihan Tanggal Kedatangan <span className="text-slate-900">*</span>
                       </label>
                       <input
-                        type="text"
-                        placeholder="Contoh: Vario 160, NMAX, Aerox, Beat"
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                        required
+                        type="date"
+                        min={todayStr}
+                        value={bookingDate}
+                        onChange={(e) => setBookingDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-medium"
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] uppercase font-bold text-slate-600 mb-1">
-                          Pilihan Tanggal <span className="text-slate-900">*</span>
+                    {/* Interactive Clock & Time Slot Selector with Hardware Clock + Real-Time Verification */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="block text-[11px] uppercase font-bold text-slate-600 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Pilih Jam Kedatangan (Clock):</span>
                         </label>
-                        <input
-                          required
-                          type="date"
-                          value={bookingDate}
-                          onChange={(e) => setBookingDate(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
-                        />
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {isDateToday ? 'Live Hardware Clock' : `${bookedSlotsOnDate.length} slot terisi`}
+                        </span>
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] uppercase font-bold text-slate-600 mb-1">
-                          Jam Kedatangan
-                        </label>
-                        <select
-                          value={bookingTime}
-                          onChange={(e) => setBookingTime(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-mono"
-                        >
-                          <option value="08:30">08:30 WIB (Pagi)</option>
-                          <option value="09:30">09:30 WIB</option>
-                          <option value="10:30">10:30 WIB</option>
-                          <option value="11:30">11:30 WIB</option>
-                          <option value="13:30">13:30 WIB (Siang)</option>
-                          <option value="14:30">14:30 WIB</option>
-                          <option value="15:30">15:30 WIB (Sore)</option>
-                          <option value="16:30">16:30 WIB</option>
-                        </select>
+                      {/* Interactive Time Grid */}
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-2xl max-h-48 overflow-y-auto no-scrollbar">
+                        {timeSlots.map((slot) => {
+                          const isPast = isSlotPast(slot.time);
+                          const isBooked = isSlotBooked(slot.time);
+                          const isDisabled = isPast || isBooked;
+                          const isSelected = bookingTime === slot.time;
+
+                          let badgeText = slot.period;
+                          let tooltip = `Pilih jam ${slot.time} WIB`;
+
+                          if (isPast) {
+                            badgeText = 'Lewat';
+                            tooltip = `Jam ${slot.time} WIB sudah terlewat untuk hari ini`;
+                          } else if (isBooked) {
+                            badgeText = 'Penuh';
+                            tooltip = `Jam ${slot.time} WIB sudah dibooking oleh pelanggan lain`;
+                          }
+
+                          return (
+                            <button
+                              key={slot.time}
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => setBookingTime(slot.time)}
+                              className={`py-2 px-1 rounded-xl text-xs font-mono font-bold flex flex-col items-center justify-center transition-all cursor-pointer relative ${
+                                isDisabled
+                                  ? 'bg-slate-200/70 border border-slate-200 text-slate-400 cursor-not-allowed opacity-50 line-through'
+                                  : isSelected
+                                  ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900'
+                                  : 'bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs'
+                              }`}
+                              title={tooltip}
+                            >
+                              <div className="flex items-center gap-1">
+                                {isBooked && <Lock className="w-2.5 h-2.5 text-slate-400" />}
+                                <span>{slot.time}</span>
+                              </div>
+                              <span className={`text-[8px] uppercase tracking-wider font-sans font-semibold mt-0.5 ${
+                                isDisabled ? 'text-slate-400' : isSelected ? 'text-emerald-400' : 'text-slate-500'
+                              }`}>
+                                {badgeText}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
+
+                      {/* Selected Time Live Verification Badge */}
+                      <div className="mt-2 flex items-center justify-between text-xs p-2.5 rounded-xl border bg-white border-slate-200">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-slate-700" />
+                          <span className="text-slate-600">Jam Dipilih:</span>
+                          <span className="font-mono font-bold text-slate-900">{bookingTime} WIB</span>
+                        </div>
+
+                        {isCurrentTimeSlotUnavailable ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-rose-600" />
+                            {isSlotPast(bookingTime) ? 'Jam Sudah Terlewat (Past Time)' : 'Slot Sudah Terisi (Unavailable)'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            Slot Tersedia (Available)
+                          </span>
+                        )}
+                      </div>
+
+                      {isCurrentTimeSlotUnavailable && (
+                        <p className="text-[11px] text-rose-600 font-medium mt-1 animate-fade-in flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          {isSlotPast(bookingTime)
+                            ? `Jam ${bookingTime} WIB sudah terlewat hari ini. Silakan pilih jam berikutnya.`
+                            : `Jam ${bookingTime} WIB sudah dibooking. Silakan pilih slot lain di atas.`}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1439,20 +1686,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                     placeholder="Contoh: Tarikan awal agak gredeg, rem depan bunyi decit saat jalan pelan..."
                     value={complaintNotes}
                     onChange={(e) => setComplaintNotes(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all resize-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all resize-none"
                   />
                 </div>
 
                 {/* Submit CTA */}
                 <button
                   type="submit"
-                  disabled={isSubmittingBooking}
-                  className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm uppercase tracking-wider rounded-2xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 active:scale-98"
+                  disabled={isSubmittingBooking || isCurrentTimeSlotUnavailable}
+                  className="w-full py-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-bold text-sm uppercase tracking-wider rounded-2xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
                 >
                   {isSubmittingBooking ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Memproses Pendaftaran...
+                      Mendaftarkan ke Database Bengkel...
                     </>
                   ) : (
                     <>
@@ -1691,8 +1938,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
       </section>
 
       {/* 10. FAQ SECTION WITH SMOOTH ACCORDION TRANSITION */}
-      <section id="faq" className="py-20 bg-slate-50 border-t border-slate-200 scroll-mt-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="faq" className="py-24 bg-slate-50 border-t border-slate-200 scroll-mt-20 min-h-[600px] flex flex-col justify-center">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           
           <div className="text-center space-y-3 mb-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-800 text-xs font-bold uppercase tracking-wider">
@@ -1710,13 +1957,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
               return (
                 <div
                   key={idx}
-                  className={`bg-white border rounded-2xl overflow-hidden transition-all duration-300 shadow-2xs ${
+                  className={`bg-white border rounded-2xl overflow-hidden transition-colors duration-200 shadow-2xs ${
                     isOpen ? 'border-slate-900 shadow-sm' : 'border-slate-200'
                   }`}
                 >
                   <button
                     type="button"
-                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setOpenFaq(isOpen ? null : idx);
+                    }}
                     className="w-full p-5 text-left flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/80 transition-colors"
                   >
                     <span className="text-xs sm:text-sm font-bold text-slate-900">{faq.q}</span>
