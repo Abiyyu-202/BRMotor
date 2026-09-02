@@ -104,18 +104,18 @@ function AppContent() {
     day: 'numeric'
   });
 
-  // Navigation tabs configuration with explicit role assignments
+  // Navigation tabs configuration with explicit role assignments (10 items sequence)
   const navItems = [
     { name: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
-    { name: 'Customers', icon: Users, roles: ['owner', 'admin', 'cashier'] },
-    { name: 'Vehicles', icon: Bike, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
     { name: 'Bookings', icon: Calendar, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
     { name: 'Work Orders', icon: Wrench, roles: ['owner', 'admin', 'mechanic', 'cashier'] },
+    { name: 'Payments', icon: CreditCard, roles: ['owner', 'admin', 'cashier'] },
+    { name: 'Customers', icon: Users, roles: ['owner', 'admin', 'cashier'] },
+    { name: 'Vehicles', icon: Bike, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
     { name: 'Mechanics', icon: Users, roles: ['owner', 'admin'] },
     { name: 'Inventory', icon: Package, roles: ['owner', 'admin', 'mechanic'] },
-    { name: 'Payments', icon: CreditCard, roles: ['owner', 'admin', 'cashier'] },
     { name: 'Reports', icon: TrendingUp, roles: ['owner', 'admin'] },
-    { name: 'Settings', icon: SettingsIcon, roles: ['owner'] }
+    { name: 'Settings', icon: SettingsIcon, roles: ['owner', 'admin'] }
   ].filter(item => item.roles.includes(currentRole));
 
   // Auto-redirect if role switcher makes activeTab illegal

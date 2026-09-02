@@ -21,15 +21,15 @@ export const translations = {
     // Navigation Tabs
     nav: {
       Dashboard: "Dashboard",
-      Customers: "Data Pelanggan",
-      Vehicles: "Data Motor",
       Bookings: "Jadwal Booking",
       "Work Orders": "Daftar Servis",
+      Payments: "Pembayaran",
+      Customers: "Data Pelanggan",
+      Vehicles: "Data Motor",
       Mechanics: "Data Mekanik",
-      Inventory: "Stok Sparepart & Oli",
-      Payments: "Kasir & Nota",
+      Inventory: "Stok Sparepart",
       Reports: "Laporan Omzet",
-      Settings: "Pengaturan Bengkel",
+      Settings: "Pengaturan",
     },
 
     // Roles
@@ -236,14 +236,14 @@ export const translations = {
     // Navigation Tabs
     nav: {
       Dashboard: "Dashboard",
-      Customers: "Customers",
-      Vehicles: "Vehicles",
       Bookings: "Bookings",
       "Work Orders": "Work Orders",
-      Mechanics: "Mechanics",
-      Inventory: "Inventory",
       Payments: "Payments",
-      Reports: "Reports",
+      Customers: "Customers",
+      Vehicles: "Vehicles",
+      Mechanics: "Mechanics",
+      Inventory: "Spare Parts",
+      Reports: "Revenue Reports",
       Settings: "Settings",
     },
 
