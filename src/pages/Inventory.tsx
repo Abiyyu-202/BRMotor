@@ -60,14 +60,14 @@ export const Inventory: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<SparePart | null>(null);
 
-  // Form Fields
+  // Form Fields - All initialized to empty so user sees pure placeholders
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [category, setCategory] = useState('');
-  const [purchasePrice, setPurchasePrice] = useState(0);
-  const [sellingPrice, setSellingPrice] = useState(0);
-  const [currentStock, setCurrentStock] = useState(10);
-  const [minimumStock, setMinimumStock] = useState(5);
+  const [purchasePrice, setPurchasePrice] = useState<number | ''>('');
+  const [sellingPrice, setSellingPrice] = useState<number | ''>('');
+  const [currentStock, setCurrentStock] = useState<number | ''>('');
+  const [minimumStock, setMinimumStock] = useState<number | ''>('');
   const [supplier, setSupplier] = useState('');
   const [partToDelete, setPartToDelete] = useState<string | null>(null);
 
@@ -76,11 +76,11 @@ export const Inventory: React.FC = () => {
     setEditingPart(null);
     setName('');
     setSku('');
-    setCategory('Oli & Pelumas');
-    setPurchasePrice(0);
-    setSellingPrice(0);
-    setCurrentStock(10);
-    setMinimumStock(5);
+    setCategory('');
+    setPurchasePrice('');
+    setSellingPrice('');
+    setCurrentStock('');
+    setMinimumStock('');
     setSupplier('');
     setIsModalOpen(true);
   };
@@ -100,12 +100,26 @@ export const Inventory: React.FC = () => {
 
   const handleSavePart = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !sku.trim() || !category.trim() || !supplier.trim()) {
+    if (
+      !name.trim() ||
+      !sku.trim() ||
+      !category.trim() ||
+      !supplier.trim() ||
+      purchasePrice === '' ||
+      sellingPrice === '' ||
+      currentStock === '' ||
+      minimumStock === ''
+    ) {
       showToast('Semua field wajib diisi untuk menyimpan suku cadang', 'error');
       return;
     }
 
-    if (sellingPrice < purchasePrice) {
+    const numPurchasePrice = Number(purchasePrice);
+    const numSellingPrice = Number(sellingPrice);
+    const numCurrentStock = Number(currentStock);
+    const numMinimumStock = Number(minimumStock);
+
+    if (numSellingPrice < numPurchasePrice) {
       showToast('Peringatan: Harga jual lebih rendah dari harga beli!', 'warning');
     }
 
@@ -113,10 +127,10 @@ export const Inventory: React.FC = () => {
       name,
       sku: sku.toUpperCase(),
       category,
-      purchasePrice: Number(purchasePrice),
-      sellingPrice: Number(sellingPrice),
-      currentStock: Number(currentStock),
-      minimumStock: Number(minimumStock),
+      purchasePrice: numPurchasePrice,
+      sellingPrice: numSellingPrice,
+      currentStock: numCurrentStock,
+      minimumStock: numMinimumStock,
       supplier
     };
 
@@ -422,7 +436,7 @@ export const Inventory: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: Ban Tubeless Michelin 90/90-14"
+                  placeholder="Contoh: Kampas Rem Depan Honda Beat"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
@@ -435,7 +449,7 @@ export const Inventory: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="Contoh: BAN-MCH-909014"
+                    placeholder="Contoh: KMP-REM-01"
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
@@ -446,7 +460,7 @@ export const Inventory: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="Contoh: Ban, Oli, Rem, Mesin"
+                    placeholder="Contoh: Pengereman / Oli / Mesin"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
@@ -462,9 +476,10 @@ export const Inventory: React.FC = () => {
                     required
                     min={0}
                     step="any"
+                    placeholder="Contoh: 35000"
                     value={purchasePrice}
-                    onChange={(e) => setPurchasePrice(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-medium focus:outline-none"
+                    onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
                   />
                 </div>
                 <div>
@@ -474,9 +489,10 @@ export const Inventory: React.FC = () => {
                     required
                     min={0}
                     step="any"
+                    placeholder="Contoh: 50000"
                     value={sellingPrice}
-                    onChange={(e) => setSellingPrice(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-medium focus:outline-none"
+                    onChange={(e) => setSellingPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
                   />
                 </div>
               </div>
@@ -488,9 +504,10 @@ export const Inventory: React.FC = () => {
                     type="number"
                     required
                     min={0}
+                    placeholder="Contoh: 10"
                     value={currentStock}
-                    onChange={(e) => setCurrentStock(parseInt(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-medium focus:outline-none"
+                    onChange={(e) => setCurrentStock(e.target.value === '' ? '' : parseInt(e.target.value))}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
                   />
                 </div>
                 <div>
@@ -499,9 +516,10 @@ export const Inventory: React.FC = () => {
                     type="number"
                     required
                     min={0}
+                    placeholder="Contoh: 3"
                     value={minimumStock}
-                    onChange={(e) => setMinimumStock(parseInt(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-medium focus:outline-none"
+                    onChange={(e) => setMinimumStock(e.target.value === '' ? '' : parseInt(e.target.value))}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
                   />
                 </div>
               </div>
@@ -511,27 +529,26 @@ export const Inventory: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: PT Sumber Rejeki Motor"
+                  placeholder="Contoh: PT Sumber Rejeki Motor / AHM"
                   value={supplier}
                   onChange={(e) => setSupplier(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
                 />
               </div>
 
-              <div className="flex gap-3 justify-end pt-2">
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl font-bold cursor-pointer transition-all"
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-bold transition-all cursor-pointer"
                 >
-                  Batal
+                  {t.actions.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                  className="px-5 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 font-bold transition-all cursor-pointer shadow-sm"
                 >
-                  <CheckCircle className="w-4 h-4" />
-                  Simpan Suku Cadang
+                  {t.actions.save}
                 </button>
               </div>
             </form>
@@ -539,12 +556,16 @@ export const Inventory: React.FC = () => {
         </div>
       )}
 
+      {/* CONFIRM DELETE MODAL */}
       <ConfirmModal
-        isOpen={!!partToDelete}
+        isOpen={Boolean(partToDelete)}
         title="Hapus Suku Cadang"
-        message="Apakah Anda yakin ingin menghapus suku cadang ini dari katalog? Data riwayat servis mungkin terpengaruh."
+        message="Apakah Anda yakin ingin menghapus data suku cadang ini dari daftar persediaan gudang?"
+        confirmLabel="Hapus Suku Cadang"
+        cancelLabel="Batal"
+        variant="danger"
         onConfirm={confirmDeletePart}
-        onClose={() => setPartToDelete(null)}
+        onCancel={() => setPartToDelete(null)}
       />
     </div>
   );

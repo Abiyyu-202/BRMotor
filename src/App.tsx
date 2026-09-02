@@ -63,7 +63,9 @@ function AppContent() {
     notificationHistory,
     markNotificationsAsRead,
     updateBookingStatus,
-    pendingDeletionCount
+    pendingDeletionCount,
+    bookings,
+    workOrders
   } = useWorkshop();
 
   // Landing page or login screen view state when unauthenticated
@@ -214,6 +216,39 @@ function AppContent() {
     ? (customers.find(c => String(c.id) === String(currentUserId) || (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())) || null)
     : null;
 
+  // Find user's customer records for filtering order count
+  const userCustomers = customers.filter(c => 
+    (currentUserId && String(c.id) === String(currentUserId)) ||
+    (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
+  );
+  const userCustomerIds = userCustomers.map(c => String(c.id));
+
+  // Compute order badge counts for navigation items
+  const getNavBadge = (itemName: string) => {
+    if (itemName === 'Bookings') {
+      const count = currentRole === 'user'
+        ? bookings.filter(b => (userCustomerIds.includes(String(b.customerId)) || (activeCustomer && b.customerName?.toLowerCase() === activeCustomer.name.toLowerCase())) && b.status === 'pending').length
+        : bookings.filter(b => b.status === 'pending').length;
+      return count > 0 ? { count, color: 'bg-rose-500 text-white' } : null;
+    }
+    if (itemName === 'Work Orders') {
+      const count = currentRole === 'user'
+        ? workOrders.filter(w => userCustomerIds.includes(String(w.customerId)) && w.status !== 'picked_up' && w.status !== 'completed').length
+        : workOrders.filter(w => w.status !== 'picked_up' && w.status !== 'completed').length;
+      return count > 0 ? { count, color: 'bg-blue-600 text-white' } : null;
+    }
+    if (itemName === 'Payments') {
+      const count = currentRole === 'user'
+        ? workOrders.filter(w => userCustomerIds.includes(String(w.customerId)) && w.paymentStatus === 'unpaid').length
+        : workOrders.filter(w => w.paymentStatus === 'unpaid').length;
+      return count > 0 ? { count, color: 'bg-emerald-600 text-white' } : null;
+    }
+    if (itemName === 'Settings' && pendingDeletionCount > 0) {
+      return { count: pendingDeletionCount, color: 'bg-amber-500 text-white' };
+    }
+    return null;
+  };
+
   return (
     <div className="flex h-screen bg-slate-100/60 overflow-hidden font-sans select-none">
       
@@ -252,22 +287,31 @@ function AppContent() {
               const IconComponent = item.icon;
               const isSelected = activeTab === item.name;
               const label = t.nav[item.name as keyof typeof t.nav] || item.name;
+              const badge = getNavBadge(item.name);
 
               return (
                 <button
                   key={item.name}
                   onClick={() => setActiveTab(item.name)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide cursor-pointer transition-all ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide cursor-pointer transition-all ${
                     isSelected
                       ? 'bg-slate-900 text-white shadow-sm'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
-                  <IconComponent className="w-4 h-4 shrink-0" />
-                  {label}
-                  {item.name === 'Settings' && pendingDeletionCount > 0 && (
-                    <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-amber-500 text-white rounded-full leading-none">
-                      {pendingDeletionCount}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <IconComponent className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </div>
+                  {badge && (
+                    <span
+                      className={`px-2 py-0.5 text-[10px] font-black rounded-full leading-none flex items-center justify-center min-w-[20px] h-5 shrink-0 transition-transform ${
+                        isSelected
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : `${badge.color} shadow-xs`
+                      }`}
+                    >
+                      {badge.count}
                     </span>
                   )}
                 </button>
@@ -325,6 +369,7 @@ function AppContent() {
                   const IconComponent = item.icon;
                   const isSelected = activeTab === item.name;
                   const label = t.nav[item.name as keyof typeof t.nav] || item.name;
+                  const badge = getNavBadge(item.name);
 
                   return (
                     <button
@@ -333,14 +378,27 @@ function AppContent() {
                         setActiveTab(item.name);
                         setMobileSidebarOpen(false);
                       }}
-                      className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold ${
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold ${
                         isSelected
                           ? 'bg-slate-900 text-white'
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      <IconComponent className="w-4 h-4" />
-                      {label}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <IconComponent className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{label}</span>
+                      </div>
+                      {badge && (
+                        <span
+                          className={`px-2 py-0.5 text-[10px] font-black rounded-full leading-none flex items-center justify-center min-w-[20px] h-5 shrink-0 ${
+                            isSelected
+                              ? 'bg-white text-slate-900'
+                              : badge.color
+                          }`}
+                        >
+                          {badge.count}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
