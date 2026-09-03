@@ -115,22 +115,22 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <div
-        className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
+        className="w-full max-w-xl bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="p-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-white font-extrabold text-base backdrop-blur-md">
-              {name ? name.charAt(0).toUpperCase() : <User className="w-5 h-5" />}
+            <div className="w-10 h-10 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white font-extrabold text-sm backdrop-blur-md">
+              {name ? name.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-extrabold tracking-tight">
+                <h3 className="text-sm font-extrabold tracking-tight">
                   {language === 'id' ? 'Edit Profil Akun Saya' : 'Edit My Profile'}
                 </h3>
                 {isGoogleAccount && (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/20 text-white border border-white/30 flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-white/20 text-white border border-white/30 flex items-center gap-1">
                     <Sparkles className="w-2.5 h-2.5 text-amber-300" /> Google Login
                   </span>
                 )}
@@ -145,17 +145,17 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 text-slate-900">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 text-slate-900">
           {/* Notice for Google users */}
           {isGoogleAccount && (
-            <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl flex items-start gap-3 text-xs text-blue-900">
+            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-lg flex items-start gap-3 text-xs text-blue-900">
               <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold">Akun Terhubung dengan Google</p>
@@ -168,7 +168,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
 
           {/* Row 1: Full Name */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1 flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-slate-500" />
               {language === 'id' ? 'Nama Lengkap (Tampil di Bengkel)' : 'Full Name (Display Name)'}
               <span className="text-rose-500">*</span>
@@ -179,14 +179,14 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Contoh: Ahmad Taher Al Abiyyu"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-semibold focus:outline-none focus:border-slate-800 focus:bg-white transition-all shadow-2xs"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-semibold focus:outline-none focus:border-slate-800 focus:bg-white transition-all shadow-2xs"
             />
           </div>
 
           {/* Row 2: Phone Number & Email */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1 flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-slate-500" />
                 {language === 'id' ? 'No. WhatsApp / HP' : 'WhatsApp / Phone'}
                 <span className="text-rose-500">*</span>
@@ -197,13 +197,13 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Contoh: 081234567890"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-semibold focus:outline-none focus:border-slate-800 focus:bg-white transition-all shadow-2xs"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-semibold focus:outline-none focus:border-slate-800 focus:bg-white transition-all shadow-2xs"
               />
               <p className="text-[10px] text-slate-400 mt-1">Untuk notifikasi servis selesai & WA</p>
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-slate-500" />
                 {language === 'id' ? 'Alamat Email' : 'Email Address'}
               </label>
@@ -212,14 +212,14 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="nama@email.com"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-semibold focus:outline-none focus:border-slate-800 focus:bg-white transition-all shadow-2xs"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-semibold focus:outline-none focus:border-slate-800 focus:bg-white transition-all shadow-2xs"
               />
             </div>
           </div>
 
           {/* Row 3: Address */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1 flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-slate-500" />
               {language === 'id' ? 'Alamat Tempat Tinggal / Rumah' : 'Home / Residence Address'}
             </label>
@@ -228,7 +228,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Contoh: Perumahan Grand Harmoni Blok C No. 12, Kebumen"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 font-medium focus:outline-none focus:border-slate-800 focus:bg-white transition-all resize-none shadow-2xs"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-slate-800 focus:bg-white transition-all resize-none shadow-2xs"
             />
           </div>
 
@@ -239,7 +239,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
               {language === 'id' ? 'Keamanan Akun (Opsional)' : 'Account Security (Optional)'}
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
                   <AtSign className="w-3 h-3" /> Username Login
@@ -249,7 +249,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="username_anda"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-slate-800 focus:bg-white transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-slate-800 focus:bg-white transition-all"
                 />
               </div>
 
@@ -271,7 +271,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Kosongkan jika tidak diubah"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:bg-white transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:bg-white transition-all"
                 />
               </div>
             </div>
@@ -281,18 +281,18 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
           </div>
 
           {/* Footer Buttons */}
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-200">
+          <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer"
+              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer"
             >
               {language === 'id' ? 'Batal' : 'Cancel'}
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+              className="px-5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {isSaving

@@ -99,25 +99,25 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         case 'in_progress':
           return { label: 'On Stand / Active Repair', desc: 'Your mechanic is actively turning wrenches on your motorcycle.', color: 'bg-indigo-100 text-black border-2 border-black' };
         case 'waiting_parts':
-          return { label: 'Hold / Waiting Spare Parts', desc: 'Awaiting specialized parts delivery from our warehouse stock.', color: 'bg-purple-100 text-black border-2 border-black' };
+          return { label: 'Parts Requisition', desc: 'Waiting for requested parts from workshop stock.', color: 'bg-purple-100 text-black border-2 border-black' };
         case 'quality_control':
-          return { label: 'Testing / Quality Control', desc: 'Repairs are done. Undergoing secondary road-tests & torque checks.', color: 'bg-blue-100 text-black border-2 border-black' };
+          return { label: 'Quality Verification', desc: 'Work complete. Carrying out torque checks and test run.', color: 'bg-blue-100 text-black border-2 border-black' };
         case 'completed':
-          return { label: 'Ready for Pickup!', desc: 'All repairs completed. Please present invoice to desk checkout.', color: 'bg-emerald-100 text-black border-2 border-black animate-pulse' };
+          return { label: 'Ready for Collection!', desc: 'Ready for pick-up. Settle cashier payment at your convenience.', color: 'bg-emerald-100 text-black border-2 border-black animate-pulse' };
         case 'picked_up':
-          return { label: 'Released / Completed', desc: 'Ticket closed. Bike was successfully checked out and ridden home.', color: 'bg-slate-200 text-black border-2 border-black' };
+          return { label: 'Completed & Released', desc: 'Invoice settled and vehicle delivered to owner.', color: 'bg-slate-200 text-black border-2 border-black' };
         default:
           return { label: 'Received', desc: 'Ticket registered in system.', color: 'bg-slate-200 text-black border-2 border-black' };
       }
     };
 
     return (
-      <div className="space-y-8 animate-fade-in text-slate-900">
+      <div className="space-y-6 animate-fade-in text-slate-900">
         {/* Address Warning Banner if empty */}
         {isAddressEmpty && (
-          <div className="p-5 bg-amber-50 border-2 border-amber-300 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="p-4 sm:p-5 bg-amber-50 border-2 border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-100 text-amber-800 rounded-2xl shrink-0">
+              <div className="p-2 bg-amber-100 text-amber-800 rounded-lg shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
@@ -134,7 +134,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             <button
               type="button"
               onClick={() => setIsProfileModalOpen(true)}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer shrink-0"
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all shadow-xs cursor-pointer shrink-0"
             >
               {language === 'id' ? 'Lengkapi Profil & Alamat' : 'Complete Profile & Address'}
             </button>
@@ -142,14 +142,14 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         )}
 
         {/* Customer Banner */}
-        <div className="p-8 bg-white border border-slate-200 rounded-3xl shadow-sm space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="p-6 bg-white border border-slate-200 rounded-xl shadow-xs space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div className="space-y-2">
               <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 flex items-center gap-2">
                 <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block animate-ping" />
                 {language === 'id' ? 'Sesi Pelanggan Aktif' : 'Connected client session'}
               </div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+              <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">
                 {language === 'id' ? `Selamat Datang, ${displayName}` : `Welcome Back, ${displayName}`}
               </h1>
               <p className="text-xs text-slate-600 max-w-xl">
@@ -159,11 +159,11 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsProfileModalOpen(true)}
-                className="px-5 py-3 bg-white hover:bg-slate-100 text-slate-900 border border-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shrink-0 cursor-pointer shadow-2xs flex items-center gap-2"
+                className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-900 border border-slate-300 font-bold text-xs uppercase tracking-wider rounded-lg transition-all shrink-0 cursor-pointer shadow-2xs flex items-center gap-2"
               >
                 <Users className="w-4 h-4 text-slate-700" />
                 {language === 'id' ? 'Edit Profil' : 'Edit Profile'}
@@ -172,7 +172,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               <button
                 type="button"
                 onClick={() => setActiveTab('Bookings')}
-                className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shrink-0 cursor-pointer shadow-sm flex items-center gap-2"
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all shrink-0 cursor-pointer shadow-xs flex items-center gap-2"
               >
                 <Calendar className="w-4 h-4 text-slate-300" />
                 {t.dashboard.newBooking}
@@ -182,8 +182,8 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
 
           {/* Quick Profile Summary Pills */}
           <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
-              <div className="p-2 bg-white rounded-xl border border-slate-200 text-slate-700">
+            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-slate-50 border border-slate-200/80">
+              <div className="p-2 bg-white rounded-md border border-slate-200 text-slate-700">
                 <Users className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
@@ -192,8 +192,8 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
-              <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-700">
+            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-slate-50 border border-slate-200/80">
+              <div className="p-2 bg-emerald-50 rounded-md border border-emerald-200 text-emerald-700">
                 <Clock className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
@@ -202,8 +202,8 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
-              <div className="p-2 bg-amber-50 rounded-xl border border-amber-200 text-amber-700">
+            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-slate-50 border border-slate-200/80">
+              <div className="p-2 bg-amber-50 rounded-md border border-amber-200 text-amber-700">
                 <MapPin className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
@@ -233,7 +233,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </h2>
 
           {clientWorkOrders.length === 0 ? (
-            <div className="p-12 bg-white border border-dashed border-slate-200 rounded-2xl text-center space-y-3">
+            <div className="p-8 bg-white border border-dashed border-slate-200 rounded-xl text-center space-y-3">
               <p className="text-xs text-slate-500 font-medium">
                 {language === 'id' ? 'Tidak ada tiket servis yang sedang berjalan saat ini.' : 'No active repair tickets found on our stand right now.'}
               </p>
@@ -246,7 +246,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
               {clientWorkOrders.map((wo) => {
                 const step = getFriendlyStatus(wo.status);
                 const currentStageIdx =
@@ -266,15 +266,15 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                 ];
 
                 return (
-                  <div key={wo.id} className="p-6 bg-white border border-slate-200 rounded-3xl flex flex-col justify-between space-y-5 shadow-sm hover:shadow-md transition-all">
+                  <div key={wo.id} className="p-5 sm:p-6 bg-white border border-slate-200 rounded-xl flex flex-col justify-between space-y-5 shadow-xs hover:shadow-md transition-all">
                     <div className="space-y-4">
                       {/* Card Header: Plate & Status */}
                       <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider bg-slate-900 text-white px-2.5 py-1 rounded-lg shadow-2xs">
+                          <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
                             SPK: {wo.id}
                           </span>
-                          <span className="text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-lg uppercase">
+                          <span className="text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md uppercase">
                             {wo.licensePlate}
                           </span>
                         </div>
@@ -285,7 +285,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                       </div>
                       
                       <div>
-                        <h3 className="font-extrabold text-lg text-slate-900 uppercase tracking-tight">{wo.vehicleModel}</h3>
+                        <h3 className="font-extrabold text-base sm:text-lg text-slate-900 uppercase tracking-tight">{wo.vehicleModel}</h3>
                         <p className="text-xs text-slate-600 italic mt-0.5">
                           &quot;{wo.complaint || (language === 'id' ? 'Servis berkala harian' : 'Standard maintenance tuning')}&quot;
                         </p>
@@ -309,11 +309,11 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                             return (
                               <div key={st.num} className="flex flex-col items-center text-center relative z-10">
                                 <div
-                                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
                                     isDone
-                                      ? 'bg-emerald-500 text-white shadow-sm'
+                                      ? 'bg-emerald-500 text-white shadow-2xs'
                                       : isCurrent
-                                      ? 'bg-slate-900 text-white ring-4 ring-slate-100 shadow-md scale-110'
+                                      ? 'bg-slate-900 text-white ring-3 ring-slate-100 shadow-sm scale-105'
                                       : 'bg-white border-2 border-slate-200 text-slate-400'
                                   }`}
                                 >
@@ -332,7 +332,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                       </div>
 
                       {/* Active Status Badge Note */}
-                      <div className={`p-3.5 rounded-2xl ${step.color} space-y-0.5 border border-slate-200/60`}>
+                      <div className={`p-3 rounded-lg ${step.color} space-y-0.5 border border-slate-200/60`}>
                         <p className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-current animate-ping" />
                           {step.label}
@@ -343,7 +343,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                       </div>
 
                       {/* Live Cost Preview Breakdown */}
-                      <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1.5 text-xs">
+                      <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-lg space-y-1.5 text-xs">
                         <div className="flex justify-between items-center text-slate-600">
                           <span>Jasa Servis ({wo.services.length} item):</span>
                           <span className="font-semibold text-slate-800">{formatRupiah(wo.costs.serviceCost)}</span>
@@ -376,7 +376,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         </div>
 
         {/* TWO COLUMN GRID: VEHICLES & BOOKINGS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
           
           {/* REGISTERED MOTORCYCLES */}
           <div className="space-y-4">
@@ -386,14 +386,14 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             </h2>
 
             {clientVehicles.length === 0 ? (
-              <div className="p-8 bg-white border border-dashed border-slate-200 rounded-2xl text-center py-8">
+              <div className="p-6 bg-white border border-dashed border-slate-200 rounded-xl text-center py-8">
                 <p className="text-xs text-slate-500 font-medium mb-3">
                   {language === 'id' ? 'Belum ada kendaraan yang terdaftar atas nama Anda.' : 'No bikes registered under your name yet.'}
                 </p>
                 <button
                   type="button"
                   onClick={() => setActiveTab('Vehicles')}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-xs text-white font-bold uppercase tracking-wider rounded-xl transition-all"
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-xs text-white font-bold uppercase tracking-wider rounded-lg transition-all"
                 >
                   {t.vehicles.addVehicle}
                 </button>
@@ -401,7 +401,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             ) : (
               <div className="space-y-3">
                 {clientVehicles.map((v) => (
-                  <div key={v.id} className="p-4 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-sm">
+                  <div key={v.id} className="p-3.5 bg-white border border-slate-200 rounded-lg flex items-center justify-between shadow-2xs">
                     <div>
                       <p className="text-xs font-bold text-slate-900">{v.brand} {v.model}</p>
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5">
@@ -409,7 +409,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] font-mono font-bold bg-slate-100 text-slate-900 px-2 py-0.5 inline-block rounded-lg">{v.licensePlate}</p>
+                      <p className="text-[10px] font-mono font-bold bg-slate-100 text-slate-900 px-2 py-0.5 inline-block rounded-md">{v.licensePlate}</p>
                       <p className="text-[10px] text-slate-500 mt-1">{v.year}</p>
                     </div>
                   </div>
@@ -418,7 +418,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                 <button
                   type="button"
                   onClick={() => setActiveTab('Vehicles')}
-                  className="w-full text-center py-2.5 border border-dashed border-slate-300 bg-white rounded-xl text-xs font-bold hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
+                  className="w-full text-center py-2.5 border border-dashed border-slate-300 bg-white rounded-lg text-xs font-bold hover:bg-slate-50 text-slate-700 cursor-pointer transition-colors"
                 >
                   + {t.vehicles.addVehicle}
                 </button>
@@ -434,14 +434,14 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             </h2>
 
             {clientBookings.length === 0 ? (
-              <div className="p-8 bg-white border border-dashed border-slate-200 rounded-2xl text-center py-8">
+              <div className="p-6 bg-white border border-dashed border-slate-200 rounded-xl text-center py-8">
                 <p className="text-xs text-slate-500 font-medium mb-3">
                   {language === 'id' ? 'Belum ada tanggal reservasi booking mendatang.' : 'No future booking dates reserved.'}
                 </p>
                 <button
                   type="button"
                   onClick={() => setActiveTab('Bookings')}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-xs text-white font-bold uppercase tracking-wider rounded-xl transition-all"
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-xs text-white font-bold uppercase tracking-wider rounded-lg transition-all"
                 >
                   {t.dashboard.newBooking}
                 </button>
@@ -449,12 +449,12 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             ) : (
               <div className="space-y-3">
                 {clientBookings.map((b) => (
-                  <div key={b.id} className="p-4 bg-white border border-slate-200 rounded-xl space-y-2 shadow-sm">
+                  <div key={b.id} className="p-3.5 bg-white border border-slate-200 rounded-lg space-y-2 shadow-2xs">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-lg uppercase">
+                      <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md uppercase">
                         {t.bookings.queueNo}: {b.queueNumber}
                       </span>
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-lg ${
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${
                         b.status === 'checked-in'
                           ? 'bg-emerald-100 text-emerald-800'
                           : b.status === 'cancelled'
@@ -486,18 +486,18 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         {/* Quick Address Modal */}
         {isAddressModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+            <div className="bg-white rounded-xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
               <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-base text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-amber-500" />
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
                   {language === 'id' ? 'Lengkapi Alamat Pelanggan' : 'Complete Client Address'}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsAddressModalOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
@@ -540,20 +540,20 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                     value={inputAddress}
                     onChange={(e) => setInputAddress(e.target.value)}
                     placeholder={language === 'id' ? 'Contoh: Perumahan Grand Harmoni Blok C No. 12, Kebumen' : 'e.g. 123 Main Street, Suite 4B'}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:border-slate-400 resize-none font-medium"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-900 focus:outline-none focus:border-slate-400 resize-none font-medium"
                   />
                 </div>
-                <div className="flex gap-3 justify-end pt-2">
+                <div className="flex gap-2.5 justify-end pt-2">
                   <button
                     type="button"
                     onClick={() => setIsAddressModalOpen(false)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer transition-all"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-lg cursor-pointer transition-all"
                   >
                     {language === 'id' ? 'Batal' : 'Cancel'}
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-sm cursor-pointer transition-all"
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-xs cursor-pointer transition-all"
                   >
                     {language === 'id' ? 'Simpan Alamat' : 'Save Address'}
                   </button>
@@ -563,7 +563,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
         )}
 
-        {/* Dedicated Customer Profile Modal */}
+        {/* Global Customer Profile Modal */}
         <CustomerProfileModal
           isOpen={isProfileModalOpen}
           onClose={() => setIsProfileModalOpen(false)}
@@ -573,10 +573,8 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
     );
   }
 
-  // 1. Calculations
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todaySales = salesHistory.find((s) => s.date === todayStr);
-  const todayRevenue = todaySales ? todaySales.amount : 0;
+  // Fallback: standard staff / owner dashboard
+  const todayRevenue = salesHistory.length > 0 ? salesHistory[salesHistory.length - 1].amount : 0;
 
   const activeWorkOrders = workOrders.filter(
     (wo) => wo.status !== 'picked_up' && wo.status !== 'completed'
@@ -621,7 +619,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight">
               {t.dashboard.title}
             </h1>
-            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-lg border border-slate-200 uppercase">
+            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 uppercase">
               {currentRole.toUpperCase()}
             </span>
           </div>
@@ -637,7 +635,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           <button
             type="button"
             onClick={() => setIsQuickCheckInOpen(true)}
-            className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer transition-all shadow-sm active:scale-95"
+            className="bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer transition-all shadow-xs active:scale-98"
           >
             <Sparkles className="w-4 h-4" />
             Check-In Motor Cepat
@@ -645,7 +643,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           <button
             type="button"
             onClick={() => setIsReminderOpen(true)}
-            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer transition-all shadow-2xs active:scale-95"
+            className="bg-white hover:bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer transition-all shadow-2xs active:scale-98"
           >
             <Bell className="w-4 h-4 text-slate-500" />
             Pengingat WA
@@ -653,7 +651,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           <button
             type="button"
             onClick={() => setIsAuditLogOpen(true)}
-            className="bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer transition-all shadow-2xs active:scale-95"
+            className="bg-white hover:bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer transition-all shadow-2xs active:scale-98"
           >
             <History className="w-4 h-4 text-slate-500" />
             {language === 'id' ? 'Log Audit' : 'Audit Log'}
@@ -662,14 +660,14 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
       </div>
 
       {/* Grid Metrics (6 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
         {/* Metric 1: Revenue */}
         <button
           type="button"
-          className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
+          className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs hover:shadow-sm transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
           onClick={() => setActiveTab('Payments')}
         >
-          <div className="p-2.5 bg-slate-900 text-white rounded-xl shrink-0">
+          <div className="p-2.5 bg-slate-900 text-white rounded-lg shrink-0">
             <DollarSign className="w-4 h-4" />
           </div>
           <div>
@@ -683,10 +681,10 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         {/* Metric 2: Active Work Orders */}
         <button
           type="button"
-          className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
+          className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs hover:shadow-sm transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
           onClick={() => setActiveTab('Work Orders')}
         >
-          <div className="p-2.5 bg-slate-900 text-white rounded-xl shrink-0">
+          <div className="p-2.5 bg-slate-900 text-white rounded-lg shrink-0">
             <Wrench className="w-4 h-4" />
           </div>
           <div>
@@ -700,12 +698,12 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         {/* Metric 3: Incoming Bookings */}
         <button
           type="button"
-          className={`p-4 rounded-2xl bg-white border shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full ${
+          className={`p-4 rounded-xl bg-white border shadow-2xs hover:shadow-sm transition-all flex items-center gap-3.5 cursor-pointer text-left w-full ${
             pendingBookings.length > 0 ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200'
           }`}
           onClick={() => setActiveTab('Bookings')}
         >
-          <div className={`p-2.5 rounded-xl shrink-0 ${pendingBookings.length > 0 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-800'}`}>
+          <div className={`p-2.5 rounded-lg shrink-0 ${pendingBookings.length > 0 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-800'}`}>
             <Calendar className="w-4 h-4" />
           </div>
           <div>
@@ -719,10 +717,10 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         {/* Metric 4: Total Customers */}
         <button
           type="button"
-          className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
+          className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs hover:shadow-sm transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
           onClick={() => setActiveTab('Customers')}
         >
-          <div className="p-2.5 bg-slate-900 text-white rounded-xl shrink-0">
+          <div className="p-2.5 bg-slate-900 text-white rounded-lg shrink-0">
             <Users className="w-4 h-4" />
           </div>
           <div>
@@ -736,10 +734,10 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         {/* Metric 5: Total Vehicles */}
         <button
           type="button"
-          className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
+          className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs hover:shadow-sm transition-all flex items-center gap-3.5 cursor-pointer text-left w-full"
           onClick={() => setActiveTab('Vehicles')}
         >
-          <div className="p-2.5 bg-slate-900 text-white rounded-xl shrink-0">
+          <div className="p-2.5 bg-slate-900 text-white rounded-lg shrink-0">
             <FileText className="w-4 h-4" />
           </div>
           <div>
@@ -753,12 +751,12 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         {/* Metric 6: Low Stock Parts */}
         <button
           type="button"
-          className={`p-4 rounded-2xl bg-white border shadow-sm hover:shadow-md transition-all flex items-center gap-3.5 cursor-pointer text-left w-full ${
+          className={`p-4 rounded-xl bg-white border shadow-2xs hover:shadow-sm transition-all flex items-center gap-3.5 cursor-pointer text-left w-full ${
             lowStockParts.length > 0 ? 'border-rose-300' : 'border-slate-200'
           }`}
           onClick={() => setActiveTab('Inventory')}
         >
-          <div className={`p-2.5 rounded-xl shrink-0 ${lowStockParts.length > 0 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-800'}`}>
+          <div className={`p-2.5 rounded-lg shrink-0 ${lowStockParts.length > 0 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-800'}`}>
             <AlertTriangle className="w-4 h-4" />
           </div>
           <div>
@@ -776,10 +774,10 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         <div className="lg:col-span-2 space-y-6">
 
           {/* Incoming Online Bookings Queue Card */}
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-amber-100 text-amber-900 rounded-xl">
+                <div className="p-2 bg-amber-100 text-amber-900 rounded-lg">
                   <Calendar className="w-4 h-4 text-amber-700" />
                 </div>
                 <div>
@@ -788,7 +786,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                       Antrean & Booking Online Masuk
                     </h2>
                     {pendingBookings.length > 0 && (
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-mono text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white font-mono text-[10px] font-bold">
                         {pendingBookings.length} Baru
                       </span>
                     )}
@@ -802,7 +800,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               <button
                 type="button"
                 onClick={() => setActiveTab('Bookings')}
-                className="text-xs text-slate-700 hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200"
+                className="text-xs text-slate-700 hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"
               >
                 Lihat di Menu Booking
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -810,7 +808,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             </div>
 
             {pendingBookings.length === 0 ? (
-              <div className="py-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <div className="py-6 text-center text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
                 <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-1.5" />
                 <p className="text-xs font-bold text-slate-700">Semua Antrean Booking Sudah Diproses</p>
                 <p className="text-[10px] text-slate-400 mt-0.5">Belum ada booking online baru yang menunggu konfirmasi.</p>
@@ -820,10 +818,10 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                 {pendingBookings.slice(0, 5).map((b) => (
                   <div
                     key={b.id}
-                    className="p-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                    className="p-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="px-2.5 py-1 bg-slate-900 text-white font-mono font-bold text-xs rounded-lg shrink-0">
+                      <span className="px-2.5 py-1 bg-slate-900 text-white font-mono font-bold text-xs rounded-md shrink-0">
                         {b.queueNumber}
                       </span>
                       <div>
@@ -860,7 +858,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
 
           {/* Revenue Chart Section */}
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
@@ -871,13 +869,13 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                   {language === 'id' ? 'Catatan omset kasir harian 6 hari terakhir' : 'Daily cash earnings ledger for the last 6 operations'}
                 </p>
               </div>
-              <span className="text-[10px] font-mono uppercase text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg font-semibold">
+              <span className="text-[10px] font-mono uppercase text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md font-semibold">
                 {language === 'id' ? '6 Hari Terakhir' : 'Last 6 Days'}
               </span>
             </div>
 
             {/* Interactive SVG Line Chart */}
-            <div className="relative bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="relative bg-slate-50 p-4 rounded-lg border border-slate-200">
               <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto overflow-visible">
                 {/* Horizontal grid lines */}
                 {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
@@ -955,7 +953,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             </div>
 
             {/* Custom Bottom Labels for Days */}
-            <div className="flex justify-between px-6 mt-3 text-[10px] font-mono text-slate-400 font-semibold">
+            <div className="flex justify-between px-4 sm:px-6 mt-3 text-[10px] font-mono text-slate-400 font-semibold">
               {salesHistory.map((s) => {
                 const parts = s.date.split('-');
                 return <span key={s.id}>{`${parts[1]}/${parts[2]}`}</span>;
@@ -964,7 +962,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
 
           {/* Active Pipeline Board Progress Overview */}
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
@@ -986,7 +984,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             </div>
 
             {/* Progress Pipelines Map */}
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {[
                 { label: t.workOrders.waiting, val: pipelineCounts.waiting, col: 'bg-slate-100 text-slate-800' },
                 { label: t.workOrders.inProgress, val: pipelineCounts.in_progress, col: 'bg-indigo-50 text-indigo-900' },
@@ -994,7 +992,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                 { label: t.workOrders.testing, val: pipelineCounts.quality_control, col: 'bg-purple-50 text-purple-900' },
                 { label: t.workOrders.done, val: pipelineCounts.completed, col: 'bg-emerald-50 text-emerald-900' },
               ].map((pipe) => (
-                <div key={pipe.label} className={`p-3 rounded-xl border border-slate-200/60 flex flex-col items-center justify-center ${pipe.col}`}>
+                <div key={pipe.label} className={`p-3 rounded-lg border border-slate-200/60 flex flex-col items-center justify-center ${pipe.col}`}>
                   <span className="text-[9px] text-center uppercase tracking-wider font-bold opacity-80 leading-none">
                     {pipe.label}
                   </span>
@@ -1008,7 +1006,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         {/* Right Column (1 Grid width on LG) */}
         <div className="space-y-6">
           {/* Mechanic Status & Assignments */}
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -1035,11 +1033,11 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                 else if (m.status === 'busy') statusColor = 'bg-amber-500 animate-pulse';
 
                 return (
-                  <div key={m.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div key={m.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {/* Avatar Placeholder */}
                       <div className="relative">
-                        <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs uppercase">
+                        <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs uppercase">
                           {m.name.charAt(0)}
                         </div>
                         <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${statusColor}`} />
@@ -1062,7 +1060,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
 
           {/* Low Stock Alerts & Fast Action Stock-Up */}
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 mb-1">
               <Package className="w-4 h-4 text-slate-700" />
               {t.inventory.lowStockWarning}
@@ -1084,7 +1082,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
             ) : (
               <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                 {lowStockParts.map((part) => (
-                  <div key={part.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div key={part.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
                     <div className="flex-1 min-w-0 pr-2">
                       <p className="text-xs font-bold text-slate-900 truncate">{part.name}</p>
                       <p className="text-[10px] text-amber-600 font-bold mt-0.5 uppercase">
@@ -1094,7 +1092,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                     <button
                       type="button"
                       onClick={() => restockSparePart(part.id, 10)}
-                      className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] rounded-lg transition-all shrink-0 cursor-pointer shadow-sm uppercase"
+                      className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] rounded-md transition-all shrink-0 cursor-pointer shadow-2xs uppercase"
                     >
                       {t.inventory.restock}
                     </button>

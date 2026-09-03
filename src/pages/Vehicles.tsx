@@ -3,133 +3,119 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
-import { Vehicle } from '../types';
+import { Vehicle, WorkOrder, UserRole } from '../types';
 import {
   Bike,
   Plus,
   Search,
-  Edit2,
-  Trash2,
   User,
+  Calendar,
+  Wrench,
+  Clock,
   History,
+  FileText,
+  Trash2,
+  Edit2,
   X,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { canTriggerDelete, canDeleteDirectly } from '../utils/permissions';
 
 export const Vehicles: React.FC = () => {
   const {
     vehicles,
     customers,
     workOrders,
-    addCustomer,
     addVehicle,
     updateVehicle,
     deleteVehicle,
-    currentRole,
-    currentUserId,
-    currentUserName,
     requestDelete,
     showToast,
-    language,
-    formatRupiah
+    formatRupiah,
+    currentUser,
+    currentRole
   } = useWorkshop();
 
-  // 1. Search & Filter State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  // Role permissions
+  const canTriggerDelete = (role: UserRole) => role === 'owner' || role === 'admin';
+  const canDeleteDirectly = (role: UserRole) => role === 'owner';
 
-  // 2. Modals State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(
+    vehicles.length > 0 ? vehicles[0] : null
+  );
+
+  // Modal State: Add/Edit Vehicle
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
   const [vehicleToEdit, setVehicleToEdit] = useState<Vehicle | null>(null);
+  const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
 
-  // Form Fields
+  // Form State
   const [customerId, setCustomerId] = useState('');
-  const [brand, setBrand] = useState('');
+  const [brand, setBrand] = useState('Honda');
   const [model, setModel] = useState('');
-  const [platePrefix, setPlatePrefix] = useState('');
+  const [platePrefix, setPlatePrefix] = useState('AB');
   const [plateNumber, setPlateNumber] = useState('');
   const [plateSuffix, setPlateSuffix] = useState('');
   const [year, setYear] = useState<number | ''>(new Date().getFullYear());
   const [imageUrl, setImageUrl] = useState('');
-  const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
 
-  // File Upload Handler for vehicle photo
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('Ukuran file foto maksimal 5MB', 'error');
-        return;
+  // Find customer associated with logged in user (if client)
+  const userCustomer = useMemo(() => {
+    if (currentRole === 'user' && currentUser?.id) {
+      return customers.find(c => c.userId === currentUser.id);
+    }
+    return null;
+  }, [customers, currentUser, currentRole]);
+
+  // Filter vehicles according to role and search
+  const filteredVehicles = useMemo(() => {
+    return vehicles.filter((v) => {
+      if (currentRole === 'user' && userCustomer) {
+        if (v.customerId !== userCustomer.id) return false;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageUrl(reader.result as string);
-        showToast('Foto kendaraan berhasil diunggah!', 'success');
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
-  // Find all user's customer records (reliable via customer id or fallback by name)
-  const userCustomers = customers.filter(c => 
-    (currentUserId && String(c.id) === String(currentUserId)) ||
-    (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
-  );
-  const userCustomer = userCustomers[0];
-  const userVehicleCustomerIds = userCustomers.map(c => String(c.id));
+      const matchSearch =
+        v.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.customerName && v.customerName.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // Filter vehicles by user role (regular user only accesses their own vehicles)
-  const allowedVehicles = currentRole === 'user'
-    ? vehicles.filter((v) => userVehicleCustomerIds.includes(String(v.customerId)))
-    : vehicles;
+      return matchSearch;
+    });
+  }, [vehicles, searchTerm, currentRole, userCustomer]);
 
-  // Search filter
-  const filteredVehicles = allowedVehicles.filter(
-    (v) =>
-      v.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.customerName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Selected vehicle owner
+  const selectedOwner = useMemo(() => {
+    if (!selectedVehicle) return null;
+    return customers.find((c) => c.id === selectedVehicle.customerId);
+  }, [selectedVehicle, customers]);
 
-  // Sync selected vehicle
-  useEffect(() => {
-    if (filteredVehicles.length > 0) {
-      if (!selectedVehicle || !filteredVehicles.some((v) => v.id === selectedVehicle.id)) {
-        setSelectedVehicle(filteredVehicles[0]);
-      }
-    } else {
-      setSelectedVehicle(null);
-    }
-  }, [vehicles, currentRole, currentUserName]);
+  // Service History of selected vehicle
+  const selectedVehicleHistory = useMemo(() => {
+    if (!selectedVehicle) return [];
+    return workOrders.filter(
+      (wo) =>
+        wo.vehicleId === selectedVehicle.id ||
+        wo.licensePlate.toUpperCase().replace(/\s/g, '') ===
+          selectedVehicle.licensePlate.toUpperCase().replace(/\s/g, '')
+    );
+  }, [selectedVehicle, workOrders]);
 
-  // Helper to parse plate string "B 1234 BKM" into parts
-  const parsePlate = (plateStr: string) => {
-    const parts = plateStr.trim().split(/\s+/);
-    if (parts.length >= 3) {
-      return { prefix: parts[0], number: parts[1], suffix: parts.slice(2).join('') };
-    } else if (parts.length === 2) {
-      return { prefix: parts[0], number: parts[1], suffix: '' };
-    }
-    return { prefix: '', number: plateStr, suffix: '' };
-  };
-
-  // 3. Actions
   const handleOpenAddModal = () => {
     setVehicleToEdit(null);
-    if (currentRole === 'user') {
-      setCustomerId(userCustomer?.id || '');
+    if (currentRole === 'user' && userCustomer) {
+      setCustomerId(userCustomer.id);
     } else {
-      setCustomerId(customers[0]?.id || '');
+      setCustomerId(customers.length > 0 ? customers[0].id : '');
     }
-    setBrand('');
+    setBrand('Honda');
     setModel('');
-    setPlatePrefix('');
+    setPlatePrefix('AB');
     setPlateNumber('');
     setPlateSuffix('');
     setYear(new Date().getFullYear());
@@ -142,125 +128,126 @@ export const Vehicles: React.FC = () => {
     setCustomerId(v.customerId);
     setBrand(v.brand);
     setModel(v.model);
-    const parsed = parsePlate(v.licensePlate);
-    setPlatePrefix(parsed.prefix);
-    setPlateNumber(parsed.number);
-    setPlateSuffix(parsed.suffix);
+
+    // Split Indonesian license plate e.g. "AB 1234 CD"
+    const plateParts = v.licensePlate.split(' ');
+    if (plateParts.length === 3) {
+      setPlatePrefix(plateParts[0]);
+      setPlateNumber(plateParts[1]);
+      setPlateSuffix(plateParts[2]);
+    } else {
+      setPlatePrefix('');
+      setPlateNumber(v.licensePlate);
+      setPlateSuffix('');
+    }
+
     setYear(v.year);
     setImageUrl(v.imageUrl || '');
     setIsVehicleModalOpen(true);
   };
 
-  const handleSaveVehicle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    let finalCustomerId = customerId;
-
-    if (currentRole === 'user') {
-      // Use existing customer record linked by user ID (most reliable)
-      if (userCustomer) {
-        finalCustomerId = userCustomer.id;
-      } else {
-        // Fallback: create a new customer record
-        try {
-          const newCustId = await addCustomer({
-            name: currentUserName,
-            phone: '+62 812-3456-7890',
-            address: 'Pelanggan Terdaftar Mandiri'
-          });
-          finalCustomerId = newCustId;
-        } catch (err) {
-          return; // addCustomer already toasts error
-        }
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        showToast('Ukuran foto terlalu besar. Maksimal 2MB.', 'warning');
+        return;
       }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
+  };
 
-    const fullPlate = `${platePrefix.trim().toUpperCase()} ${plateNumber.trim()} ${plateSuffix.trim().toUpperCase()}`.trim();
+  const handleSaveVehicle = (e: React.FormEvent) => {
+    e.preventDefault();
 
-    if (!brand.trim() || !model.trim() || !plateNumber.trim() || !finalCustomerId) {
-      showToast('Merek, model, dan nomor plat wajib diisi', 'error');
+    if (!brand.trim() || !model.trim() || !plateNumber.trim()) {
+      showToast('Harap lengkapi merek, tipe motor, dan nomor plat!', 'warning');
       return;
     }
 
-    const numYear = typeof year === 'number' ? year : new Date().getFullYear();
+    const formattedPlate = `${platePrefix.trim()} ${plateNumber.trim()} ${plateSuffix.trim()}`.trim().toUpperCase();
 
     if (vehicleToEdit) {
       updateVehicle(vehicleToEdit.id, {
         brand,
         model,
-        licensePlate: fullPlate,
-        year: numYear,
-        imageUrl: imageUrl.trim() || undefined
+        licensePlate: formattedPlate,
+        year: typeof year === 'number' ? year : 2020,
+        imageUrl: imageUrl || undefined,
       });
-      setSelectedVehicle({
-        ...vehicleToEdit,
-        brand,
-        model,
-        licensePlate: fullPlate,
-        year: numYear,
-        imageUrl: imageUrl.trim() || undefined
-      });
+      showToast(`Data kendaraan ${brand} ${model} berhasil diperbarui!`, 'success');
     } else {
-      const added = addVehicle({
-        customerId: finalCustomerId,
+      if (!customerId) {
+        showToast('Pilih pelanggan pemilik kendaraan!', 'warning');
+        return;
+      }
+
+      addVehicle({
+        customerId,
         brand,
         model,
-        licensePlate: fullPlate,
-        year: numYear,
-        imageUrl: imageUrl.trim() || undefined
+        licensePlate: formattedPlate,
+        year: typeof year === 'number' ? year : 2020,
+        imageUrl: imageUrl || undefined,
+        lastServiceDate: new Date().toISOString(),
       });
-      setSelectedVehicle(added);
+      showToast(`Kendaraan baru ${formattedPlate} berhasil didaftarkan!`, 'success');
     }
+
     setIsVehicleModalOpen(false);
   };
 
   const handleDelete = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!canTriggerDelete(currentRole)) return;
+
     if (canDeleteDirectly(currentRole)) {
       setVehicleToDelete(id);
     } else {
-      const vehicle = vehicles.find((v) => v.id === id);
-      requestDelete('vehicle', id, `${vehicle?.brand || ''} ${vehicle?.model || ''} [${vehicle?.licensePlate || ''}]`);
+      const v = vehicles.find((item) => item.id === id);
+      requestDelete('vehicle', id, `Motor: ${v ? `${v.brand} ${v.model} [${v.licensePlate}]` : id}`);
+      showToast('Permintaan hapus kendaraan telah dikirim ke Owner.', 'info');
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDeleteVehicle = () => {
     if (vehicleToDelete) {
       deleteVehicle(vehicleToDelete);
       if (selectedVehicle?.id === vehicleToDelete) {
-        const remaining = vehicles.filter((v) => v.id !== vehicleToDelete);
-        setSelectedVehicle(remaining[0] || null);
+        setSelectedVehicle(null);
       }
+      showToast('Data sepeda motor berhasil dihapus dari sistem.', 'success');
       setVehicleToDelete(null);
     }
   };
 
-  // Relations
-  const selectedVehicleHistory = selectedVehicle
-    ? workOrders.filter((wo) => wo.vehicleId === selectedVehicle.id)
-    : [];
-
-  const selectedOwner = selectedVehicle
-    ? customers.find((c) => c.id === selectedVehicle.customerId)
-    : null;
+  const currentUserName = userCustomer?.name || currentUser?.name || 'Pelanggan';
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
-      {/* Header Panel */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Bike className="w-5 h-5 text-slate-800" />
-            Katalog Data Kendaraan
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight">
+              {currentRole === 'user' ? 'Motor Saya' : 'Data Kendaraan & Paspor Servis'}
+            </h1>
+            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 uppercase">
+              {filteredVehicles.length} Unit
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            Kelola spesifikasi kendaraan pelanggan dan riwayat pengerjaan servis.
+            Katalog sepeda motor terdaftar, riwayat perawatan berkala, serta rekam jejak diagnosa mekanik.
           </p>
         </div>
+
         <button
           type="button"
           onClick={handleOpenAddModal}
-          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+          className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98"
         >
           <Plus className="w-4 h-4" />
           Tambah Motor
@@ -271,7 +258,7 @@ export const Vehicles: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Grid: Vehicle Index */}
         <div className="lg:col-span-1 flex flex-col gap-4">
-          <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center gap-2 shadow-sm">
+          <div className="p-2.5 bg-white rounded-lg border border-slate-200 flex items-center gap-2 shadow-2xs">
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
@@ -282,7 +269,7 @@ export const Vehicles: React.FC = () => {
             />
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[550px] shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col max-h-[550px] shadow-xs">
             <div className="bg-slate-900 p-3 text-[10px] text-slate-200 font-mono tracking-wider font-bold shrink-0">
               DAFTAR MOTOR TERDAFTAR ({filteredVehicles.length})
             </div>
@@ -298,7 +285,7 @@ export const Vehicles: React.FC = () => {
                     <div
                       key={v.id}
                       onClick={() => setSelectedVehicle(v)}
-                      className={`p-4 cursor-pointer transition-all flex items-center justify-between w-full ${
+                      className={`p-3.5 sm:p-4 cursor-pointer transition-all flex items-center justify-between w-full ${
                         isActive ? 'bg-slate-100 border-l-4 border-l-slate-900' : 'hover:bg-slate-50 bg-white'
                       }`}
                     >
@@ -309,7 +296,7 @@ export const Vehicles: React.FC = () => {
                           </span>
                           <p className="text-xs font-bold text-slate-900 truncate">{v.brand} {v.model}</p>
                         </div>
-                        <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1 font-medium">
+                        <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1 font-medium">
                           <User className="w-3.5 h-3.5 text-slate-400" />
                           Pemilik: {v.customerName}
                         </p>
@@ -319,7 +306,7 @@ export const Vehicles: React.FC = () => {
                         <button
                           type="button"
                           onClick={(e) => handleDelete(v.id, e)}
-                          className="p-1.5 ml-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                          className="p-1.5 ml-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors cursor-pointer shrink-0"
                           title="Hapus Kendaraan"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -338,12 +325,12 @@ export const Vehicles: React.FC = () => {
           {selectedVehicle ? (
             <div className="space-y-6">
               {/* Specs sheet panel */}
-              <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 flex gap-2">
+              <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 flex gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleOpenEditModal(selectedVehicle)}
-                    className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-700 cursor-pointer border border-slate-200 font-bold text-xs rounded-xl transition-colors"
+                    className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 cursor-pointer border border-slate-200 font-bold text-xs rounded-md transition-colors"
                     title="Edit Spesifikasi Motor"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -352,7 +339,7 @@ export const Vehicles: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleDelete(selectedVehicle.id)}
-                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-xl transition-colors"
+                      className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-md transition-colors"
                       title="Hapus Kendaraan"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -365,10 +352,10 @@ export const Vehicles: React.FC = () => {
                     <img
                       src={selectedVehicle.imageUrl}
                       alt={selectedVehicle.model}
-                      className="w-20 h-20 object-cover rounded-xl border border-slate-200 shrink-0"
+                      className="w-20 h-20 object-cover rounded-lg border border-slate-200 shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center shrink-0 font-bold">
+                    <div className="w-12 h-12 bg-slate-900 text-white rounded-lg flex items-center justify-center shrink-0 font-bold">
                       <Bike className="w-6 h-6" />
                     </div>
                   )}
@@ -378,19 +365,19 @@ export const Vehicles: React.FC = () => {
                       <span className="text-[10px] font-mono font-bold bg-slate-900 text-white px-2 py-1 rounded-md">
                         {selectedVehicle.licensePlate}
                       </span>
-                      <h2 className="text-lg font-bold text-slate-900 uppercase tracking-tight">
+                      <h2 className="text-base sm:text-lg font-bold text-slate-900 uppercase tracking-tight">
                         {selectedVehicle.brand} {selectedVehicle.model}
                       </h2>
                     </div>
                     <p className="text-xs text-slate-500 mt-1 font-medium">Spesifikasi & Informasi Motor</p>
 
                     {/* Specs Grid */}
-                    <div className="grid grid-cols-2 gap-4 mt-4">
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="grid grid-cols-2 gap-3.5 mt-4">
+                      <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                         <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Tahun Pembuatan</p>
                         <p className="text-xs font-bold text-slate-900 mt-1">{selectedVehicle.year}</p>
                       </div>
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                      <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                         <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Riwayat Servis</p>
                         <p className="text-xs font-bold text-slate-900 mt-1">{selectedVehicleHistory.length} Kali Servis</p>
                       </div>
@@ -400,12 +387,12 @@ export const Vehicles: React.FC = () => {
               </div>
 
               {/* Owner card display */}
-              <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+              <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
                   <User className="w-4 h-4 text-slate-700" /> Pemilik Terdaftar
                 </h3>
                 {selectedOwner ? (
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div className="p-3.5 sm:p-4 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between">
                     <div>
                       <h4 className="text-xs font-bold text-slate-900">{selectedOwner.name}</h4>
                       <p className="text-[10px] text-slate-500 mt-1 font-medium">
@@ -417,14 +404,14 @@ export const Vehicles: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs flex items-center gap-2 font-medium">
+                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-xs flex items-center gap-2 font-medium">
                     <HelpCircle className="w-4 h-4" /> Data pemilik tidak ditemukan atau telah dihapus.
                   </div>
                 )}
               </div>
 
               {/* BUKU SERVIS DIGITAL (Digital Service Passport) */}
-              <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div>
                     <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2">
@@ -435,95 +422,104 @@ export const Vehicles: React.FC = () => {
                       Catatan riwayat perbaikan, diagnosa teknisi, pergantian oli & suku cadang
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold bg-slate-100 text-slate-800 px-3 py-1 rounded-lg border border-slate-200 self-start sm:self-auto font-mono">
+                  <span className="text-[10px] font-bold bg-slate-100 text-slate-800 px-3 py-1 rounded-md border border-slate-200 self-start sm:self-auto font-mono">
                     Total: {selectedVehicleHistory.length} Riwayat Servis
                   </span>
                 </div>
 
                 {selectedVehicleHistory.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200 font-medium">
-                    Belum ada catatan servis resmi untuk motor ini.
+                  <div className="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200 font-medium">
+                    Belum ada riwayat SPK atau servis yang terekam pada motor ini.
                   </div>
                 ) : (
-                  <div className="relative pl-4 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200">
-                    {selectedVehicleHistory.map((wo, idx) => {
-                      const totalParts = wo.sparePartsUsed.reduce((sum, p) => sum + p.totalPrice, 0);
-                      const totalServices = wo.services.reduce((sum, s) => sum + s.price, 0);
+                  <div className="space-y-4">
+                    {selectedVehicleHistory.map((wo) => {
+                      const serviceDate = new Date(wo.createdAt).toLocaleDateString('id-ID', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
+                      });
 
                       return (
-                        <div key={wo.id} className="relative group">
-                          {/* Timeline dot */}
-                          <div className="absolute -left-[21px] top-1 w-3.5 h-3.5 rounded-full bg-slate-900 border-2 border-white ring-2 ring-slate-300 group-hover:scale-110 transition-transform" />
-
-                          <div className="p-4 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 text-xs space-y-3 transition-colors">
-                            <div className="flex items-center justify-between flex-wrap gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-slate-900 text-xs">{wo.id}</span>
-                                <span className="px-2 py-0.5 border border-slate-200 rounded-md text-[9px] font-bold bg-slate-900 text-white uppercase">
-                                  {wo.status.replace('_', ' ')}
-                                </span>
-                                {wo.paymentStatus === 'paid' && (
-                                  <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                    Lunas
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[11px] text-slate-500 font-medium">
-                                {new Date(wo.createdAt).toLocaleDateString('id-ID', {
-                                  day: 'numeric',
-                                  month: 'long',
-                                  year: 'numeric'
-                                })}
+                        <div
+                          key={wo.id}
+                          className="p-4 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 text-xs space-y-3 transition-colors"
+                        >
+                          {/* Row Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[11px]">
+                                {wo.id}
+                              </span>
+                              <span className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                {serviceDate}
                               </span>
                             </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700 bg-white p-3 rounded-xl border border-slate-200/60">
-                              <div>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Keluhan Awal</p>
-                                <p className="mt-0.5 font-medium text-slate-800">{wo.complaint}</p>
-                              </div>
-                              <div>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Diagnosa / Catatan Mekanik</p>
-                                <p className="mt-0.5 font-medium text-slate-800">{wo.diagnosis || 'Pemeriksaan rutin sesuai SOP'}</p>
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-slate-500">
+                                Teknisi: <strong className="text-slate-900">{wo.assignedMechanicName || 'Umum'}</strong>
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
+                                  wo.status === 'completed' || wo.status === 'picked_up'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {wo.status.replace('_', ' ')}
+                              </span>
                             </div>
+                          </div>
 
-                            {/* Services rendered & Parts replaced */}
-                            <div className="space-y-2">
-                              {wo.services.length > 0 && (
-                                <div>
-                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Jasa Pengerjaan:</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {wo.services.map((s) => (
-                                      <span key={s.serviceId} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-800 font-semibold shadow-2xs">
-                                        🔧 {s.name}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {wo.sparePartsUsed.length > 0 && (
-                                <div>
-                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Suku Cadang Diganti:</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {wo.sparePartsUsed.map((p) => (
-                                      <span key={p.partId} className="px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900 font-semibold shadow-2xs">
-                                        📦 {p.name} ({p.quantity}x)
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
+                          {/* Work detail & parts */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700 bg-white p-3 rounded-lg border border-slate-200/60">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                                <Wrench className="w-3 h-3" /> Paket Jasa Servis:
+                              </p>
+                              {wo.services.length === 0 ? (
+                                <span className="text-slate-400 text-[11px] italic">Tidak ada jasa khusus</span>
+                              ) : (
+                                <ul className="space-y-0.5">
+                                  {wo.services.map((s, idx) => (
+                                    <li key={idx} className="text-[11px] font-medium text-slate-800 flex justify-between">
+                                      <span>• {s.name}</span>
+                                      <span className="text-slate-500 font-mono">{formatRupiah(s.price)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
                               )}
                             </div>
 
-                            {/* Total bill & assigned mechanic */}
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/80 text-[11px]">
-                              <span className="text-slate-500 font-medium">
-                                Teknisi: <strong className="text-slate-800">{wo.assignedMechanicName || 'Mekanik BR Motor'}</strong>
-                              </span>
-                              <span className="font-mono font-black text-slate-900 text-xs">
-                                Total: {formatRupiah(wo.costs?.total || (totalServices + totalParts))}
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                                <FileText className="w-3 h-3" /> Pergantian Part & Oli:
+                              </p>
+                              {wo.sparePartsUsed.length === 0 ? (
+                                <span className="text-slate-400 text-[11px] italic">Tidak ada pergantian part</span>
+                              ) : (
+                                <ul className="space-y-0.5">
+                                  {wo.sparePartsUsed.map((p, idx) => (
+                                    <li key={idx} className="text-[11px] font-medium text-slate-800 flex justify-between">
+                                      <span>• {p.name} ({p.quantity}x)</span>
+                                      <span className="text-slate-500 font-mono">{formatRupiah(p.price * p.quantity)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Notes / Complaint & Total Cost */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                            <p className="text-[11px] text-slate-500 italic truncate max-w-md">
+                              Keluhan awal: "{wo.complaint || 'Servis rutin berkala'}"
+                            </p>
+                            <div className="text-right">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-2">Total Biaya:</span>
+                              <span className="font-mono font-bold text-slate-900 text-xs">
+                                {formatRupiah(wo.costs?.total || 0)}
                               </span>
                             </div>
                           </div>
@@ -535,7 +531,7 @@ export const Vehicles: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center p-8 text-center text-slate-400 border border-dashed border-slate-200 bg-white rounded-2xl font-medium text-xs min-h-[300px]">
+            <div className="h-full flex items-center justify-center p-8 text-center text-slate-400 border border-dashed border-slate-200 bg-white rounded-xl font-medium text-xs min-h-[300px]">
               Pilih kendaraan motor dari daftar di samping untuk melihat buku riwayat servis digital dan spesifikasi teknis.
             </div>
           )}
@@ -545,13 +541,13 @@ export const Vehicles: React.FC = () => {
       {/* MODAL: ADD / EDIT VEHICLE */}
       {isVehicleModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl overflow-hidden shadow-xl animate-scale-in">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-xl overflow-hidden shadow-xl animate-scale-in">
             <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">{vehicleToEdit ? 'Edit Data Kendaraan' : 'Tambah Kendaraan Baru'}</h3>
               <button
                 type="button"
                 onClick={() => setIsVehicleModalOpen(false)}
-                className="text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer p-1 rounded-lg transition-all"
+                className="text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer p-1 rounded-md transition-all"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -564,7 +560,7 @@ export const Vehicles: React.FC = () => {
                   <select
                     value={customerId}
                     onChange={(e) => setCustomerId(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-medium focus:outline-none focus:border-slate-400"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
                   >
                     <option value="" disabled>-- Pilih Pelanggan Terdaftar --</option>
                     {customers.map((c) => (
@@ -581,12 +577,12 @@ export const Vehicles: React.FC = () => {
                     type="text"
                     disabled
                     value={currentUserName}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-600 font-bold focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600 font-bold focus:outline-none"
                   />
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Merek Motor</label>
                   <input
@@ -595,7 +591,7 @@ export const Vehicles: React.FC = () => {
                     placeholder="Contoh: Honda, Yamaha"
                     value={brand}
                     onChange={(e) => setBrand(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800"
                   />
                 </div>
                 <div>
@@ -606,7 +602,7 @@ export const Vehicles: React.FC = () => {
                     placeholder="Contoh: NMAX 155, Vario 160"
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 font-medium focus:outline-none"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800"
                   />
                 </div>
               </div>
@@ -625,7 +621,7 @@ export const Vehicles: React.FC = () => {
                       placeholder="Kode"
                       value={platePrefix}
                       onChange={(e) => setPlatePrefix(e.target.value.toUpperCase())}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-center text-slate-900 font-bold uppercase focus:outline-none focus:border-slate-400"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-center text-slate-900 font-bold uppercase focus:outline-none focus:border-slate-800"
                     />
                     <span className="text-[9px] text-slate-400 block text-center mt-0.5">Kode Depan</span>
                   </div>
@@ -637,7 +633,7 @@ export const Vehicles: React.FC = () => {
                       placeholder="1234"
                       value={plateNumber}
                       onChange={(e) => setPlateNumber(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-center text-slate-900 font-bold focus:outline-none focus:border-slate-400"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-center text-slate-900 font-bold focus:outline-none focus:border-slate-800"
                     />
                     <span className="text-[9px] text-slate-400 block text-center mt-0.5">Nomor Polisi</span>
                   </div>
@@ -648,7 +644,7 @@ export const Vehicles: React.FC = () => {
                       placeholder="BKM"
                       value={plateSuffix}
                       onChange={(e) => setPlateSuffix(e.target.value.toUpperCase())}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-center text-slate-900 font-bold uppercase focus:outline-none focus:border-slate-400"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-center text-slate-900 font-bold uppercase focus:outline-none focus:border-slate-800"
                     />
                     <span className="text-[9px] text-slate-400 block text-center mt-0.5">Kode Belakang</span>
                   </div>
@@ -671,7 +667,7 @@ export const Vehicles: React.FC = () => {
                   placeholder="Contoh: 2024"
                   value={year || ''}
                   onChange={(e) => setYear(e.target.value ? parseInt(e.target.value) : '')}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-900 font-medium focus:outline-none"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
                 />
               </div>
 
@@ -685,37 +681,37 @@ export const Vehicles: React.FC = () => {
                     type="file"
                     accept="image/*"
                     onChange={handleImageFileUpload}
-                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer"
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer"
                   />
                   {imageUrl && (
                     <button
                       type="button"
                       onClick={() => setImageUrl('')}
-                      className="px-2.5 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-colors shrink-0"
+                      className="px-2.5 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors shrink-0"
                     >
                       Hapus Foto
                     </button>
                   )}
                 </div>
                 {imageUrl && (
-                  <div className="mt-2 flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="mt-2 flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-200">
                     <img src={imageUrl} alt="Preview Motor" className="w-16 h-16 object-cover rounded-lg border" />
                     <span className="text-[11px] text-slate-600 font-medium">Foto siap disimpan</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
+              <div className="flex gap-2.5 justify-end pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsVehicleModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl font-bold cursor-pointer transition-all"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg font-bold cursor-pointer transition-all"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
                 >
                   <CheckCircle className="w-4 h-4" />
                   Simpan Kendaraan
@@ -728,9 +724,9 @@ export const Vehicles: React.FC = () => {
 
       <ConfirmModal
         isOpen={!!vehicleToDelete}
-        title="Hapus Data Kendaraan"
-        message="Apakah Anda yakin ingin menghapus data kendaraan ini dari sistem?"
-        onConfirm={confirmDelete}
+        title="Hapus Kendaraan"
+        message="Apakah Anda yakin ingin menghapus data kendaraan ini beserta catatan histori servisnya?"
+        onConfirm={confirmDeleteVehicle}
         onClose={() => setVehicleToDelete(null)}
       />
     </div>

@@ -7,79 +7,89 @@ import React, { useState } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { WorkOrder } from '../types';
 import {
-  CreditCard,
-  CheckCircle,
+  DollarSign,
   Printer,
+  CheckCircle,
+  FileText,
   ChevronRight,
+  MessageCircle,
+  Calendar,
   Sparkles,
-  MessageCircle
+  AlertCircle
 } from 'lucide-react';
 
 export const Payments: React.FC = () => {
   const {
     workOrders,
-    customers,
-    checkoutWorkOrder,
+    processPayment,
     shopInfo,
     showToast,
-    formatRupiah,
-    language
+    formatRupiah
   } = useWorkshop();
 
-  // Local State
+  // Active Tab: pending checkout vs completed transactions
   const [activeTab, setActiveTab] = useState<'pending' | 'archives'>('pending');
   const [selectedWO, setSelectedWO] = useState<WorkOrder | null>(null);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // Checkout inputs
-  const [discountInput, setDiscountInput] = useState(0);
+  // Form checkout state
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'qris' | 'card'>('cash');
-  const [cashGiven, setCashGiven] = useState(0);
+  const [cashGiven, setCashGiven] = useState<number>(0);
+  const [discountInput, setDiscountInput] = useState<number>(0);
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
 
-  // Calculations
-  const pendingOrders = workOrders.filter((wo) => wo.paymentStatus === 'unpaid');
-  const paidOrders = workOrders.filter((wo) => wo.paymentStatus === 'paid');
+  // Orders filtered
+  const pendingOrders = workOrders.filter(
+    (wo) => wo.paymentStatus === 'unpaid' && (wo.status === 'completed' || wo.status === 'quality_control' || wo.status === 'picked_up')
+  );
 
-  // Active WO Calculation breakdown
-  const serviceCost = selectedWO?.costs.serviceCost || 0;
-  const partsCost = selectedWO?.costs.sparePartCost || 0;
-  const subtotal = serviceCost + partsCost;
-  const tax = subtotal * (shopInfo.taxRate / 100);
-  const grandTotalBeforeDiscount = subtotal + tax;
-  const grandTotal = Math.max(0, grandTotalBeforeDiscount - discountInput);
-  const changeDue = paymentMethod === 'cash' ? Math.max(0, cashGiven - grandTotal) : 0;
+  const paidOrders = workOrders.filter(
+    (wo) => wo.paymentStatus === 'paid'
+  );
 
-  // Actions
   const handleSelectWO = (wo: WorkOrder) => {
     setSelectedWO(wo);
-    setDiscountInput(0);
-    setPaymentMethod('cash');
-    setCashGiven(0);
+    setDiscountInput(wo.costs.discount || 0);
+    // Auto populate exact cash
+    const totalDue = Math.max(0, (wo.costs.serviceCost + wo.costs.sparePartCost) - (wo.costs.discount || 0));
+    setCashGiven(totalDue);
   };
+
+  const calculateTotals = () => {
+    if (!selectedWO) return { subtotal: 0, discount: 0, grandTotal: 0, changeDue: 0 };
+    const subtotal = selectedWO.costs.serviceCost + selectedWO.costs.sparePartCost;
+    const discount = Math.max(0, Math.min(subtotal, discountInput));
+    const grandTotal = Math.max(0, subtotal - discount);
+    const changeDue = paymentMethod === 'cash' ? Math.max(0, cashGiven - grandTotal) : 0;
+    return { subtotal, discount, grandTotal, changeDue };
+  };
+
+  const { subtotal, discount, grandTotal, changeDue } = calculateTotals();
 
   const handleCheckoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWO) return;
 
     if (paymentMethod === 'cash' && cashGiven < grandTotal) {
-      showToast(
-        language === 'id'
-          ? `Uang dibayarkan (${shopInfo.currency} ${cashGiven.toLocaleString('id-ID')}) kurang dari total tagihan (${shopInfo.currency} ${grandTotal.toLocaleString('id-ID')})`
-          : `Cash tendered must equal or exceed total ${shopInfo.currency} ${grandTotal.toLocaleString('id-ID')}`,
-        'error'
-      );
+      showToast(`Uang tunai kurang dari total tagihan (${formatRupiah(grandTotal)})!`, 'warning');
       return;
     }
 
-    checkoutWorkOrder(selectedWO.id, discountInput, paymentMethod, cashGiven, changeDue);
-    // Reload active WO with updated paid state
+    // Process payment through context
+    processPayment(selectedWO.id, paymentMethod, discount, cashGiven, changeDue);
+    showToast(`Pembayaran SPK ${selectedWO.id} berhasil diselesaikan!`, 'success');
+
+    // Update locally selected WO to reflect paid status
     const updated = {
       ...selectedWO,
       paymentStatus: 'paid' as const,
       paymentMethod,
+      costs: {
+        ...selectedWO.costs,
+        discount,
+        total: grandTotal
+      },
       cashTendered: cashGiven,
-      changeAmount: changeDue,
-      costs: { ...selectedWO.costs, discount: discountInput, total: grandTotal }
+      changeAmount: changeDue
     };
     setSelectedWO(updated);
     setShowSuccessModal(true);
@@ -91,60 +101,53 @@ export const Payments: React.FC = () => {
 
   const handleSendWhatsAppInvoice = () => {
     if (!selectedWO) return;
-    const customer = customers.find(c => String(c.id) === String(selectedWO.customerId));
-    const rawPhone = customer?.phone || '';
-    let cleanPhone = rawPhone.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) {
-      cleanPhone = '62' + cleanPhone.slice(1);
-    } else if (!cleanPhone.startsWith('62') && cleanPhone) {
-      cleanPhone = '62' + cleanPhone;
-    }
+    const cleanPhone = selectedWO.customerPhone?.replace(/\D/g, '') || '';
+    const phoneWithCountry = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
 
-    const serviceList = selectedWO.services.map(s => `• ${s.name}: ${formatRupiah(s.price)}`).join('\n');
-    const partList = selectedWO.sparePartsUsed.map(p => `• ${p.name} (x${p.quantity}): ${formatRupiah(p.totalPrice)}`).join('\n');
+    const partsList = selectedWO.sparePartsUsed.length > 0
+      ? selectedWO.sparePartsUsed.map(p => `• ${p.name} (${p.quantity}x) = ${formatRupiah(p.price * p.quantity)}`).join('\n')
+      : '• Tidak ada penggantian part';
 
-    let details = '';
-    if (serviceList) details += `\n*JASA & SERVIS:*\n${serviceList}`;
-    if (partList) details += `\n\n*SUKU CADANG / OLI:*\n${partList}`;
+    const servicesList = selectedWO.services.length > 0
+      ? selectedWO.services.map(s => `• ${s.name} = ${formatRupiah(s.price)}`).join('\n')
+      : '• Servis standar';
 
-    const paidTotal = selectedWO.paymentStatus === 'paid' ? selectedWO.costs.total : grandTotal;
-    const paymentInfo = selectedWO.paymentStatus === 'paid' ? `*LUNAS* (${(selectedWO.paymentMethod || 'Tunai').toUpperCase()})` : '*BELUM LUNAS*';
+    const msg = `*${shopInfo.name.toUpperCase()} - NOTA PEMBAYARAN ELEKTRONIK*\n━━━━━━━━━━━━━━━━━━━━\nNo. SPK: *${selectedWO.id}*\nPelanggan: *${selectedWO.customerName}*\nMotor: *${selectedWO.vehicleModel}* (${selectedWO.licensePlate})\n\n*RINCIAN JASA:*\n${servicesList}\n\n*RINCIAN SUKU CADANG:*\n${partsList}\n\n━━━━━━━━━━━━━━━━━━━━\nSubtotal: ${formatRupiah(selectedWO.costs.serviceCost + selectedWO.costs.sparePartCost)}\nDiskon: -${formatRupiah(selectedWO.costs.discount || 0)}\n*TOTAL AKHIR: ${formatRupiah(selectedWO.costs.total)}*\nMetode: ${selectedWO.paymentMethod?.toUpperCase() || 'TUNAI'} (LUNAS \u2713)\n━━━━━━━━━━━━━━━━━━━━\n*Alamat:* ${shopInfo.address}\nTerima kasih telah mempercayakan motor Anda kepada bengkel kami!`;
 
-    const message = `*${shopInfo.name.toUpperCase()} - NOTA PEMBAYARAN RESMI* 🛵\n━━━━━━━━━━━━━━━━━━━━\nNo. Nota: *${selectedWO.id}*\nTanggal: ${new Date().toLocaleDateString('id-ID')}\nPelanggan: *${selectedWO.customerName}*\nMotor: *${selectedWO.vehicleModel}* (${selectedWO.licensePlate})\nMekanik: *${selectedWO.assignedMechanicName.split(' ')[0]}*\n━━━━━━━━━━━━━━━━━━━━${details}\n\n*TOTAL TAGIHAN: ${formatRupiah(paidTotal)}*\nStatus Pembayaran: ${paymentInfo}\n━━━━━━━━━━━━━━━━━━━━\nTerima kasih telah mempercayakan perawatan motor Anda di *${shopInfo.name}*! 🙏\n_Garansi servis 1 minggu pasca perbaikan._`;
-
-    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+    const url = `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
   };
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
-      {/* Header Panel */}
+      {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-slate-800" />
-            Kasir & Pembayaran Servis
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Kasir & Pembayaran</h1>
+            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 uppercase">
+              {pendingOrders.length} SPK Tertunda
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            Proses pembayaran perintah kerja, berikan potongan diskon, dan cetak nota struk pembayaran pelanggan.
+            Proses pelunasan transaksi perbaikan, kalkulasi diskon dan uang kembalian, serta cetak struk nota belanja.
           </p>
         </div>
       </div>
 
-      {/* Main Split Checkout Panel (Hidden when printing or overlay covers it) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start no-print">
         {/* Left Grid: Payment list selection */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           {/* Sub Tab selection */}
-          <div className="flex gap-2 p-1 bg-slate-100 border border-slate-200 rounded-2xl text-xs font-bold shrink-0">
+          <div className="flex gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold shrink-0">
             <button
               onClick={() => {
                 setActiveTab('pending');
                 setSelectedWO(null);
               }}
-              className={`flex-1 py-2 rounded-xl text-center cursor-pointer transition-all uppercase tracking-wider ${
+              className={`flex-1 py-2 rounded-md text-center cursor-pointer transition-all uppercase tracking-wider ${
                 activeTab === 'pending'
-                  ? 'bg-slate-900 text-white shadow-sm'
+                  ? 'bg-slate-900 text-white shadow-2xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -155,9 +158,9 @@ export const Payments: React.FC = () => {
                 setActiveTab('archives');
                 setSelectedWO(null);
               }}
-              className={`flex-1 py-2 rounded-xl text-center cursor-pointer transition-all uppercase tracking-wider ${
+              className={`flex-1 py-2 rounded-md text-center cursor-pointer transition-all uppercase tracking-wider ${
                 activeTab === 'archives'
-                  ? 'bg-slate-900 text-white shadow-sm'
+                  ? 'bg-slate-900 text-white shadow-2xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -166,7 +169,7 @@ export const Payments: React.FC = () => {
           </div>
 
           {/* List display */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[500px] overflow-y-auto shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col max-h-[500px] overflow-y-auto shadow-2xs">
             {activeTab === 'pending' ? (
               pendingOrders.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs font-medium">
@@ -239,7 +242,7 @@ export const Payments: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
               {/* Checkout Form (only if unpaid) */}
               {selectedWO.paymentStatus === 'unpaid' ? (
-                <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
                   <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-3 mb-2">
                     <Sparkles className="w-4 h-4 text-slate-800" />
                     Kasir & Verifikasi Pembayaran
@@ -265,9 +268,9 @@ export const Payments: React.FC = () => {
                               setPaymentMethod(method.id as any);
                               if (method.id !== 'cash') setCashGiven(grandTotal);
                             }}
-                            className={`py-2 px-3 rounded-xl font-bold text-[11px] border text-center transition-all cursor-pointer ${
+                            className={`py-2 px-3 rounded-lg font-bold text-[11px] border text-center transition-all cursor-pointer ${
                               paymentMethod === method.id
-                                ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                             }`}
                           >
@@ -282,7 +285,7 @@ export const Payments: React.FC = () => {
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                         Diskon / Potongan ({shopInfo.currency})
                       </label>
-                      <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3.5 py-2.5">
+                      <div className="flex items-center bg-white border border-slate-200 rounded-lg px-3 py-2">
                         <span className="text-slate-900 font-bold mr-1.5">{shopInfo.currency}</span>
                         <input
                           type="number"
@@ -291,7 +294,7 @@ export const Payments: React.FC = () => {
                           step="any"
                           value={discountInput}
                           onChange={(e) => setDiscountInput(parseFloat(e.target.value) || 0)}
-                          className="bg-transparent text-slate-900 font-bold focus:outline-none w-full font-mono text-sm"
+                          className="bg-transparent text-slate-900 font-bold focus:outline-none w-full font-mono text-xs"
                         />
                       </div>
                     </div>
@@ -302,7 +305,7 @@ export const Payments: React.FC = () => {
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                           Uang Dibayarkan (Tunai)
                         </label>
-                        <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 mb-2">
+                        <div className="flex items-center bg-white border border-slate-200 rounded-lg px-3 py-2 mb-2">
                           <span className="text-slate-900 font-bold mr-1.5">{shopInfo.currency}</span>
                           <input
                             type="number"
@@ -311,7 +314,7 @@ export const Payments: React.FC = () => {
                             value={cashGiven || ''}
                             onChange={(e) => setCashGiven(parseFloat(e.target.value) || 0)}
                             placeholder="e.g. 100000"
-                            className="bg-transparent text-slate-900 font-bold focus:outline-none w-full font-mono text-sm"
+                            className="bg-transparent text-slate-900 font-bold focus:outline-none w-full font-mono text-xs"
                           />
                         </div>
 
@@ -353,7 +356,7 @@ export const Payments: React.FC = () => {
 
                     {/* Change calculator display */}
                     {paymentMethod === 'cash' && cashGiven > 0 && (
-                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
                         <div className="flex justify-between text-[11px] text-slate-500 font-medium">
                           <span>Total Tagihan:</span>
                           <span className="font-bold text-slate-800">{formatRupiah(grandTotal)}</span>
@@ -376,26 +379,26 @@ export const Payments: React.FC = () => {
                     <button
                       type="submit"
                       disabled={paymentMethod === 'cash' && cashGiven < grandTotal}
-                      className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-xl cursor-pointer text-center text-xs tracking-wider uppercase shadow-sm transition-all"
+                      className="w-full py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-lg cursor-pointer text-center text-xs tracking-wider uppercase shadow-xs transition-all"
                     >
                       Proses & Selesaikan Pembayaran
                     </button>
                   </form>
                 </div>
               ) : (
-                <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm text-center space-y-3">
-                  <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl mx-auto flex items-center justify-center border border-emerald-100 shadow-2xs">
-                    <CheckCircle className="w-8 h-8" />
+                <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs text-center space-y-3">
+                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-lg mx-auto flex items-center justify-center border border-emerald-100 shadow-2xs">
+                    <CheckCircle className="w-7 h-7" />
                   </div>
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Pembayaran Lunas</h3>
                   <p className="text-xs text-slate-500 font-medium">
                     Tagihan telah dilunasi via <strong className="uppercase text-slate-800">{selectedWO.paymentMethod || 'Tunai'}</strong>.
                   </p>
-                  <div className="flex items-center justify-center gap-2.5 flex-wrap pt-2">
+                  <div className="flex items-center justify-center gap-2 flex-wrap pt-2">
                     <button
                       type="button"
                       onClick={handlePrint}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl cursor-pointer transition-all shadow-sm"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg cursor-pointer transition-all shadow-xs"
                     >
                       <Printer className="w-4 h-4" />
                       Cetak Struk Thermal
@@ -403,7 +406,7 @@ export const Payments: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleSendWhatsAppInvoice}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-all shadow-sm"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer transition-all shadow-xs"
                     >
                       <MessageCircle className="w-4 h-4" />
                       Kirim Nota WA
@@ -413,7 +416,7 @@ export const Payments: React.FC = () => {
               )}
 
               {/* Receipts Preview slip panel */}
-              <div className="bg-white text-slate-900 p-5 rounded-2xl shadow-sm max-w-sm border border-slate-200 relative font-mono text-[10px] space-y-4">
+              <div className="bg-white text-slate-900 p-5 rounded-xl shadow-xs max-w-sm border border-slate-200 relative font-mono text-[10px] space-y-4">
                 {/* Slip Header */}
                 <div className="text-center space-y-1 pt-2">
                   <h4 className="font-bold text-sm uppercase tracking-tight text-slate-900">{shopInfo.name}</h4>
@@ -423,96 +426,83 @@ export const Payments: React.FC = () => {
 
                 <div className="border-t border-dashed border-slate-300 my-3" />
 
-                {/* Specs */}
-                <div className="space-y-1 text-slate-700 font-medium">
+                {/* Metadata */}
+                <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span>No. Nota: {selectedWO.id}</span>
-                    <span>Tgl: {new Date(selectedWO.createdAt).toLocaleDateString('id-ID')}</span>
+                    <span className="text-slate-500">No. Nota / SPK:</span>
+                    <span className="font-bold">{selectedWO.id}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Pelanggan: {selectedWO.customerName}</span>
-                    <span>Plat: {selectedWO.licensePlate}</span>
+                    <span className="text-slate-500">Waktu:</span>
+                    <span>{new Date(selectedWO.createdAt).toLocaleString('id-ID')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Motor: {selectedWO.vehicleModel}</span>
-                    <span>Mekanik: {selectedWO.assignedMechanicName.split(' ')[0]}</span>
+                    <span className="text-slate-500">Kasir / Teknisi:</span>
+                    <span>{selectedWO.assignedMechanicName || 'Staf Kasir'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Pelanggan:</span>
+                    <span className="font-bold">{selectedWO.customerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">No. Polisi:</span>
+                    <span className="font-bold">{selectedWO.licensePlate}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Tipe Motor:</span>
+                    <span>{selectedWO.vehicleModel}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-dashed border-slate-300 my-3" />
 
-                {/* Services items */}
-                <div className="space-y-1.5">
-                  <p className="font-bold text-slate-900 uppercase text-[9px] tracking-wide">Jasa & Servis</p>
-                  {selectedWO.services.map((s) => (
-                    <div key={s.serviceId} className="flex justify-between text-slate-700">
-                      <span>• {s.name}</span>
-                      <span className="font-bold">{formatRupiah(s.price)}</span>
+                {/* Items List */}
+                <div className="space-y-2">
+                  <p className="font-bold uppercase text-[9px] text-slate-400">Rincian Jasa & Part</p>
+                  {selectedWO.services.map((s, idx) => (
+                    <div key={`srv-${idx}`} className="flex justify-between">
+                      <span className="truncate pr-2">[Jasa] {s.name}</span>
+                      <span className="shrink-0">{formatRupiah(s.price)}</span>
+                    </div>
+                  ))}
+                  {selectedWO.sparePartsUsed.map((p, idx) => (
+                    <div key={`prt-${idx}`} className="flex justify-between">
+                      <span className="truncate pr-2">[Part] {p.name} ({p.quantity}x)</span>
+                      <span className="shrink-0">{formatRupiah(p.price * p.quantity)}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* Spare parts items */}
-                {selectedWO.sparePartsUsed.length > 0 && (
-                  <div className="space-y-1.5 pt-2">
-                    <p className="font-bold text-slate-900 uppercase text-[9px] tracking-wide">Suku Cadang / Part</p>
-                    {selectedWO.sparePartsUsed.map((p) => (
-                      <div key={p.partId} className="flex justify-between text-slate-700">
-                        <span>• {p.name} (x{p.quantity})</span>
-                        <span className="font-bold">{formatRupiah(p.totalPrice)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
                 <div className="border-t border-dashed border-slate-300 my-3" />
 
-                {/* Total aggregations */}
-                <div className="space-y-1.5 text-slate-900 font-bold text-right">
-                  <div className="flex justify-between text-slate-500 font-medium">
-                    <span>Subtotal</span>
+                {/* Grand Totals */}
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
                     <span>{formatRupiah(subtotal)}</span>
                   </div>
-
-                  {tax > 0 && (
-                    <div className="flex justify-between text-slate-500 font-medium">
-                      <span>Pajak ({shopInfo.taxRate}%)</span>
-                      <span>{formatRupiah(tax)}</span>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-amber-600">
+                      <span>Potongan Diskon:</span>
+                      <span>-{formatRupiah(discount)}</span>
                     </div>
                   )}
-
-                  {(selectedWO.paymentStatus === 'unpaid' ? discountInput : selectedWO.costs.discount) > 0 && (
-                    <div className="flex justify-between text-rose-600">
-                      <span>Diskon</span>
-                      <span>-{formatRupiah(selectedWO.paymentStatus === 'unpaid' ? discountInput : selectedWO.costs.discount)}</span>
-                    </div>
+                  <div className="flex justify-between text-xs font-black pt-1 border-t border-slate-300 text-slate-900">
+                    <span>TOTAL:</span>
+                    <span>{formatRupiah(grandTotal)}</span>
+                  </div>
+                  {paymentMethod === 'cash' && selectedWO.paymentStatus === 'paid' && (
+                    <>
+                      <div className="flex justify-between text-[9px] pt-1">
+                        <span className="text-slate-500">Tunai Diterima:</span>
+                        <span>{formatRupiah(selectedWO.cashTendered || cashGiven)}</span>
+                      </div>
+                      <div className="flex justify-between text-[9px]">
+                        <span className="text-slate-500">Kembalian:</span>
+                        <span>{formatRupiah(selectedWO.changeAmount || changeDue)}</span>
+                      </div>
+                    </>
                   )}
-
-                  <div className="flex justify-between font-black text-xs text-slate-900 pt-1 border-t border-slate-200">
-                    <span>TOTAL BAYAR</span>
-                    <span className="text-sm">
-                      {formatRupiah(selectedWO.paymentStatus === 'unpaid' ? grandTotal : selectedWO.costs.total)}
-                    </span>
-                  </div>
-
-                  <div className="pt-2 text-left space-y-0.5 border-t border-dashed border-slate-200 text-slate-700 font-normal">
-                    <div className="flex justify-between font-bold">
-                      <span>Metode:</span>
-                      <span className="uppercase">{selectedWO.paymentMethod || paymentMethod || 'Tunai'}</span>
-                    </div>
-                    {(selectedWO.cashTendered || cashGiven) ? (
-                      <>
-                        <div className="flex justify-between">
-                          <span>Bayar:</span>
-                          <span>{formatRupiah(selectedWO.cashTendered || cashGiven)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-slate-900">
-                          <span>Kembali:</span>
-                          <span>{formatRupiah(selectedWO.changeAmount !== undefined ? selectedWO.changeAmount : changeDue)}</span>
-                        </div>
-                      </>
-                    ) : null}
-                  </div>
                 </div>
 
                 <div className="border-t border-dashed border-slate-300 my-3" />
@@ -525,7 +515,7 @@ export const Payments: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center p-8 text-center text-slate-400 border border-dashed border-slate-200 bg-white rounded-2xl font-medium text-xs">
+            <div className="h-full flex items-center justify-center p-8 text-center text-slate-400 border border-dashed border-slate-200 bg-white rounded-xl font-medium text-xs">
               Pilih daftar pembayaran aktif dari menu di samping untuk memproses kasir, diskon, dan cetak struk nota.
             </div>
           )}
@@ -535,9 +525,9 @@ export const Payments: React.FC = () => {
       {/* --- POST-CHECKOUT SUCCESS MODAL POP-UP --- */}
       {showSuccessModal && selectedWO && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
-          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 text-center space-y-5 animate-scale-in">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl mx-auto flex items-center justify-center">
-              <CheckCircle className="w-10 h-10" />
+          <div className="w-full max-w-md bg-white rounded-xl p-5 sm:p-6 shadow-2xl border border-slate-200 text-center space-y-5 animate-scale-in">
+            <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-lg mx-auto flex items-center justify-center">
+              <CheckCircle className="w-9 h-9" />
             </div>
 
             <div className="space-y-1">
@@ -547,7 +537,7 @@ export const Payments: React.FC = () => {
               </p>
             </div>
 
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-xs">
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-2 text-xs">
               <div className="flex justify-between text-slate-600">
                 <span>Total Tagihan:</span>
                 <span className="font-bold text-slate-900">{formatRupiah(selectedWO.costs.total)}</span>
@@ -571,7 +561,7 @@ export const Payments: React.FC = () => {
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                  className="py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
                 >
                   <Printer className="w-4 h-4 shrink-0" />
                   Cetak Struk
@@ -579,7 +569,7 @@ export const Payments: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSendWhatsAppInvoice}
-                  className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4 shrink-0" />
                   Kirim Nota WA
@@ -589,7 +579,7 @@ export const Payments: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowSuccessModal(false)}
-                className="w-full py-2.5 text-slate-500 hover:text-slate-800 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                className="w-full py-2 text-slate-500 hover:text-slate-800 text-xs font-semibold rounded-lg transition-all cursor-pointer"
               >
                 Tutup & Transaksi Berikutnya
               </button>
@@ -598,36 +588,29 @@ export const Payments: React.FC = () => {
         </div>
       )}
 
-      {/* --- PRINT ONLY THERMAL RECEIPT SLIP (Optimized 58mm/80mm POS mini printer) --- */}
+      {/* PRINT-ONLY THERMAL SLIP DEDICATED VIEW */}
       {selectedWO && (
-        <div className="print-only hidden p-2 bg-white text-black font-mono text-[11px] max-w-[80mm] mx-auto space-y-2">
-          <div className="text-center space-y-0.5">
-            <h1 className="font-black text-sm uppercase">{shopInfo.name}</h1>
-            <p className="text-[9px]">{shopInfo.address}</p>
-            <p className="text-[9px]">WA/Telp: {shopInfo.phone}</p>
+        <div className="hidden print:block font-mono text-black text-xs p-2 max-w-[80mm] mx-auto">
+          <div className="text-center space-y-1 mb-3">
+            <h2 className="font-black text-sm uppercase">{shopInfo.name}</h2>
+            <p className="text-[10px]">{shopInfo.address}</p>
+            <p className="text-[10px]">Telp: {shopInfo.phone}</p>
+            <p className="text-[9px] border-b border-black pb-2">================================</p>
           </div>
 
-          <div className="border-t border-dashed border-black my-1" />
-
-          <div className="space-y-0.5 text-[10px]">
-            <div className="flex justify-between">
-              <span>Nota: {selectedWO.id}</span>
-              <span>{new Date(selectedWO.createdAt).toLocaleDateString('id-ID')}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Plg: {selectedWO.customerName}</span>
-              <span>Plat: {selectedWO.licensePlate}</span>
-            </div>
-            <div>Motor: {selectedWO.vehicleModel}</div>
-            <div>Mekanik: {selectedWO.assignedMechanicName}</div>
+          <div className="space-y-1 text-[11px] mb-3">
+            <div>SPK: {selectedWO.id}</div>
+            <div>Tgl: {new Date().toLocaleDateString('id-ID')} {new Date().toLocaleTimeString('id-ID')}</div>
+            <div>Cust: {selectedWO.customerName}</div>
+            <div>Unit: {selectedWO.vehicleModel} ({selectedWO.licensePlate})</div>
+            <div>Mekanik: {selectedWO.assignedMechanicName || '-'}</div>
+            <p className="border-b border-black">--------------------------------</p>
           </div>
 
-          <div className="border-t border-dashed border-black my-1" />
-
-          <div className="space-y-1 text-[10px]">
-            <p className="font-bold uppercase text-[9px]">Jasa & Servis:</p>
-            {selectedWO.services.map((s) => (
-              <div key={s.serviceId} className="flex justify-between">
+          <div className="space-y-1 text-[11px] mb-3">
+            <div className="font-bold">JASA:</div>
+            {selectedWO.services.map((s, idx) => (
+              <div key={`print-srv-${idx}`} className="flex justify-between">
                 <span>{s.name}</span>
                 <span>{formatRupiah(s.price)}</span>
               </div>
@@ -635,51 +618,50 @@ export const Payments: React.FC = () => {
 
             {selectedWO.sparePartsUsed.length > 0 && (
               <>
-                <p className="font-bold uppercase text-[9px] pt-1">Suku Cadang:</p>
-                {selectedWO.sparePartsUsed.map((p) => (
-                  <div key={p.partId} className="flex justify-between">
+                <div className="font-bold pt-1">SUKU CADANG:</div>
+                {selectedWO.sparePartsUsed.map((p, idx) => (
+                  <div key={`print-prt-${idx}`} className="flex justify-between">
                     <span>{p.name} x{p.quantity}</span>
-                    <span>{formatRupiah(p.totalPrice)}</span>
+                    <span>{formatRupiah(p.price * p.quantity)}</span>
                   </div>
                 ))}
               </>
             )}
+            <p className="border-b border-black">--------------------------------</p>
           </div>
 
-          <div className="border-t border-dashed border-black my-1" />
-
-          <div className="space-y-0.5 text-right text-[10px]">
+          <div className="space-y-1 text-[11px]">
             <div className="flex justify-between">
               <span>Subtotal:</span>
               <span>{formatRupiah(subtotal)}</span>
             </div>
-            {(selectedWO.costs.discount || discountInput) > 0 && (
+            {discount > 0 && (
               <div className="flex justify-between">
                 <span>Diskon:</span>
-                <span>-{formatRupiah(selectedWO.costs.discount || discountInput)}</span>
+                <span>-{formatRupiah(discount)}</span>
               </div>
             )}
-            <div className="flex justify-between font-bold text-xs border-t border-black pt-1">
+            <div className="flex justify-between font-black text-sm pt-1 border-t border-black">
               <span>TOTAL:</span>
-              <span>{formatRupiah(selectedWO.costs.total || grandTotal)}</span>
+              <span>{formatRupiah(grandTotal)}</span>
             </div>
-            <div className="flex justify-between text-[10px] pt-0.5">
-              <span>Metode ({selectedWO.paymentMethod || paymentMethod}):</span>
-              <span>{formatRupiah(selectedWO.cashTendered || cashGiven || selectedWO.costs.total)}</span>
+            <div className="flex justify-between text-[11px] pt-1">
+              <span>Bayar ({paymentMethod.toUpperCase()}):</span>
+              <span>{formatRupiah(selectedWO.cashTendered || grandTotal)}</span>
             </div>
-            {(selectedWO.paymentMethod === 'cash' || paymentMethod === 'cash') && (
-              <div className="flex justify-between text-[10px] font-bold">
+            {paymentMethod === 'cash' && (
+              <div className="flex justify-between text-[11px]">
                 <span>Kembali:</span>
-                <span>{formatRupiah(selectedWO.changeAmount !== undefined ? selectedWO.changeAmount : changeDue)}</span>
+                <span>{formatRupiah(selectedWO.changeAmount || 0)}</span>
               </div>
             )}
           </div>
 
-          <div className="border-t border-dashed border-black my-1" />
-
-          <div className="text-center text-[9px] pt-1 space-y-0.5">
-            <p className="font-bold uppercase">★ Terima Kasih Atas Kunjungan Anda ★</p>
-            <p>Garansi Servis 1 Minggu Pasca Perbaikan</p>
+          <div className="text-center text-[10px] mt-6 space-y-1">
+            <p>================================</p>
+            <p className="font-bold">TERIMA KASIH</p>
+            <p>Garansi Servis 7 Hari</p>
+            <p>Simpan struk ini sebagai bukti</p>
           </div>
         </div>
       )}

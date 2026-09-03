@@ -40,15 +40,16 @@ const ToastItem: React.FC<{ toast: any; onDismiss: (id: string) => void }> = ({ 
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9, y: -10 }}
       transition={{ duration: 0.2 }}
-      className={`flex items-start gap-3 p-3.5 rounded-2xl border ${bgColor} ${borderCol} shadow-2xl backdrop-blur-md text-white`}
+      className={`flex items-start gap-3 p-3.5 rounded-xl border ${bgColor} ${borderCol} shadow-xl backdrop-blur-md text-white`}
     >
       <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${iconColor}`} />
       <div className="flex-1 text-xs font-medium text-slate-100 leading-snug">
         {toast.message}
       </div>
       <button
+        type="button"
         onClick={() => onDismiss(toast.id)}
-        className="text-slate-400 hover:text-white transition-colors cursor-pointer rounded p-0.5"
+        className="text-slate-400 hover:text-white transition-colors cursor-pointer rounded-md p-0.5"
       >
         <X className="w-3.5 h-3.5" />
       </button>

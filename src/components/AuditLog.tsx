@@ -130,7 +130,7 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
             {/* Header */}
             <div className="p-5 border-b border-white/10 bg-zinc-900/40 backdrop-blur-md flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/10 text-white rounded-xl border border-white/15 shadow-sm">
+                <div className="p-2 bg-white/10 text-white rounded-lg border border-white/15 shadow-sm">
                   <History className="w-5 h-5" />
                 </div>
                 <div>
@@ -145,7 +145,7 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-all cursor-pointer border border-transparent hover:border-white/10"
+                className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition-all cursor-pointer border border-transparent hover:border-white/10"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -163,7 +163,7 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
                   placeholder="Cari aksi, rincian, atau kata kunci..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-zinc-900/80 border border-white/10 focus:border-white/30 rounded-xl text-xs placeholder-zinc-500 text-zinc-100 outline-none transition-all font-medium"
+                  className="w-full pl-10 pr-4 py-2 bg-zinc-900/80 border border-white/10 focus:border-white/30 rounded-lg text-xs placeholder-zinc-500 text-zinc-100 outline-none transition-all font-medium"
                 />
               </div>
 
@@ -176,9 +176,9 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
                   <button
                     type="button"
                     onClick={() => setSelectedCategory('all')}
-                    className={`px-3 py-1.5 text-xs rounded-xl border font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 text-xs rounded-lg border font-bold transition-all cursor-pointer ${
                       selectedCategory === 'all'
-                        ? 'bg-white text-zinc-950 border-white shadow-md'
+                        ? 'bg-white text-zinc-950 border-white shadow-xs'
                         : 'bg-zinc-900/60 text-zinc-400 border-white/10 hover:border-white/20 hover:text-zinc-200'
                     }`}
                   >
@@ -192,9 +192,9 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
                         key={key}
                         type="button"
                         onClick={() => setSelectedCategory(key as AuditLogCategory)}
-                        className={`px-3 py-1.5 text-xs rounded-xl border font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        className={`px-3 py-1.5 text-xs rounded-lg border font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                           isSelected
-                            ? 'bg-white text-zinc-950 border-white shadow-md'
+                            ? 'bg-white text-zinc-950 border-white shadow-xs'
                             : 'bg-zinc-900/60 text-zinc-400 border-white/10 hover:border-white/20 hover:text-zinc-200'
                         }`}
                       >
@@ -215,9 +215,9 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
                   <button
                     type="button"
                     onClick={() => setSelectedRole('all')}
-                    className={`px-2.5 py-1 text-xs rounded-xl border font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 text-xs rounded-lg border font-bold transition-all cursor-pointer ${
                       selectedRole === 'all'
-                        ? 'bg-zinc-200 text-zinc-950 border-zinc-200 shadow-sm'
+                        ? 'bg-zinc-200 text-zinc-950 border-zinc-200 shadow-xs'
                         : 'bg-zinc-900/60 text-zinc-400 border-white/10 hover:border-white/20 hover:text-zinc-200'
                     }`}
                   >
@@ -230,9 +230,9 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
                         key={r}
                         type="button"
                         onClick={() => setSelectedRole(r)}
-                        className={`px-2.5 py-1 text-xs rounded-xl border font-semibold transition-all cursor-pointer ${
+                        className={`px-2.5 py-1 text-xs rounded-lg border font-semibold transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-zinc-200 text-zinc-950 border-zinc-200 shadow-sm'
+                            ? 'bg-zinc-200 text-zinc-950 border-zinc-200 shadow-xs'
                             : 'bg-zinc-900/60 text-zinc-400 border-white/10 hover:border-white/20 hover:text-zinc-200'
                         }`}
                       >
@@ -270,13 +270,13 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
                       >
                         {/* Timeline Bullet Node with Category Icon */}
                         <div
-                          className="absolute -left-[15px] top-0 w-7 h-7 rounded-full border border-white/20 bg-zinc-950 text-zinc-300 flex items-center justify-center transition-all group-hover:scale-110 group-hover:border-white group-hover:text-white shadow-sm"
+                          className="absolute -left-[15px] top-0 w-7 h-7 rounded-full border border-white/20 bg-zinc-950 text-zinc-300 flex items-center justify-center transition-all group-hover:scale-110 group-hover:border-white group-hover:text-white shadow-xs"
                         >
                           <Icon className="w-3.5 h-3.5" />
                         </div>
 
                         {/* Card Container - Frosted Glass Monochrome */}
-                        <div className="p-4 bg-white/[0.04] backdrop-blur-md rounded-2xl border border-white/10 hover:border-white/25 hover:bg-white/[0.07] transition-all shadow-sm">
+                        <div className="p-4 bg-white/[0.04] backdrop-blur-md rounded-xl border border-white/10 hover:border-white/25 hover:bg-white/[0.07] transition-all shadow-xs">
                           <div className="flex items-start justify-between gap-2">
                             <h4 className="text-xs font-bold text-white tracking-tight">
                               {log.action}
@@ -318,7 +318,7 @@ export const AuditLog: React.FC<AuditLogProps> = ({ isOpen, onClose }) => {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-1.5 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-sm uppercase tracking-wider"
+                className="px-3.5 py-1.5 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-extrabold rounded-lg transition-all cursor-pointer shadow-xs uppercase tracking-wider"
               >
                 Tutup
               </button>

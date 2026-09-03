@@ -137,15 +137,15 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="px-5 py-4 sm:px-6 sm:py-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-400 text-slate-950 rounded-2xl font-bold shadow-sm">
-              <Bell className="w-5 h-5" />
+            <div className="p-2 bg-amber-400 text-slate-950 rounded-lg font-bold shadow-2xs">
+              <Bell className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold uppercase tracking-wide flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-extrabold uppercase tracking-wide flex items-center gap-2">
                 Pengingat Servis Berkala & Ganti Oli
               </h2>
               <p className="text-xs text-slate-300">
@@ -156,14 +156,14 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Filter Controls */}
-        <div className="p-5 border-b border-slate-100 bg-slate-50/70 space-y-3 shrink-0">
+        <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 space-y-3 shrink-0">
           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
             {/* Search Bar */}
             <div className="relative w-full sm:w-72">
@@ -173,17 +173,17 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
                 placeholder="Cari plat, motor, atau nama..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-800"
+                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-800"
               />
             </div>
 
             {/* Filter Days Tabs */}
-            <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-xl w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-lg w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setFilterDays('30')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  filterDays === '30' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  filterDays === '30' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 30+ Hari ({reminderItems.filter((i) => i.daysElapsed >= 30).length})
@@ -191,8 +191,8 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
               <button
                 type="button"
                 onClick={() => setFilterDays('60')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  filterDays === '60' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  filterDays === '60' ? 'bg-rose-500 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 60+ Hari ({reminderItems.filter((i) => i.daysElapsed >= 60).length})
@@ -200,8 +200,8 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
               <button
                 type="button"
                 onClick={() => setFilterDays('all')}
-                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  filterDays === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  filterDays === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 Semua ({reminderItems.length})
@@ -211,7 +211,7 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
         </div>
 
         {/* List Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-3">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-3">
           {filteredList.length === 0 ? (
             <div className="py-14 text-center text-slate-400 space-y-2">
               <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
@@ -226,36 +226,36 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
               return (
                 <div
                   key={item.vehicle.id}
-                  className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  className="p-4 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3.5"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-bold text-xs bg-slate-900 text-white px-2.5 py-0.5 rounded-md uppercase">
+                      <span className="font-mono font-bold text-xs bg-slate-900 text-white px-2 py-0.5 rounded uppercase">
                         {item.vehicle.licensePlate}
                       </span>
                       <span className="font-bold text-xs text-slate-900">
                         {item.vehicle.brand} {item.vehicle.model}
                       </span>
                       {isUrgent && (
-                        <span className="text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <span className="text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" />
                           Mendesak: {item.daysElapsed} Hari Lalu
                         </span>
                       )}
                       {isDue && (
-                        <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           Waktunya Servis: {item.daysElapsed} Hari Lalu
                         </span>
                       )}
                       {!isUrgent && !isDue && (
-                        <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded">
                           Servis Terakhir: {item.daysElapsed} Hari Lalu
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-4 text-xs text-slate-600 flex-wrap">
+                    <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
                       <span className="flex items-center gap-1 font-medium">
                         <User className="w-3.5 h-3.5 text-slate-400" />
                         Pemilik: <strong className="text-slate-800">{item.owner?.name || 'Pelanggan Umum'}</strong>
@@ -275,7 +275,7 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
                     <button
                       type="button"
                       onClick={() => handleSendWhatsAppReminder(item)}
-                      className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full sm:w-auto px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-lg shadow-2xs hover:shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <MessageCircle className="w-4 h-4" />
                       Kirim Pengingat WA
@@ -288,12 +288,12 @@ export const ServiceReminderModal: React.FC<ServiceReminderModalProps> = ({ isOp
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
           <span>Menampilkan {filteredList.length} motor terdata</span>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl transition-all cursor-pointer"
+            className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg transition-all cursor-pointer"
           >
             Tutup
           </button>

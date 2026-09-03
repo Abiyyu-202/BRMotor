@@ -117,7 +117,7 @@ function AppContent() {
     { name: 'Mechanics', icon: Users, roles: ['owner', 'admin'] },
     { name: 'Inventory', icon: Package, roles: ['owner', 'admin', 'mechanic'] },
     { name: 'Reports', icon: TrendingUp, roles: ['owner', 'admin'] },
-    { name: 'Settings', icon: SettingsIcon, roles: ['owner', 'admin'] }
+    { name: 'Settings', icon: SettingsIcon, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] }
   ].filter(item => item.roles.includes(currentRole));
 
   // Auto-redirect if role switcher makes activeTab illegal
@@ -193,14 +193,14 @@ function AppContent() {
   if (showLandingPreview) {
     return (
       <div className="relative">
-        <div className="bg-slate-900 text-white text-xs font-bold py-2.5 px-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-50 shadow-lg">
+        <div className="bg-slate-900 text-white text-xs font-bold py-2.5 px-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-50 shadow-sm">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span>Mode Pratinjau Website Landing Page • Masuk sebagai: <span className="uppercase text-white font-bold">{currentRole}</span> ({currentUserName || 'Staf'})</span>
           </div>
           <button
             onClick={() => setShowLandingPreview(false)}
-            className="px-3.5 py-1.5 bg-white text-slate-900 hover:bg-slate-100 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm"
+            className="px-3 py-1.5 bg-white text-slate-900 hover:bg-slate-100 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs"
           >
             Kembali ke Konsol Bengkel →
           </button>
@@ -254,18 +254,18 @@ function AppContent() {
       
       {/* 1. SIDEBAR NAVIGATION - DESKTOP */}
       <aside className="w-64 bg-white border-r border-slate-200 flex-col justify-between hidden lg:flex shrink-0 no-print">
-        <div className="p-5">
+        <div className="p-4">
           {/* Workshop Brand Header with Clickable Home Flow */}
-          <div className="flex items-center justify-between pb-5 border-b border-slate-200">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
             <button
               onClick={() => setShowLandingPreview(true)}
               title="Klik untuk melihat Website Beranda"
-              className="flex items-center gap-3 text-left group cursor-pointer transition-all hover:opacity-85"
+              className="flex items-center gap-2.5 text-left group cursor-pointer transition-all hover:opacity-85"
             >
               <img
                 src="/BR-Motor_Logo.png"
                 alt="BR Motor Logo"
-                className="w-10 h-10 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-xs shrink-0 group-hover:border-slate-400 transition-colors"
+                className="w-9 h-9 object-contain rounded-lg bg-white border border-slate-200 p-0.5 shadow-2xs shrink-0 group-hover:border-slate-400 transition-colors"
               />
               <div className="min-w-0">
                 <h1 className="font-bold text-sm text-slate-900 tracking-tight truncate group-hover:text-slate-700 transition-colors">{shopInfo.name}</h1>
@@ -282,7 +282,7 @@ function AppContent() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="mt-5 space-y-1">
+          <nav className="mt-4 space-y-1">
             {navItems.map((item) => {
               const IconComponent = item.icon;
               const isSelected = activeTab === item.name;
@@ -293,22 +293,22 @@ function AppContent() {
                 <button
                   key={item.name}
                   onClick={() => setActiveTab(item.name)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide cursor-pointer transition-all ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold tracking-wide cursor-pointer transition-all ${
                     isSelected
-                      ? 'bg-slate-900 text-white shadow-sm'
+                      ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <IconComponent className="w-4 h-4 shrink-0" />
                     <span className="truncate">{label}</span>
                   </div>
                   {badge && (
                     <span
-                      className={`px-2 py-0.5 text-[10px] font-black rounded-full leading-none flex items-center justify-center min-w-[20px] h-5 shrink-0 transition-transform ${
+                      className={`px-1.5 py-0.5 text-[10px] font-black rounded-full leading-none flex items-center justify-center min-w-[18px] h-4.5 shrink-0 transition-transform ${
                         isSelected
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : `${badge.color} shadow-xs`
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : `${badge.color} shadow-2xs`
                       }`}
                     >
                       {badge.count}
@@ -327,7 +327,7 @@ function AppContent() {
               setIsAuthenticated(false);
               showToast(language === 'id' ? 'Telah keluar dari sistem.' : 'Signed out of the system.', 'info');
             }}
-            className="w-full text-center py-2.5 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer border border-slate-200"
+            className="w-full text-center py-2 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer border border-slate-200"
           >
             {t.signOut}
           </button>
@@ -337,21 +337,21 @@ function AppContent() {
       {/* 2. SIDEBAR NAVIGATION - MOBILE DRAWER */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 lg:hidden flex no-print">
-          <div className="w-64 bg-white h-full border-r border-slate-200 p-5 flex flex-col justify-between animate-fade-in text-slate-900">
+          <div className="w-64 bg-white h-full border-r border-slate-200 p-4 flex flex-col justify-between animate-fade-in text-slate-900">
             <div>
               {/* Brand Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
                 <button
                   onClick={() => {
                     setShowLandingPreview(true);
                     setMobileSidebarOpen(false);
                   }}
-                  className="flex items-center gap-3 text-left"
+                  className="flex items-center gap-2.5 text-left"
                 >
                   <img
                     src="/BR-Motor_Logo.png"
                     alt="BR Motor Logo"
-                    className="w-9 h-9 object-contain rounded-xl bg-white border border-slate-200 p-0.5 shadow-xs shrink-0"
+                    className="w-8 h-8 object-contain rounded-lg bg-white border border-slate-200 p-0.5 shadow-2xs shrink-0"
                   />
                   <span className="font-bold text-sm">{shopInfo.name}</span>
                 </button>
@@ -364,7 +364,7 @@ function AppContent() {
               </div>
 
               {/* Mobile Links */}
-              <nav className="space-y-1.5">
+              <nav className="space-y-1">
                 {navItems.map((item) => {
                   const IconComponent = item.icon;
                   const isSelected = activeTab === item.name;
@@ -378,19 +378,19 @@ function AppContent() {
                         setActiveTab(item.name);
                         setMobileSidebarOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold ${
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold ${
                         isSelected
                           ? 'bg-slate-900 text-white'
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <IconComponent className="w-4 h-4 shrink-0" />
                         <span className="truncate">{label}</span>
                       </div>
                       {badge && (
                         <span
-                          className={`px-2 py-0.5 text-[10px] font-black rounded-full leading-none flex items-center justify-center min-w-[20px] h-5 shrink-0 ${
+                          className={`px-1.5 py-0.5 text-[10px] font-black rounded-full leading-none flex items-center justify-center min-w-[18px] h-4.5 shrink-0 ${
                             isSelected
                               ? 'bg-white text-slate-900'
                               : badge.color
@@ -413,7 +413,7 @@ function AppContent() {
                   setMobileSidebarOpen(false);
                   showToast(language === 'id' ? 'Berhasil keluar dari sistem.' : 'Signed out successfully.', 'info');
                 }}
-                className="w-full text-center py-2.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer transition-colors"
+                className="w-full text-center py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-lg font-bold text-xs uppercase tracking-wider cursor-pointer transition-colors"
               >
                 {t.signOut}
               </button>
@@ -428,13 +428,13 @@ function AppContent() {
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Top Header Navbar */}
-        <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 shrink-0 no-print">
+        <header className="h-15 border-b border-slate-200 bg-white flex items-center justify-between px-4 sm:px-6 shrink-0 no-print">
           
           {/* Hamburger Menu & Page Title */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 text-slate-700 border border-slate-200 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100"
+              className="lg:hidden p-1.5 text-slate-700 border border-slate-200 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100"
             >
               <Menu className="w-4 h-4" />
             </button>
@@ -444,13 +444,13 @@ function AppContent() {
           </div>
 
           {/* Widgets */}
-          <div className="flex items-center gap-3 text-xs font-semibold">
+          <div className="flex items-center gap-2 sm:gap-2.5 text-xs font-semibold">
             {/* View Landing Page Button */}
             <button
               type="button"
               onClick={() => setShowLandingPreview(true)}
               title="Buka Website Beranda"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 hover:text-slate-900 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 hover:text-slate-900 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs active:scale-98"
             >
               <Home className="w-3.5 h-3.5 text-slate-600" />
               <span>Beranda</span>
@@ -462,7 +462,7 @@ function AppContent() {
                 type="button"
                 onClick={() => setIsProfileModalOpen(true)}
                 title={language === 'id' ? 'Klik untuk edit profil & no. WA' : 'Click to edit profile & info'}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-800 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-800 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
               >
                 <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
                   {currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U'}
@@ -482,7 +482,7 @@ function AppContent() {
                 markNotificationsAsRead();
               }}
               title={language === 'id' ? 'Histori Notifikasi Sistem' : 'System Notification History'}
-              className="relative p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 hover:text-slate-900 transition-all cursor-pointer shadow-2xs active:scale-95"
+              className="relative p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 hover:text-slate-900 transition-all cursor-pointer shadow-2xs active:scale-98"
             >
               <Bell className="w-4 h-4 text-slate-600" />
               {notificationHistory.filter((n) => !n.read).length > 0 && (
@@ -493,7 +493,7 @@ function AppContent() {
             </button>
 
             {/* Clock Widget */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-mono text-[11px]">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-mono text-[11px]">
               <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               <span>{formattedDate}</span>
               <span className="text-slate-300">•</span>
@@ -503,7 +503,7 @@ function AppContent() {
         </header>
 
         {/* Dynamic Inner Page viewport */}
-        <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto pb-16 no-scrollbar">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto max-w-7xl w-full mx-auto pb-16 no-scrollbar">
           {renderActivePage()}
         </main>
       </div>

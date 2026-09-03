@@ -105,7 +105,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
         const owner = customers.find((c) => String(c.id) === String(match.customerId));
         if (owner) {
           setCustomerName(owner.name);
-          if (owner.phone && owner.phone !== '-') setPhone(owner.phone);
+          setPhone(owner.phone || '');
         }
       } else {
         setMatchedVehicle(null);
@@ -115,39 +115,50 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
     }
   }, [plateNumber, vehicles, customers]);
 
+  // Indonesian license plate regex: max 2 front letters, 1-4 numbers, max 3 end letters
+  const plateRegex = /^[A-Z]{1,2}\s?[0-9]{1,4}\s?[A-Z]{1,3}$/i;
+  const isPlateValid = plateNumber.trim().length === 0 || plateRegex.test(plateNumber.trim());
+  const showPlateWarning = plateNumber.trim().length > 0 && !plateRegex.test(plateNumber.trim());
+
   if (!isOpen) return null;
 
-  // Strict Indonesian License Plate formatter (Max 2 letters prefix, 4 digits, 3 letters suffix)
   const handlePlateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const match = raw.match(/^([A-Z]{0,2})([0-9]{0,4})([A-Z]{0,3})/);
-    if (match) {
-      let formatted = match[1];
-      if (match[2]) formatted += ' ' + match[2];
-      if (match[3]) formatted += ' ' + match[3];
-      setPlateNumber(formatted);
+    const val = e.target.value.toUpperCase();
+    setPlateNumber(val);
+  };
+
+  const handleToggleService = (item: QuickServiceOption) => {
+    if (selectedServices.some((s) => s.id === item.id)) {
+      setSelectedServices(selectedServices.filter((s) => s.id !== item.id));
     } else {
-      setPlateNumber('');
+      setSelectedServices([...selectedServices, item]);
     }
   };
 
-  // Plate validity checker
-  const isPlateValid = /^[A-Z]{1,2}\s[0-9]{1,4}\s[A-Z]{1,3}$/.test(plateNumber.trim());
-  const showPlateWarning = plateNumber.length > 0 && !isPlateValid;
+  const handleAddPart = (partId: string) => {
+    const existing = selectedParts.find((p) => p.partId === partId);
+    if (existing) {
+      setSelectedParts(
+        selectedParts.map((p) => (p.partId === partId ? { ...p, quantity: p.quantity + 1 } : p))
+      );
+    } else {
+      setSelectedParts([...selectedParts, { partId, quantity: 1 }]);
+    }
+  };
 
-  // Reset form to clean state
+  const handleRemovePart = (partId: string) => {
+    setSelectedParts(selectedParts.filter((p) => p.partId !== partId));
+  };
+
   const resetForm = () => {
     setPlateNumber('');
     setCustomerName('');
     setPhone('');
-    setBrand('Honda');
     setModel('');
-    setYear(new Date().getFullYear());
     setComplaintNotes('');
     setSelectedServices([]);
     setSelectedParts([]);
     setMatchedVehicle(null);
-    setNotes('');
   };
 
   const handleClose = () => {
@@ -155,48 +166,9 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
     onClose();
   };
 
-  const handleToggleService = (service: QuickServiceOption) => {
-    setSelectedServices((prev) => {
-      const exists = prev.some((s) => s.id === service.id);
-      if (exists) {
-        return prev.filter((s) => s.id !== service.id);
-      } else {
-        return [...prev, service];
-      }
-    });
-  };
-
-  const handleAddPart = (partId: string) => {
-    if (!partId) return;
-    const part = spareParts.find((p) => p.id === partId);
-    if (!part) return;
-    if (part.currentStock <= 0) {
-      showToast(`Stok ${part.name} saat ini kosong!`, 'warning');
-      return;
-    }
-    setSelectedParts((prev) => {
-      const existing = prev.find((p) => p.partId === partId);
-      if (existing) {
-        if (existing.quantity >= part.currentStock) {
-          showToast(`Jumlah melebihi sisa stok (${part.currentStock})`, 'warning');
-          return prev;
-        }
-        return prev.map((p) =>
-          p.partId === partId ? { ...p, quantity: p.quantity + 1 } : p
-        );
-      }
-      return [...prev, { partId, quantity: 1 }];
-    });
-  };
-
-  const handleRemovePart = (partId: string) => {
-    setSelectedParts((prev) => prev.filter((p) => p.partId !== partId));
-  };
-
-  const handleAddMinutes = (minutes: number) => {
-    const [h, m] = estCompletion.split(':').map(Number);
+  const handleAddMinutes = (mins: number) => {
     const d = new Date();
-    d.setHours(h || d.getHours(), (m || d.getMinutes()) + minutes);
+    d.setMinutes(d.getMinutes() + mins);
     const newHours = String(d.getHours()).padStart(2, '0');
     const newMins = String(d.getMinutes()).padStart(2, '0');
     setEstCompletion(`${newHours}:${newMins}`);
@@ -227,7 +199,6 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
 
     setIsSubmitting(true);
     try {
-      // Map custom selected services
       const servicesPayload = selectedServices.map((s) => ({
         serviceId: s.id,
         name: s.name,
@@ -243,7 +214,6 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
         };
       });
 
-      // Construct complaint summary
       const serviceNames = selectedServices.map((s) => s.name).join(', ');
       const finalComplaint = serviceNames
         ? complaintNotes.trim()
@@ -286,15 +256,15 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in no-print">
-      <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[94vh] flex flex-col animate-scale-in">
+      <div className="bg-white rounded-xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[94vh] flex flex-col animate-scale-in">
         {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="px-5 py-4 sm:px-6 sm:py-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-400 text-slate-900 rounded-2xl font-bold shadow-sm">
-              <Wrench className="w-5 h-5" />
+            <div className="p-2 bg-amber-400 text-slate-900 rounded-lg font-bold shadow-2xs">
+              <Wrench className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold uppercase tracking-wide flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-extrabold uppercase tracking-wide flex items-center gap-2">
                 Catat Motor Masuk (Servis Cepat)
               </h2>
               <p className="text-xs text-slate-300">
@@ -305,14 +275,14 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
           <button
             type="button"
             onClick={handleClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1 no-scrollbar">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
           {/* Section 1: Kendaraan & Pelanggan */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-800 border-b border-slate-100 pb-1.5">
@@ -331,7 +301,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                   placeholder="AA 2549 IG"
                   value={plateNumber}
                   onChange={handlePlateChange}
-                  className={`w-full bg-slate-50 border-2 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-900 uppercase focus:outline-none transition-colors ${
+                  className={`w-full bg-slate-50 border-2 rounded-lg px-3 py-2 text-sm font-mono font-bold text-slate-900 uppercase focus:outline-none transition-colors ${
                     showPlateWarning
                       ? 'border-rose-400 focus:border-rose-500 bg-rose-50/40'
                       : isPlateValid
@@ -339,11 +309,10 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                       : 'border-slate-200 focus:border-slate-800'
                   }`}
                 />
-                {/* Plate validation error warning */}
                 {showPlateWarning && (
                   <p className="text-[10px] text-rose-600 font-bold mt-1 flex items-center gap-1 leading-tight">
                     <AlertCircle className="w-3 h-3 shrink-0" />
-                    <span>Maks 2 huruf depan, 4 angka, 3 huruf belakang (Contoh: AA 2549 IG)</span>
+                    <span>Maks 2 huruf depan, 4 angka, 3 huruf belakang</span>
                   </p>
                 )}
               </div>
@@ -355,7 +324,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                 <select
                   value={brand}
                   onChange={(e) => setBrand(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
                 >
                   <option value="Honda">Honda</option>
                   <option value="Yamaha">Yamaha</option>
@@ -376,21 +345,21 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                   placeholder="Vario 125, NMAX, Beat..."
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
                 />
               </div>
             </div>
 
             {/* Smart Vehicle Match Banner */}
             {matchedVehicle && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-2 text-xs text-emerald-900 animate-fade-in">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between gap-2 text-xs text-emerald-900 animate-fade-in">
                 <div className="flex items-center gap-2 font-medium">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>
                     Motor Terdaftar: <strong>{matchedVehicle.brand} {matchedVehicle.model}</strong> ({customerName || 'Pelanggan Lama'})
                   </span>
                 </div>
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 bg-emerald-200/80 rounded-lg text-emerald-800">
+                <span className="text-[10px] uppercase font-bold px-2 py-0.5 bg-emerald-200/80 rounded text-emerald-800">
                   Auto-filled
                 </span>
               </div>
@@ -406,7 +375,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                   placeholder="Contoh: Mas Budi"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
                 />
               </div>
 
@@ -419,13 +388,13 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                   placeholder="081234567890"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 2: Pilihan Opsi Jasa & Servis Terpadu dengan Harga */}
+          {/* Section 2: Pilihan Opsi Jasa & Servis Terpadu */}
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-800">
@@ -437,7 +406,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
               </span>
             </div>
 
-            {/* Grid of selectable service items with transparent pricing */}
+            {/* Grid of selectable service items */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {QUICK_SERVICE_OPTIONS.map((item) => {
                 const isSelected = selectedServices.some((s) => s.id === item.id);
@@ -446,9 +415,9 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                     key={item.id}
                     type="button"
                     onClick={() => handleToggleService(item)}
-                    className={`p-3 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                    className={`p-2.5 sm:p-3 rounded-lg border text-left flex items-center justify-between transition-all cursor-pointer ${
                       isSelected
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-950 shadow-xs ring-1 ring-emerald-400'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-950 shadow-2xs ring-1 ring-emerald-400'
                         : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800'
                     }`}
                   >
@@ -456,7 +425,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                       <span className="text-base shrink-0">{item.icon}</span>
                       <div className="min-w-0">
                         <p className="text-xs font-bold leading-tight truncate">{item.name}</p>
-                        <p className="text-[10px] text-slate-500 font-medium">{item.desc}</p>
+                        <p className="text-[10px] text-slate-500 font-medium truncate">{item.desc}</p>
                         <p className="text-[11px] font-mono font-extrabold text-emerald-700 mt-0.5">
                           {formatRupiah(item.price)}
                         </p>
@@ -464,9 +433,9 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                     </div>
 
                     <div
-                      className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                      className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all ${
                         isSelected
-                          ? 'bg-emerald-600 text-white shadow-xs'
+                          ? 'bg-emerald-600 text-white shadow-2xs'
                           : 'border-2 border-slate-300 bg-white'
                       }`}
                     >
@@ -487,7 +456,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                 placeholder="Misal: Rem agak keras saat ditekan, tolong sekalian cek lampu sen kiri..."
                 value={complaintNotes}
                 onChange={(e) => setComplaintNotes(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none resize-none"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none resize-none"
               />
             </div>
 
@@ -500,7 +469,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                 <select
                   value={mechanicId}
                   onChange={(e) => setMechanicId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none"
                 >
                   {activeMechanics.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -543,7 +512,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                   type="time"
                   value={estCompletion}
                   onChange={(e) => setEstCompletion(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none"
                 />
               </div>
             </div>
@@ -561,7 +530,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                   e.target.value = '';
                 }
               }}
-              className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
+              className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
             >
               <option value="">-- Pilih Sparepart / Oli dari Stok --</option>
               {spareParts.map((part) => (
@@ -580,7 +549,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                   return (
                     <div
                       key={item.partId}
-                      className="flex items-center justify-between p-2 bg-slate-100 rounded-xl text-xs"
+                      className="flex items-center justify-between p-2 bg-slate-100 rounded-lg text-xs"
                     >
                       <span className="font-semibold text-slate-800">
                         {part.name} x {item.quantity}
@@ -605,7 +574,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
           </div>
 
           {/* Section 4: Estimasi Total & Submit */}
-          <div className="p-4 bg-slate-900 text-white rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="p-4 bg-slate-900 text-white rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
               <p className="text-[10px] uppercase font-mono font-bold text-slate-400">
                 Estimasi Total Awal ({selectedServices.length} Jasa + {selectedParts.length} Part)
@@ -619,14 +588,14 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer"
               >
                 Batal
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting || showPlateWarning}
-                className="px-6 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 active:scale-95"
+                className="px-5 py-2 bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold text-xs uppercase tracking-wider rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 active:scale-98"
               >
                 <Sparkles className="w-4 h-4" />
                 {isSubmitting ? 'Mendaftarkan...' : 'Masuk Antrean Servis'}

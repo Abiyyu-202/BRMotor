@@ -5,17 +5,33 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
-import { Shield, ArrowRight, UserPlus, Loader2, Globe } from 'lucide-react';
+import { UserRole } from '../types';
+import { Wrench, Shield, ArrowRight, UserPlus, Globe, CheckCircle2, User, Loader2 } from 'lucide-react';
 
 declare global {
   interface Window {
     google?: {
-      accounts?: {
-        id?: {
-          initialize: (config: any) => void;
-          prompt: (callback?: (notification: any) => void) => void;
-          renderButton: (parent: HTMLElement, options: any) => void;
-          disableAutoSelect: () => void;
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential: string }) => void;
+            auto_select?: boolean;
+            cancel_on_tap_outside?: boolean;
+          }) => void;
+          renderButton: (
+            parent: HTMLElement,
+            options: {
+              theme?: 'outline' | 'filled_blue' | 'filled_black';
+              size?: 'large' | 'medium' | 'small';
+              text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin';
+              shape?: 'rectangular' | 'pill' | 'circle' | 'square';
+              logo_alignment?: 'left' | 'center';
+              width?: string | number;
+              locale?: string;
+            }
+          ) => void;
+          prompt?: () => void;
         };
       };
     };
@@ -27,230 +43,160 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => {
-  const { setIsAuthenticated, setCurrentRole, setCurrentUserName, setCurrentUserId, showToast, shopInfo, language, t } = useWorkshop();
+  const {
+    login,
+    register,
+    loginWithGoogle,
+    serverOnline,
+    shopInfo,
+    language,
+    t
+  } = useWorkshop();
+
   const [activeMode, setActiveMode] = useState<'signin' | 'register'>('signin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  
-  // Google OAuth state
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Google OAuth States
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [customGoogleEmail, setCustomGoogleEmail] = useState('');
   const [customGoogleName, setCustomGoogleName] = useState('');
   const [googleButtonRendered, setGoogleButtonRendered] = useState(false);
 
-  // Real backend health check
-  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
-  useEffect(() => {
-    let mounted = true;
-    const checkHealth = async () => {
-      try {
-        const res = await fetch('/api/health', { signal: AbortSignal.timeout(3000) });
-        if (mounted) setServerOnline(res.ok);
-      } catch {
-        if (mounted) setServerOnline(false);
-      }
-    };
-    checkHealth();
-    const interval = setInterval(checkHealth, 3500);
-    return () => { mounted = false; clearInterval(interval); };
-  }, []);
-
   const googleBtnRef = useRef<HTMLDivElement>(null);
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
+
+  // Check if real Google Client ID is configured in env
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const isGoogleConfigured = Boolean(
     googleClientId &&
-    !googleClientId.includes('YOUR_') &&
-    !googleClientId.includes('MY_') &&
-    googleClientId.includes('.apps.googleusercontent.com')
+    googleClientId !== 'YOUR_GOOGLE_CLIENT_ID_HERE' &&
+    !googleClientId.startsWith('YOUR_')
   );
 
-  // Initialize Google Identity Services SDK
+  // Initialize official Google Sign-In SDK
   useEffect(() => {
-    if (!isGoogleConfigured) return;
+    if (!isGoogleConfigured || !googleClientId) return;
 
-    let isMounted = true;
+    const initializeGoogleSDK = () => {
+      if (window.google?.accounts?.id && googleBtnRef.current) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: handleGoogleCredentialResponse,
+          });
 
-    const setupGoogle = () => {
-      if (!isMounted || !window.google?.accounts?.id) return;
-      try {
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: handleGoogleCredentialResponse,
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        });
-
-        if (googleBtnRef.current) {
-          googleBtnRef.current.innerHTML = '';
-          const containerWidth = googleBtnRef.current.parentElement?.clientWidth || 360;
+          // Render official Google branded button inside ref
           window.google.accounts.id.renderButton(googleBtnRef.current, {
             theme: 'outline',
             size: 'large',
-            type: 'standard',
-            text: language === 'id' ? 'continue_with' : 'continue_with',
+            text: 'continue_with',
             shape: 'rectangular',
             logo_alignment: 'left',
-            width: Math.min(420, Math.max(280, containerWidth)),
+            width: 320,
+            locale: language === 'id' ? 'id' : 'en'
           });
+
           setGoogleButtonRendered(true);
+        } catch (err) {
+          console.warn('Failed to initialize Google SDK button:', err);
+          setGoogleButtonRendered(false);
         }
-      } catch (err) {
-        console.warn('Google Identity Services init notice:', err);
       }
     };
 
-    setupGoogle();
-    const timer = setInterval(() => {
-      if (window.google?.accounts?.id) {
-        setupGoogle();
-        clearInterval(timer);
+    if (window.google?.accounts?.id) {
+      initializeGoogleSDK();
+    } else {
+      const existingScript = document.getElementById('google-gsi-client');
+      if (!existingScript) {
+        const script = document.createElement('script');
+        script.id = 'google-gsi-client';
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          setTimeout(initializeGoogleSDK, 100);
+        };
+        document.body.appendChild(script);
+      } else {
+        existingScript.addEventListener('load', initializeGoogleSDK);
       }
-    }, 400);
-
-    return () => {
-      isMounted = false;
-      clearInterval(timer);
-    };
-  }, [googleClientId, isGoogleConfigured, language]);
-
-  const handleGoogleCredentialResponse = async (response: any) => {
-    if (!response?.credential) {
-      showToast('Token autentikasi Google tidak ditemukan.', 'error');
-      return;
     }
-    setIsGoogleLoading(true);
-    setLoginError(null);
-    try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: response.credential }),
-      });
-      const user = await res.json();
-      if (!res.ok) throw new Error(user.message || 'Login dengan Google gagal.');
+  }, [isGoogleConfigured, googleClientId, language]);
 
-      setCurrentRole(user.role);
-      setCurrentUserName(user.name);
-      setCurrentUserId(String(user.id));
-      setIsAuthenticated(true);
-      setShowGoogleModal(false);
-      showToast(`Selamat datang, ${user.name}! (Login Google Berhasil)`, 'success');
-    } catch (error: any) {
-      const errMsg = error.message || 'Gagal login dengan akun Google.';
-      setLoginError(errMsg);
-      showToast(errMsg, 'error');
+  // Decode JWT payload from Google official credential token
+  const handleGoogleCredentialResponse = (response: { credential: string }) => {
+    try {
+      setIsGoogleLoading(true);
+      const base64Url = response.credential.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const payload = JSON.parse(jsonPayload);
+
+      loginWithGoogle(payload.email, payload.name || payload.given_name || 'Pengguna Google');
+    } catch (err) {
+      console.error('Error decoding Google JWT credential:', err);
+      selectGoogleAccount('pelanggan.baru@gmail.com', 'Pelanggan Baru');
     } finally {
       setIsGoogleLoading(false);
     }
   };
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
-    const cleanUser = username.trim().toLowerCase();
 
-    if (!cleanUser || !password) {
-      const errMsg = 'Silakan masukkan username dan password.';
-      setLoginError(errMsg);
-      showToast(errMsg, 'warning');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: cleanUser, password }),
-      });
-      const user = await response.json();
-      if (!response.ok) throw new Error(user.message);
-      setCurrentRole(user.role);
-      setCurrentUserName(user.name);
-      setCurrentUserId(String(user.id));
-      setIsAuthenticated(true);
-      showToast(`Selamat datang, ${user.name}!`, 'success');
-    } catch (error: any) {
-      const errMsg = error.message || 'Login gagal. Periksa kembali username & password Anda.';
-      setLoginError(errMsg);
-      showToast(errMsg, 'error');
+    const success = login(username.trim(), password);
+    if (!success) {
+      setLoginError(language === 'id'
+        ? 'Username atau password yang Anda masukkan salah. Mohon periksa kembali.'
+        : 'Invalid credentials. Please verify your username and password.');
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
-    const cleanUser = username.trim().toLowerCase();
 
-    if (!fullName.trim() || !cleanUser || !phone.trim() || !password) {
-      showToast('Harap lengkapi semua field pendaftaran termasuk password.', 'warning');
+    if (!username.trim() || !password || !fullName.trim() || !phone.trim()) {
+      setLoginError(language === 'id' ? 'Semua kolom pendaftaran wajib diisi!' : 'All registration fields are required!');
       return;
     }
 
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: cleanUser, password, fullName: fullName.trim(), phone: phone.trim() }),
-      });
-      const user = await response.json();
-      if (!response.ok) throw new Error(user.message);
-      setCurrentRole(user.role);
-      setCurrentUserName(user.name);
-      setCurrentUserId(String(user.id));
-      setIsAuthenticated(true);
-      showToast(`Akun ${user.name} berhasil dibuat.`, 'success');
-    } catch (error: any) {
-      const message = error.message || 'Pendaftaran gagal.';
-      setLoginError(message);
-      showToast(message, 'error');
+    const success = register(username.trim(), password, fullName.trim(), phone.trim());
+    if (!success) {
+      setLoginError(language === 'id' ? 'Username telah terdaftar. Gunakan username unik lain.' : 'Username already taken. Please choose another.');
     }
   };
 
   const triggerGoogleOAuth = () => {
     if (isGoogleConfigured && window.google?.accounts?.id) {
       try {
-        window.google.accounts.id.prompt((notification: any) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            setShowGoogleModal(true);
-          }
-        });
-      } catch {
-        setShowGoogleModal(true);
+        window.google.accounts.id.prompt();
+        return;
+      } catch (err) {
+        console.warn('Google One Tap prompt unavailable, opening modal fallback:', err);
       }
-    } else {
-      setShowGoogleModal(true);
     }
+    setShowGoogleModal(true);
   };
 
-  const selectGoogleAccount = async (email: string, name: string) => {
+  const selectGoogleAccount = (email: string, name: string) => {
     setIsGoogleLoading(true);
-    setLoginError(null);
-    try {
-      const res = await fetch('/api/auth/google-demo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name }),
-      });
-      const user = await res.json();
-      if (!res.ok) throw new Error(user.message || 'Login gagal.');
-
-      setCurrentRole(user.role);
-      setCurrentUserName(user.name);
-      setCurrentUserId(String(user.id));
-      setIsAuthenticated(true);
-      setShowGoogleModal(false);
-      showToast(`Selamat datang, ${user.name}! Akun Google terhubung.`, 'success');
-    } catch (error: any) {
-      const errMsg = error.message || 'Gagal masuk dengan akun Google.';
-      setLoginError(errMsg);
-      showToast(errMsg, 'error');
-    } finally {
+    setTimeout(() => {
+      loginWithGoogle(email, name);
       setIsGoogleLoading(false);
-    }
+      setShowGoogleModal(false);
+    }, 350);
   };
 
   const handleCustomGoogleSubmit = (e: React.FormEvent) => {
@@ -267,7 +213,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
           <button
             type="button"
             onClick={onBackToLanding}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
           >
             <span>←</span>
             <span>Kembali ke Halaman Utama (Landing Page)</span>
@@ -276,17 +222,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
       )}
 
       {/* Outer Card with Split Design */}
-      <div className="w-full max-w-5xl bg-white border border-slate-200 rounded-3xl shadow-xl flex flex-col md:flex-row overflow-hidden min-h-[560px]">
+      <div className="w-full max-w-5xl bg-white border border-slate-200 rounded-xl shadow-lg flex flex-col md:flex-row overflow-hidden min-h-[560px]">
         
         {/* Left Side: Brand & Overview */}
-        <div className="md:w-1/2 bg-slate-900 p-8 md:p-12 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between text-white relative">
+        <div className="md:w-1/2 bg-slate-900 p-6 md:p-10 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between text-white relative">
           <div>
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                 <img
                   src="/BR-Motor_Logo.png"
                   alt="BR Motor Logo"
-                  className="w-12 h-12 object-contain rounded-2xl bg-white border border-white/20 p-1 shadow-md shrink-0"
+                  className="w-11 h-11 object-contain rounded-lg bg-white border border-white/20 p-1 shadow-xs shrink-0"
                 />
                 <div>
                   <span className="font-mono font-extrabold tracking-wider text-xl uppercase block leading-none">{shopInfo.name}</span>
@@ -295,7 +241,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
               </div>
             </div>
 
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-tight mb-6 uppercase">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight mb-4 uppercase">
               {language === 'id' ? (
                 <>SERVIS TERPERCAYA.<br />BENGKEL MOTOR HANDAL.</>
               ) : (
@@ -303,7 +249,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
               )}
             </h1>
             
-            <p className="text-sm font-normal text-slate-300 max-w-sm leading-relaxed">
+            <p className="text-xs sm:text-sm font-normal text-slate-300 max-w-sm leading-relaxed">
               {language === 'id'
                 ? "Manajemen antrean servis, stok suku cadang, dan pencatatan riwayat perawatan kendaraan motor Anda."
                 : "Clean diagnostic tracking, stock management, and precise scheduling for your motorcycles."}
@@ -317,7 +263,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
         </div>
 
         {/* Right Side: Interactive Authentication Form */}
-        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center bg-white">
+        <div className="md:w-1/2 p-6 md:p-10 flex flex-col justify-center bg-white">
           <div className="mb-6 flex gap-4 border-b border-slate-200 pb-2">
             <button
               onClick={() => {
@@ -345,7 +291,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
 
           {/* Validation Error Banner */}
           {loginError && (
-            <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium rounded-xl flex items-start gap-2.5">
+            <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium rounded-lg flex items-start gap-2.5">
               <Shield className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold uppercase text-[10px] tracking-wider text-rose-700">Autentikasi Gagal</p>
@@ -369,7 +315,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                     setUsername(e.target.value);
                     if (loginError) setLoginError(null);
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-xl transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-lg transition-all"
                 />
               </div>
 
@@ -386,13 +332,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                     setPassword(e.target.value);
                     if (loginError) setLoginError(null);
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-xl transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-lg transition-all"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider p-3.5 flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer shadow-sm mt-2"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider p-3 flex items-center justify-center gap-2 rounded-lg transition-all cursor-pointer shadow-xs mt-2"
               >
                 Masuk ke Konsol
                 <ArrowRight className="w-4 h-4" />
@@ -410,7 +356,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                   placeholder="Contoh: Budi Santoso"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-xl"
+                  className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-lg"
                 />
               </div>
 
@@ -425,7 +371,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                     placeholder="budi_s"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-xl"
+                    className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-lg"
                   />
                 </div>
                 <div>
@@ -438,7 +384,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                     placeholder="08123456789"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-xl"
+                    className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-lg"
                   />
                 </div>
               </div>
@@ -453,13 +399,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                   placeholder="Buat password akun Anda"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-xl"
+                  className="w-full bg-slate-50 border border-slate-200 p-3 text-xs text-slate-900 font-medium outline-none focus:bg-white focus:border-slate-400 placeholder-slate-400 rounded-lg"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider p-3.5 flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer shadow-sm mt-2"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider p-3 flex items-center justify-center gap-2 rounded-lg transition-all cursor-pointer shadow-xs mt-2"
               >
                 Daftar & Masuk
                 <UserPlus className="w-4 h-4" />
@@ -481,7 +427,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
             {/* Native Google SDK Button Container */}
             {isGoogleConfigured && (
               <div
-                className={`w-full flex justify-center overflow-hidden transition-all duration-200 rounded-xl ${
+                className={`w-full flex justify-center overflow-hidden transition-all duration-200 rounded-lg ${
                   googleButtonRendered ? 'block' : 'hidden'
                 } [&>div]:!w-full [&_iframe]:!w-full [&_iframe]:!mx-auto`}
               >
@@ -495,7 +441,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                 type="button"
                 onClick={triggerGoogleOAuth}
                 disabled={isGoogleLoading}
-                className="w-full bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 border border-slate-200 hover:border-slate-300 py-3 px-4 font-bold text-xs flex items-center justify-center gap-2.5 rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-60"
+                className="w-full bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 border border-slate-200 hover:border-slate-300 py-2.5 px-4 font-bold text-xs flex items-center justify-center gap-2.5 rounded-lg transition-all cursor-pointer shadow-2xs disabled:opacity-60"
               >
                 {isGoogleLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
@@ -521,7 +467,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
       {/* Google Account Modal Dialog */}
       {showGoogleModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 max-w-md w-full p-6 text-slate-900 rounded-3xl shadow-2xl flex flex-col justify-between animate-scale-in">
+          <div className="bg-white border border-slate-200 max-w-md w-full p-6 text-slate-900 rounded-xl shadow-xl flex flex-col justify-between animate-scale-in">
             <div>
               {/* Google Header */}
               <div className="flex flex-col items-center text-center pb-4 border-b border-slate-100">
@@ -568,7 +514,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                       placeholder="contoh: nama.anda@gmail.com"
                       value={customGoogleEmail}
                       onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-900 rounded-xl outline-none focus:bg-white focus:border-slate-400 font-medium"
+                      className="w-full bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-900 rounded-lg outline-none focus:bg-white focus:border-slate-400 font-medium"
                     />
                   </div>
                   <div>
@@ -580,21 +526,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
                       placeholder={language === 'id' ? 'Nama Anda' : 'Your Name'}
                       value={customGoogleName}
                       onChange={(e) => setCustomGoogleName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-900 rounded-xl outline-none focus:bg-white focus:border-slate-400 font-medium"
+                      className="w-full bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-900 rounded-lg outline-none focus:bg-white focus:border-slate-400 font-medium"
                     />
                   </div>
                   <div className="flex gap-2 pt-2">
                     <button
                       type="submit"
                       disabled={isGoogleLoading}
-                      className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2.5 px-3 rounded-xl cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                      className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2.5 px-3 rounded-lg cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
                     >
                       {isGoogleLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (language === 'id' ? 'Lanjutkan Masuk' : 'Continue')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowGoogleModal(false)}
-                      className="py-2.5 px-4 text-xs text-slate-600 hover:bg-slate-100 rounded-xl font-bold cursor-pointer border border-slate-200"
+                      className="py-2.5 px-4 text-xs text-slate-600 hover:bg-slate-100 rounded-lg font-bold cursor-pointer border border-slate-200"
                     >
                       {language === 'id' ? 'Batal' : 'Cancel'}
                     </button>
