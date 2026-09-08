@@ -102,6 +102,7 @@ interface WorkshopContextType {
   updateWorkOrder: (id: string, updated: Partial<WorkOrder>) => void;
   deleteWorkOrder: (id: string) => void;
   checkoutWorkOrder: (id: string, discount: number, paymentMethod?: WorkOrder['paymentMethod'], cashTendered?: number, changeAmount?: number) => void;
+  processPayment: (id: string, paymentMethod?: WorkOrder['paymentMethod'], discount?: number, cashTendered?: number, changeAmount?: number) => void;
 
   // Spare Parts
   addSparePart: (part: Omit<SparePart, 'id'>) => void;
@@ -530,8 +531,11 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const newId = `wo-${1000 + workOrders.length + 1}`;
 
     // Calculate Costs
-    const serviceCost = wo.services.reduce((acc, curr) => acc + curr.price, 0);
-    const sparePartCost = wo.sparePartsUsed.reduce((acc, curr) => acc + curr.totalPrice, 0);
+    const serviceCost = (wo.services || []).reduce((acc, curr) => acc + (curr.price || 0), 0);
+    const sparePartCost = (wo.sparePartsUsed || []).reduce(
+      (acc, curr) => acc + (curr.totalPrice ?? (((curr.pricePerUnit ?? (curr as any).price ?? 0) * (curr.quantity || 1))) ?? 0),
+      0
+    );
     const total = serviceCost + sparePartCost;
 
     const newWorkOrder: WorkOrder = {
@@ -581,51 +585,43 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateWorkOrderStatus = (id: string, status: WorkOrderStatus) => {
-    const targetWo = workOrders.find((w) => w.id === id);
-    if (!targetWo) return;
-
     setWorkOrders((prev) =>
       prev.map((wo) => {
         if (wo.id === id) {
-          const updates: Partial<WorkOrder> = { status };
+          const updated = { ...wo, status };
           if (status === 'completed') {
-            updates.completedAt = new Date().toISOString();
+            updated.completedAt = new Date().toISOString();
           } else if (status === 'picked_up') {
-            updates.pickedUpAt = new Date().toISOString();
+            updated.pickedUpAt = new Date().toISOString();
           }
-          return { ...wo, ...updates };
+          return updated;
         }
         return wo;
       })
     );
+
+    // If completed, mechanic becomes available
+    if (status === 'completed') {
+      const targetWo = workOrders.find((w) => w.id === id);
+      if (targetWo && targetWo.assignedMechanicId) {
+        setMechanics((prev) =>
+          prev.map((m) =>
+            m.id === targetWo.assignedMechanicId
+              ? {
+                  ...m,
+                  status: 'available',
+                  assignedJobsCount: Math.max(0, m.assignedJobsCount - 1),
+                  completedJobsCount: m.completedJobsCount + 1
+                }
+              : m
+          )
+        );
+      }
+    }
+
     void api(`/api/work-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) })
       .then(refreshDatabase)
       .catch((error) => showToast(error.message, 'error'));
-
-    // Update Mechanic's workload if status changes
-    if (status === 'completed' || status === 'picked_up') {
-      // Release mechanic back to available
-      setMechanics((prev) =>
-        prev.map((m) => {
-          if (m.id === targetWo.assignedMechanicId) {
-            // Only decrease assigned jobs if positive
-            const activeJobs = Math.max(0, m.assignedJobsCount - 1);
-            return {
-              ...m,
-              status: activeJobs === 0 ? 'available' : m.status,
-              assignedJobsCount: activeJobs,
-              completedJobsCount: m.completedJobsCount + 1
-            };
-          }
-          return m;
-        })
-      );
-    } else if (status === 'waiting_parts') {
-      // Mechanic is technically still holding it but waiting
-      showToast(`Work Order ${id} waiting for spare parts stock`, 'warning');
-      addAuditLog("Work Order Delayed", `Work Order ${id} marked as WAITING PARTS due to parts shortage`, 'work_order');
-      return;
-    }
 
     showToast(`Work Order ${id} is now [${status.toUpperCase().replace('_', ' ')}]`, 'success');
     addAuditLog("Work Order Updated", `Work Order ${id} status set to ${status.toUpperCase().replace('_', ' ')}`, 'work_order');
@@ -637,8 +633,11 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (wo.id === id) {
           const merged = { ...wo, ...updated };
           // Recalculate costs if services or parts changed
-          const serviceCost = merged.services.reduce((acc, curr) => acc + curr.price, 0);
-          const sparePartCost = merged.sparePartsUsed.reduce((acc, curr) => acc + curr.totalPrice, 0);
+          const serviceCost = (merged.services || []).reduce((acc, curr) => acc + (curr.price || 0), 0);
+          const sparePartCost = (merged.sparePartsUsed || []).reduce(
+            (acc, curr) => acc + (curr.totalPrice ?? (((curr.pricePerUnit ?? (curr as any).price ?? 0) * (curr.quantity || 1))) ?? 0),
+            0
+          );
           const discount = merged.costs?.discount || 0;
           merged.costs = {
             serviceCost,
@@ -761,6 +760,16 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       'success'
     );
     addAuditLog("Billing Invoice Settled", `Payment of ${shopInfo.currency} ${finalAmount.toLocaleString('id-ID')} via ${paymentMethod} received for Work Order ${id}. Discount applied: ${shopInfo.currency} ${discount.toLocaleString('id-ID')}`, 'payment');
+  };
+
+  const processPayment = (
+    id: string,
+    paymentMethod: WorkOrder['paymentMethod'] = 'cash',
+    discount: number = 0,
+    cashTendered?: number,
+    changeAmount?: number
+  ) => {
+    checkoutWorkOrder(id, discount, paymentMethod, cashTendered, changeAmount);
   };
 
   // --- SPARE PARTS INVENTORY CRUD ---
@@ -985,6 +994,7 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateWorkOrder,
         deleteWorkOrder,
         checkoutWorkOrder,
+        processPayment,
         addSparePart,
         updateSparePart,
         deleteSparePart,

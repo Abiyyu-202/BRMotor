@@ -6,6 +6,7 @@
 import React, { useState, useRef } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { UserRole } from '../types';
+import { DeletionApprovalPanel } from '../components/DeletionApprovalPanel';
 import {
   Settings as SettingsIcon,
   Store,
@@ -21,28 +22,25 @@ import {
   ShieldCheck,
   Users,
   Globe,
-  Check,
-  X,
-  Trash2
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
   const {
     shopInfo,
-    updateShopInfo,
+    setShopInfo,
+    currentUserId,
     currentRole,
     setCurrentRole,
-    currentUser,
-    updateUser,
+    currentUserName,
+    setCurrentUserName,
     customers,
+    addCustomer,
+    updateCustomer,
     vehicles,
     workOrders,
     spareParts,
     mechanics,
     bookings,
-    deleteRequests,
-    approveDeleteRequest,
-    rejectDeleteRequest,
     exportDatabaseJSON,
     importDatabaseJSON,
     resetDatabaseToDefault,
@@ -61,11 +59,17 @@ export const Settings: React.FC = () => {
   const [currency, setCurrency] = useState(shopInfo.currency);
 
   // User Profile Form State
-  const [userFullName, setUserFullName] = useState(currentUser?.name || '');
-  const [userPhone, setUserPhone] = useState(currentUser?.phone || '');
-  const [userAddress, setUserAddress] = useState(currentUser?.address || '');
-  const [userEmail, setUserEmail] = useState(currentUser?.email || '');
-  const [waNotifications, setWaNotifications] = useState(currentUser?.notificationPreferences?.whatsappServiceReady ?? true);
+  const matchedCustomer = customers.find(
+    (c) =>
+      String(c.id) === String(currentUserId) ||
+      (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
+  ) || customers[0];
+
+  const [userFullName, setUserFullName] = useState(currentUserName || matchedCustomer?.name || '');
+  const [userPhone, setUserPhone] = useState(matchedCustomer?.phone || '081234567890');
+  const [userAddress, setUserAddress] = useState(matchedCustomer?.address || 'Jl. Raya Darmo No. 45, Surabaya');
+  const [userEmail, setUserEmail] = useState(matchedCustomer?.email || 'pelanggan@example.com');
+  const [waNotifications, setWaNotifications] = useState(true);
 
   // File import ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,63 +80,77 @@ export const Settings: React.FC = () => {
   // Save Shop General Info
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
-    updateShopInfo({
+    if (!shopName.trim() || !shopAddress.trim() || !shopPhone.trim() || !shopEmail.trim()) {
+      showToast(
+        language === 'id'
+          ? 'Semua data kontak wajib diisi untuk menyimpan konfigurasi bengkel'
+          : 'All contact details are required to configure shop settings',
+        'error'
+      );
+      return;
+    }
+
+    setShopInfo({
       name: shopName,
       address: shopAddress,
       phone: shopPhone,
       email: shopEmail,
-      taxRate: Number(taxRate),
+      taxRate: Number(taxRate) || 0,
       currency,
     });
-    showToast('Konfigurasi bengkel berhasil disimpan!', 'success');
+    showToast(
+      language === 'id' ? 'Konfigurasi bengkel berhasil disimpan!' : 'Shop configuration saved successfully!',
+      'success'
+    );
   };
 
   // Save Current User Profile Info
   const handleSaveUserProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
+    if (!userFullName.trim()) {
+      showToast(language === 'id' ? 'Nama lengkap wajib diisi!' : 'Full name is required!', 'error');
+      return;
+    }
 
-    updateUser(currentUser.id, {
-      name: userFullName,
-      phone: userPhone,
-      address: userAddress,
-      email: userEmail,
-      notificationPreferences: {
-        ...(currentUser.notificationPreferences || { emailPromos: false, smsAlerts: false }),
-        whatsappServiceReady: waNotifications,
-      }
-    });
+    if (matchedCustomer) {
+      updateCustomer(matchedCustomer.id, {
+        name: userFullName,
+        phone: userPhone,
+        address: userAddress,
+        email: userEmail
+      });
+    } else {
+      addCustomer({
+        name: userFullName,
+        phone: userPhone,
+        address: userAddress,
+        email: userEmail
+      });
+    }
 
+    setCurrentUserName(userFullName);
     showToast(
       language === 'id'
-        ? 'Profil Anda berhasil diperbarui!'
-        : 'Your profile has been updated successfully!',
+        ? 'Profil dan kontak Anda berhasil diperbarui!'
+        : 'Your profile and contact info updated successfully!',
       'success'
     );
   };
 
   // Handle JSON File selection for restore
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileReader = new FileReader();
     const file = e.target.files?.[0];
+    if (!file) return;
 
-    if (file) {
-      fileReader.readAsText(file, 'UTF-8');
-      fileReader.onload = (event) => {
-        try {
-          const content = event.target?.result as string;
-          const parsed = JSON.parse(content);
-          const success = importDatabaseJSON(parsed);
-          if (success) {
-            showToast('Database berhasil dipulihkan dari file JSON!', 'success');
-          } else {
-            showToast('Format file JSON tidak cocok atau rusak.', 'error');
-          }
-        } catch (err) {
-          showToast('Gagal memproses file cadangan JSON.', 'error');
-        }
-      };
-    }
+    const fileReader = new FileReader();
+    fileReader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        importDatabaseJSON(content);
+      }
+    };
+    fileReader.readAsText(file, 'UTF-8');
+    if (e.target) e.target.value = '';
   };
 
   const rolesList: { role: UserRole; title: string; desc: string; permissions: string }[] = [
@@ -180,7 +198,9 @@ export const Settings: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            Pengaturan identitas bengkel, profil saya, bahasa tampilan antarmuka, dan manajemen database JSON.
+            {currentRole === 'owner'
+              ? 'Pengaturan identitas bengkel, profil saya, bahasa tampilan antarmuka, dan manajemen database JSON.'
+              : 'Pengaturan identitas bengkel, profil saya, dan bahasa tampilan antarmuka.'}
           </p>
         </div>
       </div>
@@ -344,143 +364,147 @@ export const Settings: React.FC = () => {
             </div>
           </div>
 
-          {/* Database JSON Manager Card */}
-          <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2 pb-3 border-b border-slate-100">
-              <Database className="w-4 h-4 text-slate-800" />
-              {language === 'id' ? 'Database JSON & Cadangan File (Local Storage)' : 'JSON Database & Backup Manager'}
-            </h2>
-            <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">
-              {language === 'id'
-                ? 'Seluruh data operasional bengkel disimpan secara otomatis dalam format JSON di memori browser (Local Storage). Anda dapat mengunduh salinan file .json, mengimpor cadangan data, atau mereset ke data awal pabrik.'
-                : 'All workshop records are automatically stored in JSON format within browser LocalStorage. You can export a .json backup file, import backup data, or reset to factory defaults.'}
-            </p>
+          {/* Database JSON Manager Card (Owner Only) */}
+          {currentRole === 'owner' && (
+            <>
+              <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
+                <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2 pb-3 border-b border-slate-100">
+                  <Database className="w-4 h-4 text-slate-800" />
+                  {language === 'id' ? 'Database JSON & Cadangan File' : 'JSON Database & Backup Manager'}
+                </h2>
+                <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">
+                  {language === 'id'
+                    ? 'Seluruh data operasional bengkel disimpan di database bengkel. Anda dapat mengunduh salinan file .json cadangan data.'
+                    : 'All workshop records can be exported in JSON format as a database backup.'}
+                </p>
 
-            {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-5 p-3.5 bg-slate-50 rounded-lg border border-slate-200/80">
-              <div className="flex items-center gap-2">
-                <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-slate-400">Pelanggan</p>
-                  <p className="text-xs font-bold text-slate-900">{customers.length} data</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-slate-400">Kendaraan</p>
-                  <p className="text-xs font-bold text-slate-900">{vehicles.length} unit</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-slate-400">SPK Servis</p>
-                  <p className="text-xs font-bold text-slate-900">{workOrders.length} order</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-slate-400">Suku Cadang</p>
-                  <p className="text-xs font-bold text-slate-900">{spareParts.length} SKU</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-slate-400">Teknisi</p>
-                  <p className="text-xs font-bold text-slate-900">{mechanics.length} orang</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-slate-400">Booking</p>
-                  <p className="text-xs font-bold text-slate-900">{bookings.length} jadwal</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Hidden File Input for Import */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".json,application/json"
-              className="hidden"
-            />
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={exportDatabaseJSON}
-                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98"
-              >
-                <Download className="w-4 h-4" />
-                {language === 'id' ? 'Unduh Backup JSON' : 'Export JSON Backup'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98"
-              >
-                <Upload className="w-4 h-4 text-slate-600" />
-                {language === 'id' ? 'Impor File JSON' : 'Import JSON File'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsResetConfirmOpen(true)}
-                className="px-3.5 py-2 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ml-auto active:scale-98"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                {language === 'id' ? 'Reset Data Default' : 'Reset Default Data'}
-              </button>
-            </div>
-          </div>
-
-          {/* Reset Confirmation Modal */}
-          {isResetConfirmOpen && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-scale-in space-y-4">
-                <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center mx-auto">
-                  <AlertTriangle className="w-6 h-6" />
+                {/* Quick Metrics Bar */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-5 p-3.5 bg-slate-50 rounded-lg border border-slate-200/80">
+                  <div className="flex items-center gap-2">
+                    <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
+                    <div>
+                      <p className="text-[9px] uppercase font-bold text-slate-400">Pelanggan</p>
+                      <p className="text-xs font-bold text-slate-900">{customers.length} data</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
+                    <div>
+                      <p className="text-[9px] uppercase font-bold text-slate-400">Kendaraan</p>
+                      <p className="text-xs font-bold text-slate-900">{vehicles.length} unit</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
+                    <div>
+                      <p className="text-[9px] uppercase font-bold text-slate-400">SPK Servis</p>
+                      <p className="text-xs font-bold text-slate-900">{workOrders.length} order</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
+                    <div>
+                      <p className="text-[9px] uppercase font-bold text-slate-400">Suku Cadang</p>
+                      <p className="text-xs font-bold text-slate-900">{spareParts.length} SKU</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
+                    <div>
+                      <p className="text-[9px] uppercase font-bold text-slate-400">Teknisi</p>
+                      <p className="text-xs font-bold text-slate-900">{mechanics.length} orang</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileJson className="w-4 h-4 text-slate-700 shrink-0" />
+                    <div>
+                      <p className="text-[9px] uppercase font-bold text-slate-400">Booking</p>
+                      <p className="text-xs font-bold text-slate-900">{bookings.length} jadwal</p>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="text-center space-y-2">
-                  <h3 className="text-base font-bold text-slate-900">
-                    {language === 'id' ? 'Konfirmasi Reset Database' : 'Confirm Reset Database'}
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                    {language === 'id'
-                      ? 'Tindakan ini akan menghapus semua entri pelanggan, kendaraan, SPK, dan suku cadang yang tersimpan di browser Anda dan mengembalikan ke data awal pabrik.'
-                      : 'This action will clear custom records and restore original factory sample data. Are you sure?'}
-                  </p>
-                </div>
+                {/* Hidden File Input for Import */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept=".json,application/json"
+                  className="hidden"
+                />
 
-                <div className="flex items-center gap-2.5 pt-2">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <button
                     type="button"
-                    onClick={() => setIsResetConfirmOpen(false)}
-                    className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-all"
+                    onClick={exportDatabaseJSON}
+                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98"
                   >
-                    {language === 'id' ? 'Batal' : 'Cancel'}
+                    <Download className="w-4 h-4" />
+                    {language === 'id' ? 'Unduh Backup JSON' : 'Export JSON Backup'}
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => {
-                      resetDatabaseToDefault();
-                      setIsResetConfirmOpen(false);
-                    }}
-                    className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-all shadow-xs"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98"
                   >
-                    {language === 'id' ? 'Ya, Reset Data' : 'Yes, Reset Data'}
+                    <Upload className="w-4 h-4 text-slate-600" />
+                    {language === 'id' ? 'Impor File JSON' : 'Import JSON File'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsResetConfirmOpen(true)}
+                    className="px-3.5 py-2 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ml-auto active:scale-98"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    {language === 'id' ? 'Reset Data Default' : 'Reset Default Data'}
                   </button>
                 </div>
               </div>
-            </div>
+
+              {/* Reset Confirmation Modal */}
+              {isResetConfirmOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-scale-in space-y-4">
+                    <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center mx-auto">
+                      <AlertTriangle className="w-6 h-6" />
+                    </div>
+
+                    <div className="text-center space-y-2">
+                      <h3 className="text-base font-bold text-slate-900">
+                        {language === 'id' ? 'Konfirmasi Reset Database' : 'Confirm Reset Database'}
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                        {language === 'id'
+                          ? 'Tindakan ini akan mengembalikan ke data awal bengkel. Apakah Anda yakin ingin melanjutkan?'
+                          : 'This action will reset the shop data. Are you sure?'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsResetConfirmOpen(false)}
+                        className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-all"
+                      >
+                        {language === 'id' ? 'Batal' : 'Cancel'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetDatabaseToDefault();
+                          setIsResetConfirmOpen(false);
+                        }}
+                        className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-all shadow-xs"
+                      >
+                        {language === 'id' ? 'Ya, Reset Data' : 'Yes, Reset Data'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Shop specs configuration */}
@@ -580,7 +604,7 @@ export const Settings: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column (1 Gridwide): Quick Switch User role */}
+        {/* Right Column (1 Gridwide): Quick Switch User role & Deletion Approvals */}
         <div className="space-y-6">
           <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2 pb-3 border-b border-slate-100">
@@ -624,88 +648,9 @@ export const Settings: React.FC = () => {
           </div>
 
           {/* Deletion Approval Panel (owner only) */}
-          <DeletionApprovalPanel />
+          {currentRole === 'owner' && <DeletionApprovalPanel />}
         </div>
       </div>
-    </div>
-  );
-};
-
-// Panel for Owner approval of deletion requests
-const DeletionApprovalPanel: React.FC = () => {
-  const { currentRole, deleteRequests, approveDeleteRequest, rejectDeleteRequest, showToast } = useWorkshop();
-
-  if (currentRole !== 'owner') return null;
-
-  const pendingRequests = deleteRequests.filter((r) => r.status === 'pending');
-
-  return (
-    <div className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs">
-      <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
-        <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-          <Trash2 className="w-4 h-4 text-rose-600" />
-          Persetujuan Hapus Data
-        </h2>
-        {pendingRequests.length > 0 && (
-          <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-md">
-            {pendingRequests.length} Baru
-          </span>
-        )}
-      </div>
-      <p className="text-xs text-slate-500 mb-4 font-medium">
-        Permintaan penghapusan data pelanggan, kendaraan, SPK, atau booking dari staf yang membutuhkan persetujuan Owner.
-      </p>
-
-      {pendingRequests.length === 0 ? (
-        <div className="text-center py-6 text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200 font-medium">
-          Tidak ada permintaan penghapusan data yang tertunda.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {pendingRequests.map((req) => (
-            <div key={req.id} className="p-3.5 bg-rose-50/50 border border-rose-200 rounded-lg space-y-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className="text-[9px] font-mono uppercase font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-md">
-                    {req.targetType}
-                  </span>
-                  <p className="text-xs font-bold text-slate-900 mt-1">{req.targetName}</p>
-                </div>
-                <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                  {new Date(req.createdAt).toLocaleDateString('id-ID')}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-500 font-medium">
-                Diminta oleh: <strong className="text-slate-700">{req.requestedByRole.toUpperCase()}</strong>
-              </p>
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    approveDeleteRequest(req.id);
-                    showToast('Permintaan hapus disetujui, data telah dihapus.', 'success');
-                  }}
-                  className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Setujui Hapus
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    rejectDeleteRequest(req.id);
-                    showToast('Permintaan hapus ditolak.', 'info');
-                  }}
-                  className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-md text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Tolak
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 };

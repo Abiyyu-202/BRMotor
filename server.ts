@@ -41,7 +41,7 @@ async function log(action: string, details: string, category: string, userRole =
 
 async function readWorkOrders() {
   const orders = await query(`
-    SELECT w.*, v.plate_number, v.brand, v.model, c.id AS customer_id, c.name AS customer_name,
+    SELECT w.*, v.plate_number, v.brand, v.model, c.id AS customer_id, c.name AS customer_name, c.phone AS customer_phone,
            m.name AS mechanic_name, i.id AS invoice_id, i.payment_status, i.payment_method,
            i.subtotal_services, i.subtotal_spareparts, i.discount, i.grand_total,
            i.cash_tendered, i.change_amount, i.updated_at AS paid_at
@@ -77,6 +77,7 @@ async function readWorkOrders() {
     return {
       id: id(row.id), bookingId: row.booking_id ? id(row.booking_id) : undefined,
       customerId: id(row.customer_id || 1), customerName: row.customer_name || 'Pelanggan Umum',
+      customerPhone: row.customer_phone || '',
       vehicleId: id(row.vehicle_id || 1), licensePlate: row.plate_number || 'N/A', vehicleModel: `${row.brand || 'Motor'} ${row.model || 'Umum'}`.trim(),
       complaint: row.complaint || '', diagnosis: row.diagnosis || '', assignedMechanicId: id(row.mechanic_id || 1),
       assignedMechanicName: row.mechanic_name || 'Mekanik BR Motor', services, sparePartsUsed,
@@ -503,7 +504,7 @@ async function replaceDetails(connection: mysql.PoolConnection, orderId: number,
   await connection.query('DELETE FROM service_details WHERE work_order_id=?', [orderId]);
 
   // 3. Insert services
-  for (const service of services) {
+  for (const service of (services || [])) {
     let dbServiceId = service.serviceId;
     if (typeof dbServiceId === 'string' && !/^\d+$/.test(dbServiceId)) {
       const serviceName = service.name || dbServiceId;
@@ -518,17 +519,20 @@ async function replaceDetails(connection: mysql.PoolConnection, orderId: number,
         dbServiceId = created.insertId;
       }
     }
-    await connection.query('INSERT INTO service_details (work_order_id,service_id,quantity,price,created_at,updated_at) VALUES (?,?,1,?,NOW(),NOW())',[orderId, dbServiceId, service.price]);
+    await connection.query('INSERT INTO service_details (work_order_id,service_id,quantity,price,created_at,updated_at) VALUES (?,?,1,?,NOW(),NOW())',[orderId, dbServiceId, Number(service.price || 0)]);
   }
 
   // 4. Insert spare parts and deduct stock immediately from warehouse
-  for (const part of parts) {
-    const qty = Number(part.quantity || 1);
-    await connection.query('INSERT INTO service_details (work_order_id,sparepart_id,quantity,price,created_at,updated_at) VALUES (?,?,?, ?,NOW(),NOW())',[orderId,part.partId,qty,part.pricePerUnit]);
-    await connection.query('UPDATE spareparts SET stock=GREATEST(0, stock-?) WHERE id=?', [qty, part.partId]);
+  for (const part of (parts || [])) {
+    const partId = part.partId || part.sparePartId;
+    if (!partId) continue;
+    const qty = Number(part.quantity || part.qty || 1);
+    const price = Number(part.pricePerUnit ?? part.price ?? 0);
+    await connection.query('INSERT INTO service_details (work_order_id,sparepart_id,quantity,price,created_at,updated_at) VALUES (?,?,?, ?,NOW(),NOW())',[orderId,partId,qty,price]);
+    await connection.query('UPDATE spareparts SET stock=GREATEST(0, stock-?) WHERE id=?', [qty, partId]);
     await connection.query(
       "INSERT INTO stock_transactions (sparepart_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?, 'stock_out', ?, ?, 'Pemakaian servis SPK', NOW())",
-      [part.partId, qty, orderId]
+      [partId, qty, orderId]
     );
   }
 }

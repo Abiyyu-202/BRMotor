@@ -37,9 +37,9 @@ export const Payments: React.FC = () => {
   const [discountInput, setDiscountInput] = useState<number>(0);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
 
-  // Orders filtered
+  // Orders filtered - show all unpaid work orders
   const pendingOrders = workOrders.filter(
-    (wo) => wo.paymentStatus === 'unpaid' && (wo.status === 'completed' || wo.status === 'quality_control' || wo.status === 'picked_up')
+    (wo) => wo.paymentStatus === 'unpaid'
   );
 
   const paidOrders = workOrders.filter(
@@ -48,15 +48,20 @@ export const Payments: React.FC = () => {
 
   const handleSelectWO = (wo: WorkOrder) => {
     setSelectedWO(wo);
-    setDiscountInput(wo.costs.discount || 0);
+    const discount = wo.costs?.discount || 0;
+    setDiscountInput(discount);
     // Auto populate exact cash
-    const totalDue = Math.max(0, (wo.costs.serviceCost + wo.costs.sparePartCost) - (wo.costs.discount || 0));
+    const serviceCost = wo.costs?.serviceCost || 0;
+    const sparePartCost = wo.costs?.sparePartCost || 0;
+    const totalDue = Math.max(0, (serviceCost + sparePartCost) - discount);
     setCashGiven(totalDue);
   };
 
   const calculateTotals = () => {
     if (!selectedWO) return { subtotal: 0, discount: 0, grandTotal: 0, changeDue: 0 };
-    const subtotal = selectedWO.costs.serviceCost + selectedWO.costs.sparePartCost;
+    const serviceCost = selectedWO.costs?.serviceCost || 0;
+    const sparePartCost = selectedWO.costs?.sparePartCost || 0;
+    const subtotal = serviceCost + sparePartCost;
     const discount = Math.max(0, Math.min(subtotal, discountInput));
     const grandTotal = Math.max(0, subtotal - discount);
     const changeDue = paymentMethod === 'cash' ? Math.max(0, cashGiven - grandTotal) : 0;
@@ -104,15 +109,22 @@ export const Payments: React.FC = () => {
     const cleanPhone = selectedWO.customerPhone?.replace(/\D/g, '') || '';
     const phoneWithCountry = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
 
-    const partsList = selectedWO.sparePartsUsed.length > 0
-      ? selectedWO.sparePartsUsed.map(p => `• ${p.name} (${p.quantity}x) = ${formatRupiah(p.price * p.quantity)}`).join('\n')
+    const partsList = (selectedWO.sparePartsUsed || []).length > 0
+      ? selectedWO.sparePartsUsed.map(p => {
+          const unitPrice = p.pricePerUnit ?? (p as any).price ?? 0;
+          return `• ${p.name} (${p.quantity}x) = ${formatRupiah(unitPrice * p.quantity)}`;
+        }).join('\n')
       : '• Tidak ada penggantian part';
 
-    const servicesList = selectedWO.services.length > 0
+    const servicesList = (selectedWO.services || []).length > 0
       ? selectedWO.services.map(s => `• ${s.name} = ${formatRupiah(s.price)}`).join('\n')
       : '• Servis standar';
 
-    const msg = `*${shopInfo.name.toUpperCase()} - NOTA PEMBAYARAN ELEKTRONIK*\n━━━━━━━━━━━━━━━━━━━━\nNo. SPK: *${selectedWO.id}*\nPelanggan: *${selectedWO.customerName}*\nMotor: *${selectedWO.vehicleModel}* (${selectedWO.licensePlate})\n\n*RINCIAN JASA:*\n${servicesList}\n\n*RINCIAN SUKU CADANG:*\n${partsList}\n\n━━━━━━━━━━━━━━━━━━━━\nSubtotal: ${formatRupiah(selectedWO.costs.serviceCost + selectedWO.costs.sparePartCost)}\nDiskon: -${formatRupiah(selectedWO.costs.discount || 0)}\n*TOTAL AKHIR: ${formatRupiah(selectedWO.costs.total)}*\nMetode: ${selectedWO.paymentMethod?.toUpperCase() || 'TUNAI'} (LUNAS \u2713)\n━━━━━━━━━━━━━━━━━━━━\n*Alamat:* ${shopInfo.address}\nTerima kasih telah mempercayakan motor Anda kepada bengkel kami!`;
+    const serviceCost = selectedWO.costs?.serviceCost || 0;
+    const sparePartCost = selectedWO.costs?.sparePartCost || 0;
+    const totalCost = selectedWO.costs?.total || (serviceCost + sparePartCost);
+
+    const msg = `*${shopInfo.name.toUpperCase()} - NOTA PEMBAYARAN ELEKTRONIK*\n━━━━━━━━━━━━━━━━━━━━\nNo. SPK: *${selectedWO.id}*\nPelanggan: *${selectedWO.customerName}*\nMotor: *${selectedWO.vehicleModel}* (${selectedWO.licensePlate})\n\n*RINCIAN JASA:*\n${servicesList}\n\n*RINCIAN SUKU CADANG:*\n${partsList}\n\n━━━━━━━━━━━━━━━━━━━━\nSubtotal: ${formatRupiah(serviceCost + sparePartCost)}\nDiskon: -${formatRupiah(selectedWO.costs?.discount || 0)}\n*TOTAL AKHIR: ${formatRupiah(totalCost)}*\nMetode: ${selectedWO.paymentMethod?.toUpperCase() || 'TUNAI'} (LUNAS \u2713)\n━━━━━━━━━━━━━━━━━━━━\n*Alamat:* ${shopInfo.address}\nTerima kasih telah mempercayakan motor Anda kepada bengkel kami!`;
 
     const url = `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
@@ -227,7 +239,7 @@ export const Payments: React.FC = () => {
                       <p className="text-[10px] text-slate-500 font-medium mt-0.5">{wo.vehicleModel}</p>
                     </div>
                     <span className="font-mono text-xs font-bold text-slate-900">
-                      Rp {wo.costs.total.toLocaleString('id-ID')}
+                      Rp {(wo.costs?.total ?? 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 );
@@ -465,12 +477,16 @@ export const Payments: React.FC = () => {
                       <span className="shrink-0">{formatRupiah(s.price)}</span>
                     </div>
                   ))}
-                  {selectedWO.sparePartsUsed.map((p, idx) => (
-                    <div key={`prt-${idx}`} className="flex justify-between">
-                      <span className="truncate pr-2">[Part] {p.name} ({p.quantity}x)</span>
-                      <span className="shrink-0">{formatRupiah(p.price * p.quantity)}</span>
-                    </div>
-                  ))}
+                  {(selectedWO.sparePartsUsed || []).map((p, idx) => {
+                    const unitPrice = p.pricePerUnit ?? (p as any).price ?? 0;
+                    const total = p.totalPrice ?? (unitPrice * p.quantity);
+                    return (
+                      <div key={`prt-${idx}`} className="flex justify-between">
+                        <span className="truncate pr-2">[Part] {p.name} ({p.quantity}x)</span>
+                        <span className="shrink-0">{formatRupiah(total)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="border-t border-dashed border-slate-300 my-3" />
@@ -616,15 +632,19 @@ export const Payments: React.FC = () => {
               </div>
             ))}
 
-            {selectedWO.sparePartsUsed.length > 0 && (
+            {(selectedWO.sparePartsUsed || []).length > 0 && (
               <>
                 <div className="font-bold pt-1">SUKU CADANG:</div>
-                {selectedWO.sparePartsUsed.map((p, idx) => (
-                  <div key={`print-prt-${idx}`} className="flex justify-between">
-                    <span>{p.name} x{p.quantity}</span>
-                    <span>{formatRupiah(p.price * p.quantity)}</span>
-                  </div>
-                ))}
+                {selectedWO.sparePartsUsed.map((p, idx) => {
+                  const unitPrice = p.pricePerUnit ?? (p as any).price ?? 0;
+                  const total = p.totalPrice ?? (unitPrice * p.quantity);
+                  return (
+                    <div key={`print-prt-${idx}`} className="flex justify-between">
+                      <span>{p.name} x{p.quantity}</span>
+                      <span>{formatRupiah(total)}</span>
+                    </div>
+                  );
+                })}
               </>
             )}
             <p className="border-b border-black">--------------------------------</p>

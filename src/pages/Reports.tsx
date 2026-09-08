@@ -56,12 +56,14 @@ export const Reports: React.FC = () => {
   // Top Selling Spare Parts
   const partUsageMap: Record<string, { name: string; qty: number; sales: number }> = {};
   paidOrders.forEach((wo) => {
-    wo.sparePartsUsed.forEach((part) => {
-      if (!partUsageMap[part.sparePartId]) {
-        partUsageMap[part.sparePartId] = { name: part.name, qty: 0, sales: 0 };
+    (wo.sparePartsUsed || []).forEach((part) => {
+      const partKey = part.partId || (part as any).sparePartId || part.name;
+      const unitPrice = part.pricePerUnit ?? (part as any).price ?? 0;
+      if (!partUsageMap[partKey]) {
+        partUsageMap[partKey] = { name: part.name, qty: 0, sales: 0 };
       }
-      partUsageMap[part.sparePartId].qty += part.quantity;
-      partUsageMap[part.sparePartId].sales += part.quantity * part.price;
+      partUsageMap[partKey].qty += part.quantity;
+      partUsageMap[partKey].sales += part.quantity * unitPrice;
     });
   });
 

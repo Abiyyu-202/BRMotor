@@ -26,18 +26,21 @@ import { NotificationHistoryModal } from './components/NotificationHistoryModal'
 
 // Icons
 import {
-  Wrench,
+  LayoutDashboard,
+  Clock,
   Users,
   Bike,
   Calendar,
-  LayoutDashboard,
+  Wrench,
+  UserCheck,
   Package,
   CreditCard,
+  BarChart3,
   TrendingUp,
   Settings as SettingsIcon,
-  Clock,
   Menu,
   X,
+  PlusCircle,
   Shield,
   HelpCircle,
   Bell,
@@ -65,7 +68,10 @@ function AppContent() {
     updateBookingStatus,
     pendingDeletionCount,
     bookings,
-    workOrders
+    workOrders,
+    createWorkOrder,
+    mechanics,
+    services: serviceItems
   } = useWorkshop();
 
   // Landing page or login screen view state when unauthenticated
@@ -130,10 +136,47 @@ function AppContent() {
 
   // Callback to handle booking check-in routing
   const handleCheckInDirect = (booking: Booking) => {
+    // Check if work order already exists for this booking
+    const existingWO = workOrders.find((w) => String(w.bookingId) === String(booking.id));
+    if (!existingWO) {
+      const assignedMech = mechanics.find((m) => m.status === 'available') || mechanics[0];
+      const defaultService = serviceItems.find(
+        (s) =>
+          s.name.toLowerCase().includes('ringan') ||
+          s.name.toLowerCase().includes('tune') ||
+          s.name.toLowerCase().includes('oli')
+      ) || serviceItems[0];
+
+      createWorkOrder({
+        bookingId: booking.id,
+        customerId: booking.customerId,
+        customerName: booking.customerName,
+        vehicleId: booking.vehicleId,
+        licensePlate: booking.licensePlate,
+        vehicleModel: booking.vehicleModel,
+        complaint: booking.notes || 'Pemeriksaan & Servis Rutin (Booking Online)',
+        diagnosis: 'Diterima dari antrean booking reservasi.',
+        assignedMechanicId: assignedMech?.id || '1',
+        assignedMechanicName: assignedMech?.name || 'Mekanik BR Motor',
+        services: defaultService
+          ? [
+              {
+                serviceId: defaultService.id,
+                name: defaultService.name,
+                price: defaultService.price,
+              },
+            ]
+          : [],
+        sparePartsUsed: [],
+        estimatedCompletionTime: booking.time || '14:00',
+        notes: booking.notes || `Antrean ${booking.queueNumber}`,
+      });
+    }
+
     updateBookingStatus(booking.id, 'checked-in');
-    setPrefilledBooking(booking);
+    setPrefilledBooking(null);
     setActiveTab('Work Orders');
-    showToast(`Berhasil check-in ${booking.customerName}. Membuka form SPK.`, 'info');
+    showToast(`Berhasil check-in ${booking.customerName}. Unit motor telah masuk ke Antre Servis!`, 'success');
   };
 
   const handleClearPrefilled = () => {
@@ -419,12 +462,10 @@ function AppContent() {
               </button>
             </div>
           </div>
-          {/* Backdrop Touch to dismiss */}
-          <div className="flex-1" onClick={() => setMobileSidebarOpen(false)} />
         </div>
       )}
 
-      {/* 3. MAIN WORKSPACE CONTAINER */}
+      {/* 3. MAIN WORKSPACE VIEWPORT */}
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Top Header Navbar */}
@@ -438,9 +479,9 @@ function AppContent() {
             >
               <Menu className="w-4 h-4" />
             </button>
-            <h2 className="text-xs font-bold tracking-wider text-slate-800 uppercase hidden sm:block">
-              {t.nav[activeTab as keyof typeof t.nav] || activeTab}
-            </h2>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest hidden sm:inline">BR MOTOR</span>
+            <span className="text-slate-300 hidden sm:inline">/</span>
+            <h2 className="text-sm font-bold text-slate-900">{t.nav[activeTab as keyof typeof t.nav] || activeTab}</h2>
           </div>
 
           {/* Widgets */}
@@ -467,10 +508,7 @@ function AppContent() {
                 <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
                   {currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U'}
                 </div>
-                <span className="truncate max-w-[130px] font-bold">{currentUserName}</span>
-                <span className="text-[9px] uppercase px-1.5 py-0.5 bg-white border border-slate-200 text-slate-600 rounded-md font-bold">
-                  {language === 'id' ? 'Edit Profil' : 'Profile'}
-                </span>
+                <span className="max-w-[100px] truncate">{currentUserName || 'Profil Saya'}</span>
               </button>
             )}
 
@@ -497,7 +535,7 @@ function AppContent() {
               <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               <span>{formattedDate}</span>
               <span className="text-slate-300">•</span>
-              <span className="font-bold text-slate-900">{formattedTime}</span>
+              <span>{formattedTime}</span>
             </div>
           </div>
         </header>
@@ -508,7 +546,7 @@ function AppContent() {
         </main>
       </div>
 
-      {/* Customer Profile Modal Portal */}
+      {/* Customer Self-Service Profile Modal */}
       <CustomerProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}

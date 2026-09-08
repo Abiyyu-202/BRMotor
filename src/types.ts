@@ -60,6 +60,8 @@ export interface WorkOrderSparePart {
   quantity: number;
   pricePerUnit: number;
   totalPrice: number;
+  sparePartId?: string;
+  price?: number;
 }
 
 export interface WorkOrderService {
@@ -73,6 +75,7 @@ export interface WorkOrder {
   bookingId?: string;
   customerId: string;
   customerName: string;
+  customerPhone?: string;
   vehicleId: string;
   licensePlate: string;
   vehicleModel: string;

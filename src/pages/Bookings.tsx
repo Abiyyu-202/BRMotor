@@ -17,7 +17,8 @@ import {
   AlertCircle,
   ChevronRight,
   ClipboardList,
-  Trash2
+  Trash2,
+  Wrench
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
@@ -35,7 +36,8 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
     deleteBooking,
     requestDelete,
     showToast,
-    currentUser,
+    currentUserId,
+    currentUserName,
     currentRole
   } = useWorkshop();
 
@@ -44,7 +46,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
   const canDeleteDirectly = (role: UserRole) => role === 'owner';
 
   // Helper date function
-  const getTodayLocalDate = () => {
+  const getLocalDateStr = () => {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -64,29 +66,91 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [bookingType, setBookingType] = useState<BookingType>('scheduled');
-  const [scheduleDate, setScheduleDate] = useState(getTodayLocalDate());
+  const [scheduleDate, setScheduleDate] = useState(getLocalDateStr());
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [notes, setNotes] = useState('');
 
   // Find customer associated with user account
   const userCustomer = useMemo(() => {
-    if (currentRole === 'user' && currentUser?.id) {
-      return customers.find(c => c.userId === currentUser.id);
+    if (currentRole !== 'user') return null;
+    return (
+      customers.find(
+        (c) =>
+          (currentUserId && String(c.id) === String(currentUserId)) ||
+          (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
+      ) || null
+    );
+  }, [customers, currentUserId, currentUserName, currentRole]);
+
+  // All customer IDs belonging to this user
+  const userCustomerIds = useMemo(() => {
+    if (currentRole !== 'user') return [];
+    const ids = new Set<string>();
+    if (currentUserId) ids.add(String(currentUserId));
+    if (userCustomer?.id) ids.add(String(userCustomer.id));
+    customers.forEach((c) => {
+      if (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase()) {
+        ids.add(String(c.id));
+      }
+    });
+    return Array.from(ids);
+  }, [customers, currentRole, currentUserId, currentUserName, userCustomer]);
+
+  // All vehicle IDs belonging to this user
+  const userVehicleIds = useMemo(() => {
+    if (currentRole !== 'user') return [];
+    return vehicles
+      .filter(
+        (v) =>
+          userCustomerIds.includes(String(v.customerId)) ||
+          (currentUserName && v.customerName && v.customerName.toLowerCase() === currentUserName.toLowerCase()) ||
+          (userCustomer && v.customerName && v.customerName.toLowerCase() === userCustomer.name.toLowerCase())
+      )
+      .map((v) => String(v.id));
+  }, [vehicles, currentRole, userCustomerIds, currentUserName, userCustomer]);
+
+  // Base bookings for current user scope
+  const scopedBookings = useMemo(() => {
+    if (currentRole !== 'user') return bookings;
+    return bookings.filter((b) => {
+      return (
+        userCustomerIds.includes(String(b.customerId)) ||
+        userVehicleIds.includes(String(b.vehicleId)) ||
+        (currentUserName && b.customerName && b.customerName.toLowerCase() === currentUserName.toLowerCase()) ||
+        (userCustomer && b.customerName && b.customerName.toLowerCase() === userCustomer.name.toLowerCase())
+      );
+    });
+  }, [bookings, currentRole, userCustomerIds, userVehicleIds, currentUserName, userCustomer]);
+
+  // Vehicles belonging to selected customer
+  const customerVehicles = useMemo(() => {
+    if (currentRole === 'user') {
+      return vehicles.filter(
+        (v) =>
+          userCustomerIds.includes(String(v.customerId)) ||
+          (currentUserName && v.customerName && v.customerName.toLowerCase() === currentUserName.toLowerCase()) ||
+          (userCustomer && v.customerName && v.customerName.toLowerCase() === userCustomer.name.toLowerCase())
+      );
     }
-    return null;
-  }, [customers, currentUser, currentRole]);
+    if (!selectedCustomerId) return [];
+    return vehicles.filter((v) => String(v.customerId) === String(selectedCustomerId));
+  }, [vehicles, selectedCustomerId, currentRole, userCustomerIds, currentUserName, userCustomer]);
 
   // Handle open modal
   const handleOpenAddModal = () => {
     if (currentRole === 'user') {
-      if (userCustomer) {
-        setSelectedCustomerId(userCustomer.id);
-        const myVehicles = vehicles.filter(v => v.customerId === userCustomer.id);
-        if (myVehicles.length > 0) {
-          setSelectedVehicleId(myVehicles[0].id);
-        } else {
-          setSelectedVehicleId('');
-        }
+      const effectiveCustId = userCustomer?.id || currentUserId || '';
+      setSelectedCustomerId(effectiveCustId);
+      const myVehicles = vehicles.filter(
+        (v) =>
+          userCustomerIds.includes(String(v.customerId)) ||
+          (currentUserName && v.customerName && v.customerName.toLowerCase() === currentUserName.toLowerCase()) ||
+          (userCustomer && v.customerName && v.customerName.toLowerCase() === userCustomer.name.toLowerCase())
+      );
+      if (myVehicles.length > 0) {
+        setSelectedVehicleId(myVehicles[0].id);
+      } else {
+        setSelectedVehicleId('');
       }
       setBookingType('scheduled');
     } else {
@@ -94,21 +158,15 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
       setSelectedVehicleId('');
       setBookingType('scheduled');
     }
-    setScheduleDate(getTodayLocalDate());
+    setScheduleDate(getLocalDateStr());
     setScheduleTime('09:00');
     setNotes('');
     setIsBookingModalOpen(true);
   };
 
-  // Vehicles belonging to selected customer
-  const customerVehicles = useMemo(() => {
-    if (!selectedCustomerId) return [];
-    return vehicles.filter((v) => v.customerId === selectedCustomerId);
-  }, [vehicles, selectedCustomerId]);
-
   const handleCustomerChange = (customerId: string) => {
     setSelectedCustomerId(customerId);
-    const relatedVehicles = vehicles.filter((v) => v.customerId === customerId);
+    const relatedVehicles = vehicles.filter((v) => String(v.customerId) === String(customerId));
     if (relatedVehicles.length > 0) {
       setSelectedVehicleId(relatedVehicles[0].id);
     } else {
@@ -135,8 +193,11 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
       return;
     }
 
-    const customer = customers.find((c) => c.id === selectedCustomerId);
-    const vehicle = vehicles.find((v) => v.id === selectedVehicleId);
+    const customer =
+      customers.find((c) => String(c.id) === String(selectedCustomerId)) ||
+      userCustomer ||
+      (currentRole === 'user' ? { id: currentUserId || 'c-new', name: currentUserName || 'Pelanggan' } : null);
+    const vehicle = vehicles.find((v) => String(v.id) === String(selectedVehicleId));
 
     if (!customer || !vehicle) {
       showToast('Data pelanggan atau kendaraan tidak valid.', 'error');
@@ -170,11 +231,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
 
   // Filter Bookings
   const filteredBookings = useMemo(() => {
-    return bookings.filter((b) => {
-      if (currentRole === 'user' && userCustomer) {
-        if (b.customerId !== userCustomer.id) return false;
-      }
-
+    return scopedBookings.filter((b) => {
       const matchSearch =
         b.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         b.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -185,7 +242,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
 
       return matchSearch && matchDate && matchStatus;
     });
-  }, [bookings, searchTerm, dateFilter, statusFilter, currentRole, userCustomer]);
+  }, [scopedBookings, searchTerm, dateFilter, statusFilter]);
 
   // Normalizer for ISO strings
   const normalizeDate = (isoStr: string) => {
@@ -195,10 +252,12 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
   };
 
   // Quick stats
-  const totalCount = bookings.length;
-  const pendingCount = bookings.filter(b => b.status === 'pending').length;
-  const checkedInCount = bookings.filter(b => b.status === 'checked-in').length;
-  const cancelledCount = bookings.filter(b => b.status === 'cancelled').length;
+  const totalCount = scopedBookings.length;
+  const pendingCount = scopedBookings.filter(b => b.status === 'pending').length;
+  const checkedInCount = scopedBookings.filter(b => b.status === 'checked-in').length;
+  const cancelledCount = scopedBookings.filter(b => b.status === 'cancelled').length;
+
+  const displayUserOwnerName = userCustomer?.name || currentUserName || 'Akun Saya';
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
@@ -214,7 +273,9 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            Kelola jadwal kedatangan pelanggan walk-in maupun reservasi online untuk menghindari penumpukan di pit servis.
+            {currentRole === 'user'
+              ? 'Kelola dan pantau jadwal antrean booking servis motor Anda.'
+              : 'Kelola jadwal kedatangan pelanggan walk-in maupun reservasi online untuk menghindari penumpukan di pit servis.'}
           </p>
         </div>
 
@@ -228,174 +289,106 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
       </div>
 
       {/* Operations Overview Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
-          <div>
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-              {currentRole === 'user' ? 'Total Booking Saya' : 'Total Booking Hari Ini'}
-            </p>
-            <h4 className="text-2xl font-extrabold text-slate-900 mt-1 leading-none">{totalCount}</h4>
-          </div>
-          <ClipboardList className="w-8 h-8 text-slate-300 shrink-0" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs">
+          <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Reservasi</p>
+          <p className="text-xl font-bold text-slate-900 mt-1">{totalCount}</p>
         </div>
-        <div className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
-          <div>
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Sudah Check-In / Aktif</p>
-            <h4 className="text-2xl font-extrabold text-slate-900 mt-1 leading-none">{checkedInCount}</h4>
-          </div>
-          <Check className="w-8 h-8 text-emerald-500 shrink-0" />
+        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs">
+          <p className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">Menunggu Antrean</p>
+          <p className="text-xl font-bold text-amber-600 mt-1">{pendingCount}</p>
         </div>
-        <div className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
-          <div>
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Menunggu (Pending)</p>
-            <h4 className="text-2xl font-extrabold text-slate-900 mt-1 leading-none">{pendingCount}</h4>
-          </div>
-          <Clock className="w-8 h-8 text-amber-500 shrink-0" />
+        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs">
+          <p className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider">Sudah Check-In</p>
+          <p className="text-xl font-bold text-emerald-600 mt-1">{checkedInCount}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs">
+          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Dibatalkan</p>
+          <p className="text-xl font-bold text-slate-500 mt-1">{cancelledCount}</p>
         </div>
       </div>
 
-      {/* Filters Hub Row */}
-      <div className="p-4 bg-white rounded-xl border border-slate-200 flex flex-col gap-3 shadow-2xs">
-        {/* Status Filter Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-100">
-          <button
-            type="button"
-            onClick={() => setStatusFilter('pending')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
-              statusFilter === 'pending'
-                ? 'bg-amber-500 text-white border-amber-500 shadow-2xs'
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            <span>Antrean Aktif (Menunggu)</span>
-            <span className="px-1.5 py-0.5 bg-white/20 text-[10px] rounded-full">{pendingCount}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStatusFilter('checked-in')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
-              statusFilter === 'checked-in'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            <span>Sudah Check-In</span>
-            <span className="px-1.5 py-0.5 bg-white/20 text-[10px] rounded-full">{checkedInCount}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStatusFilter('cancelled')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
-              statusFilter === 'cancelled'
-                ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            <span>Dibatalkan</span>
-            <span className="px-1.5 py-0.5 bg-white/20 text-[10px] rounded-full">{cancelledCount}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
-              statusFilter === 'all'
-                ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            <span>Semua Status</span>
-            <span className="px-1.5 py-0.5 bg-white/20 text-[10px] rounded-full">{totalCount}</span>
-          </button>
+      {/* Filters Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+        <div className="flex items-center gap-2 w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            placeholder="Cari no antrean, plat nomor, pelanggan..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-transparent text-xs text-slate-900 placeholder-slate-400 focus:outline-none font-medium"
+          />
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            {currentRole !== 'user' && (
-              <>
-                {/* Date Selector */}
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-medium">
-                  <span className="text-slate-400 font-bold">TANGGAL:</span>
-                  <input
-                    type="date"
-                    value={dateFilter}
-                    onChange={(e) => setDateFilter(e.target.value)}
-                    className="bg-transparent text-slate-900 focus:outline-none"
-                  />
-                </div>
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          {/* Status Filter Buttons */}
+          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200/80">
+            {(['pending', 'checked-in', 'cancelled', 'all'] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFilter(st)}
+                className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all uppercase cursor-pointer ${
+                  statusFilter === st
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {st === 'all' ? 'Semua' : st}
+              </button>
+            ))}
+          </div>
 
-                {/* Quick Shortcuts for Date */}
-                <button
-                  type="button"
-                  onClick={() => setDateFilter(getTodayLocalDate())}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                    dateFilter === getTodayLocalDate()
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  Hari Ini
-                </button>
-
-                {dateFilter && (
-                  <button
-                    type="button"
-                    onClick={() => setDateFilter('')}
-                    className="text-xs text-slate-500 hover:text-slate-800 underline font-medium cursor-pointer"
-                  >
-                    Reset Tanggal
-                  </button>
-                )}
-              </>
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-medium">
+            <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="bg-transparent text-slate-800 text-xs focus:outline-none"
+            />
+            {dateFilter && (
+              <button
+                type="button"
+                onClick={() => setDateFilter('')}
+                className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
-
-          {/* Search Box */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-medium w-full md:w-72">
-            <Search className="w-4 h-4 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Cari no antrean, nama, plat..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-transparent text-slate-900 placeholder-slate-400 focus:outline-none w-full font-medium"
-            />
-          </div>
         </div>
       </div>
 
-      {/* Bookings Card Grid */}
-      {filteredBookings.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
-          <CalendarIcon className="w-12 h-12 text-slate-300 mb-3" />
-          <p className="text-sm font-bold text-slate-700">Tidak ada antrean atau booking yang ditemukan</p>
-          <p className="text-xs text-slate-400 mt-1">
-            Silakan sesuaikan tanggal atau buat jadwal booking baru menggunakan tombol di atas.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-          {filteredBookings.map((b) => {
-            let statusBadge = 'bg-slate-100 text-slate-800 border border-slate-200';
-            let statusLabel = 'TERDAFTAR';
+      {/* Bookings Queue Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredBookings.length === 0 ? (
+          <div className="col-span-full p-12 text-center text-slate-400 border border-dashed border-slate-200 bg-white rounded-xl font-medium text-xs">
+            {currentRole === 'user'
+              ? 'Anda belum memiliki booking antrean servis. Klik tombol "Buat Booking Servis" untuk membuat jadwal kedatangan.'
+              : 'Tidak ada data antrean booking yang sesuai dengan kriteria filter.'}
+          </div>
+        ) : (
+          filteredBookings.map((b) => {
+            const statusLabel =
+              b.status === 'pending'
+                ? 'Menunggu Antrean'
+                : b.status === 'checked-in'
+                ? 'Sudah Check-In'
+                : 'Dibatalkan';
 
-            if (b.status === 'pending') {
-              statusBadge = 'bg-amber-50 text-amber-700 border border-amber-200';
-              statusLabel = 'MENUNGGU GILIRAN';
-            } else if (b.status === 'checked-in') {
-              statusBadge = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-              statusLabel = 'SUDAH CHECK-IN';
-            } else if (b.status === 'cancelled') {
-              statusBadge = 'bg-rose-50 text-rose-700 border border-rose-200';
-              statusLabel = 'DIBATALKAN';
-            }
+            const statusBadge =
+              b.status === 'pending'
+                ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                : b.status === 'checked-in'
+                ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                : 'bg-slate-100 text-slate-500 border border-slate-200';
 
             return (
               <div
                 key={b.id}
-                className="p-5 rounded-xl border border-slate-200 bg-white relative flex flex-col justify-between transition-all hover:shadow-md shadow-2xs space-y-4"
+                className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-all shadow-xs flex flex-col justify-between gap-4"
               >
                 <div>
                   <div className="flex items-center justify-between">
@@ -483,34 +476,36 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
                 )}
 
                 {b.status === 'checked-in' && (
-                  <div className="border-t border-slate-100 pt-3 shrink-0">
-                    <div className="py-1.5 px-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5">
+                  <div className="border-t border-slate-100 pt-3 shrink-0 flex items-center justify-between gap-2">
+                    <div className="py-1.5 px-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold flex items-center gap-1.5 flex-1 min-w-0">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Sudah Check-In (SPK Aktif)</span>
+                      <span className="truncate">Sudah Check-In</span>
                     </div>
-                  </div>
-                )}
-
-                {b.status === 'cancelled' && (
-                  <div className="border-t border-slate-100 pt-3 shrink-0">
-                    <div className="py-1.5 px-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5">
-                      <X className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                      <span>Booking Dibatalkan</span>
-                    </div>
+                    {['owner', 'admin', 'cashier'].includes(currentRole) && (
+                      <button
+                        type="button"
+                        onClick={() => onCheckInDirect(b)}
+                        className="py-1.5 px-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs shrink-0"
+                        title="Buka / Cek SPK di Daftar Servis"
+                      >
+                        <Wrench className="w-3 h-3" />
+                        <span>LIHAT SPK</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       {/* MODAL: CREATE BOOKING */}
       {isBookingModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white border border-slate-200 w-full max-w-md rounded-xl overflow-hidden shadow-xl animate-scale-in">
             <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
-              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">Daftar Booking Servis</h3>
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">Buat Reservasi Antrean Servis</h3>
               <button
                 type="button"
                 onClick={() => setIsBookingModalOpen(false)}
@@ -544,7 +539,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
                   <input
                     type="text"
                     disabled
-                    value={userCustomer?.name ?? ''}
+                    value={displayUserOwnerName}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600 font-bold focus:outline-none"
                   />
                 </div>
@@ -619,55 +614,52 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Jam Servis</label>
-                  <input
-                    type="time"
-                    required
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Jam Kedatangan</label>
+                  <select
                     value={scheduleTime}
                     onChange={(e) => setScheduleTime(e.target.value)}
-                    className={`w-full bg-white border rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none ${
-                      isTimeSlotOccupied ? 'border-amber-400 bg-amber-50' : 'border-slate-200 focus:border-slate-800'
-                    }`}
-                  />
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800 font-mono"
+                  >
+                    {['08:00', '09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00'].map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot} WIB
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Schedule Conflict Warning */}
               {isTimeSlotOccupied && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-amber-800 text-[11px]">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                  <div>
-                    <strong className="font-bold block">Jadwal Jam {scheduleTime} Sudah Terisi!</strong>
-                    <span>Sudah ada antrean servis lain di jam tersebut pada {scheduleDate}. Silakan pilih jam atau tanggal lain agar pengerjaan tidak bentrok.</span>
-                  </div>
+                <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-center gap-2 text-[11px] font-medium">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Jadwal pada jam ini sudah memiliki antrean. Kemungkinan perlu sedikit menunggu giliran pit.</span>
                 </div>
               )}
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Catatan Keluhan / Perbaikan</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Catatan / Keluhan Awal</label>
                 <textarea
-                  placeholder="Jelaskan kendala motor, contoh: rantai kendor, suara mesin kasar, ganti oli..."
-                  rows={3}
+                  rows={2}
+                  placeholder="Contoh: Ganti oli rutin & kampas rem depan bunyi berdecit..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800"
                 />
               </div>
 
-              <div className="flex gap-2.5 justify-end pt-2">
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsBookingModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg font-bold cursor-pointer transition-all"
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={customerVehicles.length === 0}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-98"
                 >
-                  <CheckCircle className="w-4 h-4" />
                   Simpan Booking
                 </button>
               </div>
@@ -676,12 +668,16 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
         </div>
       )}
 
+      {/* Confirm Deletion Modal */}
       <ConfirmModal
-        isOpen={!!bookingToDelete}
-        title="Hapus Antrean Booking"
+        isOpen={Boolean(bookingToDelete)}
+        title="Konfirmasi Hapus Booking Antrean"
         message={`Apakah Anda yakin ingin menghapus antrean ${bookingToDelete?.queueNumber}?`}
+        confirmText="Hapus Antrean"
+        cancelText="Batal"
+        isDanger={true}
         onConfirm={confirmDeleteBooking}
-        onClose={() => setBookingToDelete(null)}
+        onCancel={() => setBookingToDelete(null)}
       />
     </div>
   );

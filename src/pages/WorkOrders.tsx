@@ -3,9 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
-import { WorkOrderStatus, WorkOrder, SparePart, ServiceItem, UserRole } from '../types';
+import { WorkOrderStatus, WorkOrder, SparePart, ServiceItem, UserRole, Booking, WorkOrderSparePart } from '../types';
+
+interface WorkOrdersProps {
+  prefilledBooking?: Booking | null;
+  clearPrefilledBooking?: () => void;
+}
 import {
   Wrench,
   Clock,
@@ -29,7 +34,10 @@ import {
 import { QuickCheckInModal } from '../components/QuickCheckInModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 
-export const WorkOrders: React.FC = () => {
+export const WorkOrders: React.FC<WorkOrdersProps> = ({
+  prefilledBooking,
+  clearPrefilledBooking,
+}) => {
   const {
     workOrders,
     customers,
@@ -37,7 +45,7 @@ export const WorkOrders: React.FC = () => {
     mechanics,
     spareParts,
     services: serviceItems,
-    addWorkOrder,
+    createWorkOrder,
     updateWorkOrderStatus,
     updateWorkOrder,
     deleteWorkOrder,
@@ -77,6 +85,25 @@ export const WorkOrders: React.FC = () => {
 
   // Modal 3: Quick Check In for walk-ins
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
+
+  // Handle prefilled booking from Check-In flow
+  useEffect(() => {
+    if (prefilledBooking) {
+      setSelectedCustomerId(prefilledBooking.customerId);
+      const custVehicles = vehicles.filter((v) => String(v.customerId) === String(prefilledBooking.customerId));
+      setSelectedVehicleId(prefilledBooking.vehicleId || (custVehicles.length > 0 ? custVehicles[0].id : ''));
+      setComplaint(prefilledBooking.notes || 'Pemeriksaan & Servis Rutin (Reservasi Booking)');
+      setDiagnosis('Diterima dari reservasi antrean booking.');
+      setNotes(prefilledBooking.notes || '');
+      setAssignedMechanicId(mechanics.length > 0 ? mechanics[0].id : '');
+      setSelectedServices(serviceItems.length > 0 ? [serviceItems[0].id] : []);
+      setSelectedParts([]);
+      setIsCreateWOOpen(true);
+      if (clearPrefilledBooking) {
+        clearPrefilledBooking();
+      }
+    }
+  }, [prefilledBooking, vehicles, mechanics, serviceItems, clearPrefilledBooking]);
 
   // Modal 4: Confirm Delete Work Order
   const [woToDelete, setWoToDelete] = useState<string | null>(null);
@@ -167,11 +194,11 @@ export const WorkOrders: React.FC = () => {
     setComplaint(wo.complaint || '');
     setDiagnosis(wo.diagnosis || '');
     setNotes(wo.notes || '');
-    setSelectedServices(wo.services.map((s) => s.serviceId));
+    setSelectedServices((wo.services || []).map((s) => s.serviceId));
     setSelectedParts(
-      wo.sparePartsUsed.map((p) => ({
-        partId: p.partId,
-        qty: p.quantity
+      (wo.sparePartsUsed || []).map((p) => ({
+        partId: p.partId || (p as any).sparePartId,
+        qty: p.quantity || 1
       }))
     );
     setIsEditWOOpen(true);
@@ -262,34 +289,30 @@ export const WorkOrders: React.FC = () => {
         const part = spareParts.find((item) => item.id === p.partId);
         return part
           ? {
-              sparePartId: part.id,
+              partId: part.id,
               name: part.name,
               quantity: p.qty,
-              price: part.sellingPrice
+              pricePerUnit: part.sellingPrice,
+              totalPrice: part.sellingPrice * p.qty
             }
           : null;
       })
-      .filter(Boolean) as { sparePartId: string; name: string; quantity: number; price: number }[];
+      .filter(Boolean) as WorkOrderSparePart[];
 
-    const costs = calculateModalTotals();
-
-    addWorkOrder({
+    createWorkOrder({
       customerId: customer.id,
       customerName: customer.name,
-      customerPhone: customer.phone,
       vehicleId: vehicle.id,
       vehicleModel: `${vehicle.brand} ${vehicle.model}`,
       licensePlate: vehicle.licensePlate,
-      assignedMechanicId: mechanic?.id,
-      assignedMechanicName: mechanic?.name,
-      status: 'waiting',
+      assignedMechanicId: mechanic?.id || '1',
+      assignedMechanicName: mechanic?.name || 'Mekanik BR Motor',
       complaint: complaint.trim() || 'Servis berkala rutin',
       diagnosis: diagnosis.trim(),
       notes: notes.trim(),
       services: finalServices,
       sparePartsUsed: finalParts,
-      costs,
-      paymentStatus: 'unpaid'
+      estimatedCompletionTime: '14:30'
     });
 
     showToast(`SPK baru untuk ${vehicle.licensePlate} berhasil dibuat!`, 'success');
@@ -315,14 +338,15 @@ export const WorkOrders: React.FC = () => {
         const part = spareParts.find((item) => item.id === p.partId);
         return part
           ? {
-              sparePartId: part.id,
+              partId: part.id,
               name: part.name,
               quantity: p.qty,
-              price: part.sellingPrice
+              pricePerUnit: part.sellingPrice,
+              totalPrice: part.sellingPrice * p.qty
             }
           : null;
       })
-      .filter(Boolean) as { sparePartId: string; name: string; quantity: number; price: number }[];
+      .filter(Boolean) as WorkOrderSparePart[];
 
     const costs = calculateModalTotals();
 
@@ -334,7 +358,12 @@ export const WorkOrders: React.FC = () => {
       notes,
       services: finalServices,
       sparePartsUsed: finalParts,
-      costs
+      costs: {
+        serviceCost: costs.serviceCost,
+        sparePartCost: costs.partsCost,
+        discount: editingWO.costs?.discount || 0,
+        total: Math.max(0, costs.total - (editingWO.costs?.discount || 0))
+      }
     });
 
     showToast(`Data SPK ${editingWO.id} berhasil diperbarui!`, 'success');
@@ -1230,13 +1259,17 @@ export const WorkOrders: React.FC = () => {
                     <td className="p-1 text-right">{formatRupiah(s.price)}</td>
                   </tr>
                 ))}
-                {printWO.sparePartsUsed.map((p, idx) => (
-                  <tr key={`part-${idx}`} className="border-b border-gray-300">
-                    <td className="p-1 border-r border-black font-semibold">[PART] {p.name}</td>
-                    <td className="p-1 text-center border-r border-black">{p.quantity}</td>
-                    <td className="p-1 text-right">{formatRupiah(p.price * p.quantity)}</td>
-                  </tr>
-                ))}
+                {(printWO.sparePartsUsed || []).map((p, idx) => {
+                  const unitPrice = p.pricePerUnit ?? (p as any).price ?? 0;
+                  const total = p.totalPrice ?? (unitPrice * p.quantity);
+                  return (
+                    <tr key={`part-${idx}`} className="border-b border-gray-300">
+                      <td className="p-1 border-r border-black font-semibold">[PART] {p.name}</td>
+                      <td className="p-1 text-center border-r border-black">{p.quantity}</td>
+                      <td className="p-1 text-right">{formatRupiah(total)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
