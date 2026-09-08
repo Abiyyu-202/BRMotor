@@ -28,7 +28,10 @@ import { QuickCheckInModal } from '../components/QuickCheckInModal';
 import { ServiceReminderModal } from '../components/ServiceReminderModal';
 import { CustomerProfileModal } from '../components/CustomerProfileModal';
 
-export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveTab }) => {
+export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBooking?: () => void }> = ({
+  setActiveTab,
+  onNewBooking
+}) => {
   const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
   const [isReminderOpen, setIsReminderOpen] = useState(false);
@@ -171,7 +174,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
 
               <button
                 type="button"
-                onClick={() => setActiveTab('Bookings')}
+                onClick={() => (onNewBooking ? onNewBooking() : setActiveTab('Bookings'))}
                 className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all shrink-0 cursor-pointer shadow-xs flex items-center gap-2"
               >
                 <Calendar className="w-4 h-4 text-slate-300" />
@@ -440,7 +443,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                 </p>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('Bookings')}
+                  onClick={() => (onNewBooking ? onNewBooking() : setActiveTab('Bookings'))}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-xs text-white font-bold uppercase tracking-wider rounded-lg transition-all"
                 >
                   {t.dashboard.newBooking}
@@ -672,9 +675,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.dashboard.revenueToday}</p>
-            <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
+            <span className="block text-sm font-extrabold text-slate-900 mt-0.5">
               Rp {todayRevenue.toLocaleString('id-ID')}
-            </h3>
+            </span>
           </div>
         </button>
 
@@ -689,9 +692,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.dashboard.activeWorkOrders}</p>
-            <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
+            <span className="block text-sm font-extrabold text-slate-900 mt-0.5">
               {activeWorkOrders.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'SPK' : 'orders'}</span>
-            </h3>
+            </span>
           </div>
         </button>
 
@@ -708,9 +711,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Booking Masuk</p>
-            <h3 className={`text-sm font-extrabold mt-0.5 ${pendingBookings.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+            <span className={`block text-sm font-extrabold mt-0.5 ${pendingBookings.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
               {pendingBookings.length} <span className="text-[10px] font-normal text-slate-400">antrean</span>
-            </h3>
+            </span>
           </div>
         </button>
 
@@ -725,9 +728,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.customers.totalCustomers}</p>
-            <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
+            <span className="block text-sm font-extrabold text-slate-900 mt-0.5">
               {customers.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'orang' : 'users'}</span>
-            </h3>
+            </span>
           </div>
         </button>
 
@@ -742,9 +745,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{language === 'id' ? 'Total Motor' : 'Vehicles'}</p>
-            <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
+            <span className="block text-sm font-extrabold text-slate-900 mt-0.5">
               {vehicles.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'unit' : 'units'}</span>
-            </h3>
+            </span>
           </div>
         </button>
 
@@ -761,9 +764,9 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.dashboard.lowStockAlerts}</p>
-            <h3 className={`text-sm font-extrabold mt-0.5 ${lowStockParts.length > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+            <span className={`block text-sm font-extrabold mt-0.5 ${lowStockParts.length > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
               {lowStockParts.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'item' : 'items'}</span>
-            </h3>
+            </span>
           </div>
         </button>
       </div>

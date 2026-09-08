@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { Booking, BookingType, BookingStatus, UserRole } from '../types';
 import {
@@ -22,11 +22,33 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
+// Operating hours time slots for workshop intake
+export const WORKSHOP_TIME_SLOTS = [
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
+];
+
+// Helper date function for local YYYY-MM-DD
+const getLocalDateStr = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getTomorrowDateStr = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return getLocalDateStr(tomorrow);
+};
+
 interface BookingsProps {
   onCheckInDirect: (booking: Booking) => void;
+  autoOpenAddModal?: boolean;
+  onModalOpened?: () => void;
 }
 
-export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
+export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAddModal, onModalOpened }) => {
   const {
     bookings,
     customers,
@@ -45,14 +67,12 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
   const canTriggerDelete = (role: UserRole) => role === 'owner' || role === 'admin';
   const canDeleteDirectly = (role: UserRole) => role === 'owner';
 
-  // Helper date function
-  const getLocalDateStr = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  // Live hardware clock tracker
+  const [hardwareNow, setHardwareNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setHardwareNow(new Date()), 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -74,7 +94,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
   const userCustomer = useMemo(() => {
     if (currentRole !== 'user') return null;
     return (
-      customers.find(
+      (customers || []).find(
         (c) =>
           (currentUserId && String(c.id) === String(currentUserId)) ||
           (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
@@ -88,7 +108,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
     const ids = new Set<string>();
     if (currentUserId) ids.add(String(currentUserId));
     if (userCustomer?.id) ids.add(String(userCustomer.id));
-    customers.forEach((c) => {
+    (customers || []).forEach((c) => {
       if (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase()) {
         ids.add(String(c.id));
       }
@@ -136,12 +156,28 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
     return vehicles.filter((v) => String(v.customerId) === String(selectedCustomerId));
   }, [vehicles, selectedCustomerId, currentRole, userCustomerIds, currentUserName, userCustomer]);
 
-  // Handle open modal
+  // Available time slots based on hardware clock and selected date
+  const availableTimeSlots = useMemo(() => {
+    const todayStr = getLocalDateStr(hardwareNow);
+    if (scheduleDate > todayStr) {
+      return WORKSHOP_TIME_SLOTS;
+    }
+    if (scheduleDate === todayStr) {
+      const currentMins = hardwareNow.getHours() * 60 + hardwareNow.getMinutes();
+      return WORKSHOP_TIME_SLOTS.filter((slot) => {
+        const [h, m] = slot.split(':').map(Number);
+        return h * 60 + m >= currentMins;
+      });
+    }
+    return [];
+  }, [scheduleDate, hardwareNow]);
+
+  // Handle open modal with hardware clock synchronization
   const handleOpenAddModal = () => {
     if (currentRole === 'user') {
       const effectiveCustId = userCustomer?.id || currentUserId || '';
       setSelectedCustomerId(effectiveCustId);
-      const myVehicles = vehicles.filter(
+      const myVehicles = (vehicles || []).filter(
         (v) =>
           userCustomerIds.includes(String(v.customerId)) ||
           (currentUserName && v.customerName && v.customerName.toLowerCase() === currentUserName.toLowerCase()) ||
@@ -158,15 +194,64 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
       setSelectedVehicleId('');
       setBookingType('scheduled');
     }
-    setScheduleDate(getLocalDateStr());
-    setScheduleTime('09:00');
+
+    const now = new Date();
+    const todayStr = getLocalDateStr(now);
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const todayRemainingSlots = WORKSHOP_TIME_SLOTS.filter((slot) => {
+      const [h, m] = slot.split(':').map(Number);
+      return h * 60 + m >= currentMins;
+    });
+
+    if (todayRemainingSlots.length > 0) {
+      setScheduleDate(todayStr);
+      setScheduleTime(todayRemainingSlots[0]);
+    } else {
+      // If hardware clock is past workshop operational hours today, auto-target tomorrow at 09:00
+      setScheduleDate(getTomorrowDateStr());
+      setScheduleTime('09:00');
+    }
+
     setNotes('');
     setIsBookingModalOpen(true);
   };
 
+  // Auto-open modal if navigated from Dashboard
+  useEffect(() => {
+    if (autoOpenAddModal) {
+      handleOpenAddModal();
+      onModalOpened?.();
+    }
+  }, [autoOpenAddModal]);
+
+  // Handle schedule date change
+  const handleDateChange = (newDate: string) => {
+    setScheduleDate(newDate);
+    const todayStr = getLocalDateStr(hardwareNow);
+    if (newDate === todayStr) {
+      const currentMins = hardwareNow.getHours() * 60 + hardwareNow.getMinutes();
+      const validSlots = WORKSHOP_TIME_SLOTS.filter((slot) => {
+        const [h, m] = slot.split(':').map(Number);
+        return h * 60 + m >= currentMins;
+      });
+      if (validSlots.length > 0) {
+        const [currH, currM] = (scheduleTime || '00:00').split(':').map(Number);
+        if (currH * 60 + currM < currentMins || !validSlots.includes(scheduleTime)) {
+          setScheduleTime(validSlots[0]);
+        }
+      } else {
+        setScheduleTime('');
+      }
+    } else if (newDate > todayStr) {
+      if (!scheduleTime || !WORKSHOP_TIME_SLOTS.includes(scheduleTime)) {
+        setScheduleTime('09:00');
+      }
+    }
+  };
+
   const handleCustomerChange = (customerId: string) => {
     setSelectedCustomerId(customerId);
-    const relatedVehicles = vehicles.filter((v) => String(v.customerId) === String(customerId));
+    const relatedVehicles = (vehicles || []).filter((v) => String(v.customerId) === String(customerId));
     if (relatedVehicles.length > 0) {
       setSelectedVehicleId(relatedVehicles[0].id);
     } else {
@@ -180,7 +265,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
     return bookings.some(
       (b) =>
         b.date === scheduleDate &&
-        b.time === scheduleTime &&
+        (b.time || '').slice(0, 5) === scheduleTime.slice(0, 5) &&
         b.status !== 'cancelled'
     );
   }, [bookings, scheduleDate, scheduleTime]);
@@ -193,11 +278,30 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
       return;
     }
 
+    if (!scheduleTime) {
+      showToast('Harap pilih jam kedatangan servis.', 'warning');
+      return;
+    }
+
+    // Validate hardware clock: do not allow booking for past hours today
+    const todayStr = getLocalDateStr(hardwareNow);
+    if (scheduleDate === todayStr) {
+      const [h, m] = scheduleTime.split(':').map(Number);
+      const currentMins = hardwareNow.getHours() * 60 + hardwareNow.getMinutes();
+      if (h * 60 + m < currentMins) {
+        showToast(
+          `Jam ${scheduleTime} WIB untuk hari ini sudah terlewat. Silakan pilih jam berikutnya.`,
+          'warning'
+        );
+        return;
+      }
+    }
+
     const customer =
-      customers.find((c) => String(c.id) === String(selectedCustomerId)) ||
+      (customers || []).find((c) => String(c.id) === String(selectedCustomerId)) ||
       userCustomer ||
       (currentRole === 'user' ? { id: currentUserId || 'c-new', name: currentUserName || 'Pelanggan' } : null);
-    const vehicle = vehicles.find((v) => String(v.id) === String(selectedVehicleId));
+    const vehicle = (vehicles || []).find((v) => String(v.id) === String(selectedVehicleId));
 
     if (!customer || !vehicle) {
       showToast('Data pelanggan atau kendaraan tidak valid.', 'error');
@@ -221,11 +325,11 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
     setIsBookingModalOpen(false);
   };
 
-  const confirmDeleteBooking = () => {
+  const confirmDeleteBooking = async () => {
     if (bookingToDelete) {
-      deleteBooking(bookingToDelete.id);
-      showToast(`Booking ${bookingToDelete.queueNumber} berhasil dihapus.`, 'success');
+      const id = bookingToDelete.id;
       setBookingToDelete(null);
+      await deleteBooking(id);
     }
   };
 
@@ -600,15 +704,15 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Tanggal Booking</label>
                   <input
                     type="date"
                     required
-                    min={new Date().toISOString().split('T')[0]}
+                    min={getLocalDateStr(hardwareNow)}
                     value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
+                    onChange={(e) => handleDateChange(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
                   />
                 </div>
@@ -616,23 +720,43 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Jam Kedatangan</label>
                   <select
+                    required
+                    disabled={availableTimeSlots.length === 0}
                     value={scheduleTime}
                     onChange={(e) => setScheduleTime(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800 font-mono"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800 font-mono disabled:bg-slate-100 disabled:text-slate-400"
                   >
-                    {['08:00', '09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00'].map((slot) => (
-                      <option key={slot} value={slot}>
-                        {slot} WIB
+                    {availableTimeSlots.length === 0 ? (
+                      <option value="" disabled>
+                        Jadwal hari ini sudah lewat/tutup (Pilih tanggal besok)
                       </option>
-                    ))}
+                    ) : (
+                      availableTimeSlots.map((slot) => (
+                        <option key={slot} value={slot}>
+                          {slot} WIB
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>
 
-              {isTimeSlotOccupied && (
+              {scheduleDate === getLocalDateStr(hardwareNow) && availableTimeSlots.length === 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-start gap-2.5 text-xs">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Jam Layanan Hari Ini Telah Tutup</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                      Seluruh jadwal antrean servis untuk hari ini telah selesai. Silakan pilih tanggal besok atau hari berikutnya pada kolom Tanggal Booking di atas.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {isTimeSlotOccupied && availableTimeSlots.length > 0 && (
                 <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-center gap-2 text-[11px] font-medium">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Jadwal pada jam ini sudah memiliki antrean. Kemungkinan perlu sedikit menunggu giliran pit.</span>
+                  <span>Jadwal pada jam ini sudah memiliki antrean lain. Kemungkinan perlu sedikit menunggu giliran pit mekanik.</span>
                 </div>
               )}
 
@@ -657,7 +781,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={customerVehicles.length === 0}
+                  disabled={customerVehicles.length === 0 || (scheduleDate === getLocalDateStr(hardwareNow) && availableTimeSlots.length === 0)}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-98"
                 >
                   Simpan Booking

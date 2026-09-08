@@ -43,7 +43,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
-  const { shopInfo, formatRupiah, serviceItems, spareParts, addBooking, bookings, refreshDatabase } = useWorkshop();
+  const { shopInfo, formatRupiah, serviceItems, spareParts, addBooking, bookings, refreshDatabase, showToast } = useWorkshop();
 
   // Mobile menu state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -126,11 +126,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
   };
 
   // Check booked slots for currently selected date
-  const bookedSlotsOnDate = bookings
-    ? bookings
-        .filter((b) => normalizeDate(b.date) === normalizeDate(bookingDate) && b.status !== 'cancelled')
-        .map((b) => b.time.slice(0, 5))
-    : [];
+  const bookedSlotsOnDate = React.useMemo(() => {
+    if (!bookings) return [];
+    return bookings
+      .filter((b) => normalizeDate(b.date) === normalizeDate(bookingDate) && b.status !== 'cancelled')
+      .map((b) => b.time.slice(0, 5));
+  }, [bookings, bookingDate]);
 
   const isDateToday = normalizeDate(bookingDate) === todayStr;
 
@@ -209,17 +210,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
     const fullPlateNumber = `${platePrefix.trim()} ${plateNumber.trim()} ${plateSuffix.trim()}`.trim().toUpperCase();
 
     if (!customerName.trim() || !phone.trim() || !platePrefix.trim() || !plateNumber.trim() || !bookingDate) {
-      alert('Harap lengkapi nama, nomor telepon, dan plat nomor motor dengan benar.');
+      showToast('Harap lengkapi nama, nomor telepon, dan plat nomor motor dengan benar.', 'warning');
       return;
     }
 
     if (isSlotPast(bookingTime)) {
-      alert(`Mohon maaf, jam ${bookingTime} WIB untuk hari ini sudah terlewat. Silakan pilih jam berikutnya yang masih tersedia.`);
+      showToast(`Jam ${bookingTime} WIB untuk hari ini sudah terlewat. Silakan pilih jam berikutnya atau tanggal lain.`, 'warning');
       return;
     }
 
     if (isSlotBooked(bookingTime)) {
-      alert(`Mohon maaf, jam ${bookingTime} WIB pada tanggal ${bookingDate} sudah dibooking oleh pelanggan lain. Silakan pilih jam yang masih tersedia.`);
+      showToast(`Jam ${bookingTime} WIB pada tanggal ${bookingDate} sudah dibooking oleh pelanggan lain. Silakan pilih jam lain.`, 'warning');
       return;
     }
 
@@ -272,7 +273,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
       }
     } catch (err: any) {
       console.error(err);
-      alert('Terjadi kesalahan saat menyimpan booking. Silakan coba lagi.');
+      showToast('Terjadi kesalahan saat menyimpan booking. Silakan coba lagi.', 'error');
     } finally {
       setIsSubmittingBooking(false);
     }

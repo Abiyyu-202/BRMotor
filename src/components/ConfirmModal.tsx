@@ -11,6 +11,7 @@ interface ConfirmModalProps {
   cancelLabel?: string;
   type?: 'danger' | 'warning' | 'info';
   variant?: 'danger' | 'warning' | 'info';
+  isDanger?: boolean;
   onConfirm: () => void;
   onClose?: () => void;
   onCancel?: () => void;
@@ -26,6 +27,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   cancelLabel,
   type,
   variant,
+  isDanger,
   onConfirm,
   onClose,
   onCancel,
@@ -39,7 +41,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   const finalConfirmText = confirmText || confirmLabel || 'Hapus';
   const finalCancelText = cancelText || cancelLabel || 'Batal';
-  const finalType = type || variant || 'danger';
+  const finalType = type || variant || (isDanger ? 'danger' : 'warning');
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fade-in">

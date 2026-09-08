@@ -136,14 +136,14 @@ export const Customers: React.FC = () => {
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (customerToDelete) {
-      deleteCustomer(customerToDelete);
-      if (selectedCustomer?.id === customerToDelete) {
+      const id = customerToDelete;
+      setCustomerToDelete(null);
+      if (selectedCustomer?.id === id) {
         setSelectedCustomer(null);
       }
-      showToast('Data pelanggan berhasil dihapus.', 'success');
-      setCustomerToDelete(null);
+      await deleteCustomer(id);
     }
   };
 

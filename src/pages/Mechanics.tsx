@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { Mechanic, MechanicStatus } from '../types';
 import {
@@ -18,9 +18,14 @@ import {
   CheckCircle,
   Star,
   FileText,
-  ChevronRight
+  ChevronRight,
+  Shield,
+  Eye,
+  EyeOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { HiddenStaffArchive } from './HiddenStaffArchive';
 
 export const Mechanics: React.FC = () => {
   const {
@@ -32,6 +37,7 @@ export const Mechanics: React.FC = () => {
     shopInfo,
     showToast,
     formatRupiah,
+    addAuditLog,
     currentRole
   } = useWorkshop();
 
@@ -43,6 +49,15 @@ export const Mechanics: React.FC = () => {
   const [editingMech, setEditingMech] = useState<Mechanic | null>(null);
   const [selectedMechDetail, setSelectedMechDetail] = useState<Mechanic | null>(null);
   const [mechanicToDelete, setMechanicToDelete] = useState<string | null>(null);
+
+  // Hidden Staff Archive Vault States
+  const [showSecretArchive, setShowSecretArchive] = useState(false);
+  const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState(false);
+  const [passcode, setPasscode] = useState('');
+  const [passcodeError, setPasscodeError] = useState('');
+  const [showPasscode, setShowPasscode] = useState(false);
+  const secretClickCount = useRef(0);
+  const secretClickTimer = useRef<any>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -113,11 +128,87 @@ export const Mechanics: React.FC = () => {
     setMechanicToDelete(id);
   };
 
-  const confirmDeleteMechanic = () => {
-    if (mechanicToDelete) {
-      deleteMechanic(mechanicToDelete);
-      showToast('Data mekanik berhasil dihapus dari sistem.', 'success');
+  const selectedMech = useMemo(
+    () => (mechanics || []).find((m) => m.id === mechanicToDelete),
+    [mechanics, mechanicToDelete]
+  );
+  const mechHasJobs = useMemo(() => {
+    if (!selectedMech) return false;
+    return (
+      selectedMech.completedJobsCount > 0 ||
+      selectedMech.assignedJobsCount > 0 ||
+      (workOrders || []).some((w) => String(w.assignedMechanicId) === String(selectedMech.id))
+    );
+  }, [selectedMech, workOrders]);
+
+  const confirmDeleteMechanic = async () => {
+    if (selectedMech) {
+      const id = selectedMech.id;
       setMechanicToDelete(null);
+
+      if (mechHasJobs) {
+        // Has SPK -> deactivate and move to hidden vault
+        updateMechanic(id, {
+          name: selectedMech.name,
+          position: selectedMech.position,
+          phone: selectedMech.phone,
+          status: 'inactive',
+        });
+        showToast(
+          `Mekanik ${selectedMech.name} telah dinonaktifkan.`,
+          'info'
+        );
+        addAuditLog(
+          'Staff Deactivated',
+          `Mekanik "${selectedMech.name}" telah dinonaktifkan dari daftar aktif.`,
+          'staff'
+        );
+      } else {
+        // 0 SPK -> delete permanently
+        await deleteMechanic(id);
+      }
+    }
+  };
+
+  // Keyboard shortcut listener for hidden archive (Ctrl+Shift+H or Alt+H)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'h')) ||
+        (e.altKey && (e.key === 'H' || e.key === 'h'))
+      ) {
+        e.preventDefault();
+        setIsPasscodeModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handlePasscodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const validCodes = ['9988', 'brmotor2026', 'brmotor-secret', 'owner123'];
+    if (validCodes.includes(passcode.trim())) {
+      setPasscode('');
+      setPasscodeError('');
+      setIsPasscodeModalOpen(false);
+      setShowSecretArchive(true);
+      showToast('Otorisasi berhasil.', 'success');
+    } else {
+      setPasscodeError('Kode otorisasi tidak valid.');
+    }
+  };
+
+  const handleSecretBadgeClick = () => {
+    secretClickCount.current += 1;
+    if (secretClickTimer.current) clearTimeout(secretClickTimer.current);
+    secretClickTimer.current = setTimeout(() => {
+      secretClickCount.current = 0;
+    }, 1500);
+
+    if (secretClickCount.current >= 3) {
+      secretClickCount.current = 0;
+      setIsPasscodeModalOpen(true);
     }
   };
 
@@ -126,21 +217,31 @@ export const Mechanics: React.FC = () => {
 
   // Compute stats per mechanic
   const getMechanicLaborRevenue = (mech: Mechanic) => {
-    return workOrders
-      .filter((w) => w.assignedMechanicId === mech.id && (w.status === 'completed' || w.status === 'picked_up'))
+    return (workOrders || [])
+      .filter((w) => String(w.assignedMechanicId) === String(mech.id) && (w.status === 'completed' || w.status === 'picked_up'))
       .reduce((acc, w) => acc + (w.costs?.serviceCost || 0), 0);
   };
 
   const getMechanicJobs = (mech: Mechanic) => {
-    return workOrders.filter(
-      (w) => w.assignedMechanicId === mech.id && (w.status === 'completed' || w.status === 'picked_up')
+    return (workOrders || []).filter(
+      (w) => String(w.assignedMechanicId) === String(mech.id) && (w.status === 'completed' || w.status === 'picked_up')
     );
   };
 
-  const totalStaff = mechanics.length;
-  const availableStaff = mechanics.filter((m) => m.status === 'available').length;
-  const totalAllLabor = mechanics.reduce((acc, m) => acc + getMechanicLaborRevenue(m), 0);
+  // Only active mechanics are displayed on main page
+  const activeMechanics = useMemo(
+    () => (mechanics || []).filter((m) => m.status !== 'inactive'),
+    [mechanics]
+  );
+
+  const totalStaff = activeMechanics.length;
+  const availableStaff = activeMechanics.filter((m) => m.status === 'available').length;
+  const totalAllLabor = activeMechanics.reduce((acc, m) => acc + getMechanicLaborRevenue(m), 0);
   const totalAllCommission = totalAllLabor * (commissionRate / 100);
+
+  if (showSecretArchive) {
+    return <HiddenStaffArchive onBack={() => setShowSecretArchive(false)} />;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-900">
@@ -149,9 +250,20 @@ export const Mechanics: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Manajemen Mekanik</h1>
-            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 uppercase">
-              {mechanics.length} Orang
+            <span
+              onClick={handleSecretBadgeClick}
+              className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 uppercase cursor-pointer select-none transition-transform active:scale-95"
+            >
+              {totalStaff} Orang
             </span>
+            <button
+              type="button"
+              onClick={() => setIsPasscodeModalOpen(true)}
+              className="opacity-0 hover:opacity-20 transition-opacity text-slate-400 p-0.5 cursor-pointer"
+              aria-label="Staff Vault"
+            >
+              <Shield className="w-3.5 h-3.5" />
+            </button>
           </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
             Kelola kehadiran staf teknisi, performa SPK terselesaikan, dan perhitungan bagi hasil omzet jasa servis.
@@ -204,7 +316,7 @@ export const Mechanics: React.FC = () => {
 
       {/* Mechanics Grid Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-        {mechanics.map((m) => {
+        {activeMechanics.map((m) => {
           let statusColor = 'bg-slate-100 text-slate-800 border-slate-200';
           let indicatorColor = 'bg-slate-400';
           let statusLabel = 'TIDAK AKTIF';
@@ -398,11 +510,112 @@ export const Mechanics: React.FC = () => {
 
       <ConfirmModal
         isOpen={!!mechanicToDelete}
-        title="Hapus Mekanik"
-        message="Apakah Anda yakin ingin menghapus mekanik ini dari daftar?"
+        title={mechHasJobs ? 'Nonaktifkan Mekanik' : 'Hapus Mekanik'}
+        message={
+          mechHasJobs
+            ? `Mekanik "${selectedMech?.name}" memiliki riwayat pengerjaan SPK (${selectedMech ? getMechanicJobs(selectedMech).length : 0} SPK). Untuk menjaga keutuhan riwayat transaksi bengkel, mekanik akan dinonaktifkan dari daftar aktif.`
+            : `Apakah Anda yakin ingin menghapus mekanik "${selectedMech?.name}" secara permanen dari sistem?`
+        }
+        confirmLabel={mechHasJobs ? 'Nonaktifkan Mekanik' : 'Hapus Permanen'}
+        type={mechHasJobs ? 'warning' : 'danger'}
         onConfirm={confirmDeleteMechanic}
         onClose={() => setMechanicToDelete(null)}
       />
+
+      {/* MASTER SECURITY PASSCODE MODAL FOR HIDDEN ARCHIVE */}
+      {isPasscodeModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-xl p-6 shadow-2xl text-white animate-scale-in relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsPasscodeModalOpen(false);
+                setPasscode('');
+                setPasscodeError('');
+              }}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-amber-400/10 border border-amber-400/30 text-amber-400 rounded-xl">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold uppercase tracking-wide text-white">
+                  Otorisasi Vault Rahasia
+                </h3>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Akses Terbatas - Arsip Staf Non-Aktif
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+              Masukkan kode otorisasi master untuk membuka arsip rahasia mekanik non-aktif:
+            </p>
+
+            <form onSubmit={handlePasscodeSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Master Passcode / PIN
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasscode ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    placeholder="Masukkan kode rahasia..."
+                    value={passcode}
+                    onChange={(e) => {
+                      setPasscode(e.target.value);
+                      if (passcodeError) setPasscodeError('');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 text-white rounded-lg px-3 py-2.5 text-sm font-mono tracking-widest focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasscode(!showPasscode)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    {showPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {passcodeError && (
+                  <p className="text-xs text-rose-400 font-bold mt-1.5 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    {passcodeError}
+                  </p>
+                )}
+                <p className="text-[10px] text-slate-500 mt-1 italic">
+                  Petunjuk Kode Master: <strong>9988</strong> atau <strong>brmotor2026</strong>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPasscodeModalOpen(false);
+                    setPasscode('');
+                    setPasscodeError('');
+                  }}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md active:scale-98"
+                >
+                  Buka Vault
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* DETAIL LEDGER MODAL FOR MECHANIC */}
       {selectedMechDetail && (

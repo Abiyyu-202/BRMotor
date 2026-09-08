@@ -43,8 +43,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     customers,
     vehicles,
     mechanics,
-    spareParts,
-    services: serviceItems,
+    spareParts = [],
+    serviceItems = [],
     createWorkOrder,
     updateWorkOrderStatus,
     updateWorkOrder,
@@ -90,13 +90,13 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
   useEffect(() => {
     if (prefilledBooking) {
       setSelectedCustomerId(prefilledBooking.customerId);
-      const custVehicles = vehicles.filter((v) => String(v.customerId) === String(prefilledBooking.customerId));
+      const custVehicles = (vehicles || []).filter((v) => String(v.customerId) === String(prefilledBooking.customerId));
       setSelectedVehicleId(prefilledBooking.vehicleId || (custVehicles.length > 0 ? custVehicles[0].id : ''));
       setComplaint(prefilledBooking.notes || 'Pemeriksaan & Servis Rutin (Reservasi Booking)');
       setDiagnosis('Diterima dari reservasi antrean booking.');
       setNotes(prefilledBooking.notes || '');
-      setAssignedMechanicId(mechanics.length > 0 ? mechanics[0].id : '');
-      setSelectedServices(serviceItems.length > 0 ? [serviceItems[0].id] : []);
+      setAssignedMechanicId((mechanics || []).length > 0 ? mechanics[0].id : '');
+      setSelectedServices((serviceItems || []).length > 0 ? [serviceItems[0].id] : []);
       setSelectedParts([]);
       setIsCreateWOOpen(true);
       if (clearPrefilledBooking) {
@@ -159,13 +159,13 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
 
   // Handle open create modal
   const handleOpenCreateModal = () => {
-    setSelectedCustomerId(customers.length > 0 ? customers[0].id : '');
+    setSelectedCustomerId((customers || []).length > 0 ? customers[0].id : '');
     setSelectedVehicleId('');
-    setAssignedMechanicId(mechanics.length > 0 ? mechanics[0].id : '');
+    setAssignedMechanicId((mechanics || []).length > 0 ? mechanics[0].id : '');
     setComplaint('');
     setDiagnosis('');
     setNotes('');
-    setSelectedServices([serviceItems[0]?.id || 's1']);
+    setSelectedServices([(serviceItems || [])[0]?.id || 's1']);
     setSelectedParts([]);
     setIsCreateWOOpen(true);
   };
@@ -173,18 +173,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
   // Vehicles belonging to selected customer in create modal
   const availableVehicles = useMemo(() => {
     if (!selectedCustomerId) return [];
-    return vehicles.filter((v) => v.customerId === selectedCustomerId);
+    return (vehicles || []).filter((v) => v.customerId === selectedCustomerId);
   }, [vehicles, selectedCustomerId]);
 
   // Handle customer change in create modal
   const handleCustomerChange = (cId: string) => {
     setSelectedCustomerId(cId);
-    const related = vehicles.filter((v) => v.customerId === cId);
-    if (related.length > 0) {
-      setSelectedVehicleId(related[0].id);
-    } else {
-      setSelectedVehicleId('');
-    }
+    const custVehicles = (vehicles || []).filter((v) => v.customerId === cId);
+    setSelectedVehicleId(custVehicles.length > 0 ? custVehicles[0].id : '');
   };
 
   // Handle open edit modal
@@ -215,7 +211,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
 
   // Adjust part quantity
   const handlePartQtyChange = (partId: string, delta: number, maxStock: number) => {
-    const existing = selectedParts.find((p) => p.partId === partId);
+    const existing = (selectedParts || []).find((p) => p.partId === partId);
     if (!existing && delta > 0) {
       if (maxStock < 1) {
         showToast('Stok suku cadang ini kosong!', 'warning');
@@ -239,14 +235,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
   // Calculate live modal costs
   const calculateModalTotals = () => {
     let serviceCost = 0;
-    selectedServices.forEach((sId) => {
-      const s = serviceItems.find((item) => item.id === sId);
+    (selectedServices || []).forEach((sId) => {
+      const s = (serviceItems || []).find((item) => item.id === sId);
       if (s) serviceCost += s.price;
     });
 
     let partsCost = 0;
-    selectedParts.forEach((p) => {
-      const part = spareParts.find((item) => item.id === p.partId);
+    (selectedParts || []).forEach((p) => {
+      const part = (spareParts || []).find((item) => item.id === p.partId);
       if (part) partsCost += part.sellingPrice * p.qty;
     });
 
@@ -266,9 +262,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
       return;
     }
 
-    const customer = customers.find((c) => c.id === selectedCustomerId);
-    const vehicle = vehicles.find((v) => v.id === selectedVehicleId);
-    const mechanic = mechanics.find((m) => m.id === assignedMechanicId);
+    const customer = (customers || []).find((c) => c.id === selectedCustomerId);
+    const vehicle = (vehicles || []).find((v) => v.id === selectedVehicleId);
+    const mechanic = (mechanics || []).find((m) => m.id === assignedMechanicId);
 
     if (!customer || !vehicle) {
       showToast('Data pelanggan atau kendaraan tidak valid.', 'error');
@@ -276,17 +272,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     }
 
     // Build services list
-    const finalServices = selectedServices
+    const finalServices = (selectedServices || [])
       .map((sId) => {
-        const s = serviceItems.find((item) => item.id === sId);
+        const s = (serviceItems || []).find((item) => item.id === sId);
         return s ? { serviceId: s.id, name: s.name, price: s.price } : null;
       })
       .filter(Boolean) as { serviceId: string; name: string; price: number }[];
 
     // Build parts list
-    const finalParts = selectedParts
+    const finalParts = (selectedParts || [])
       .map((p) => {
-        const part = spareParts.find((item) => item.id === p.partId);
+        const part = (spareParts || []).find((item) => item.id === p.partId);
         return part
           ? {
               partId: part.id,
@@ -324,18 +320,18 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     e.preventDefault();
     if (!editingWO) return;
 
-    const mechanic = mechanics.find((m) => m.id === assignedMechanicId);
+    const mechanic = (mechanics || []).find((m) => m.id === assignedMechanicId);
 
-    const finalServices = selectedServices
+    const finalServices = (selectedServices || [])
       .map((sId) => {
-        const s = serviceItems.find((item) => item.id === sId);
+        const s = (serviceItems || []).find((item) => item.id === sId);
         return s ? { serviceId: s.id, name: s.name, price: s.price } : null;
       })
       .filter(Boolean) as { serviceId: string; name: string; price: number }[];
 
-    const finalParts = selectedParts
+    const finalParts = (selectedParts || [])
       .map((p) => {
-        const part = spareParts.find((item) => item.id === p.partId);
+        const part = (spareParts || []).find((item) => item.id === p.partId);
         return part
           ? {
               partId: part.id,
@@ -430,12 +426,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     }
   };
 
-  const confirmDeleteWO = () => {
+  const confirmDeleteWO = async () => {
     if (woToDelete) {
-      deleteWorkOrder(woToDelete);
-      showToast(`SPK ${woToDelete} berhasil dihapus.`, 'success');
+      const id = woToDelete;
       setWoToDelete(null);
       setIsEditWOOpen(false);
+      await deleteWorkOrder(id);
     }
   };
 
@@ -526,7 +522,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
           >
             Semua ({workOrders.length})
           </button>
-          {mechanics.map((m) => {
+          {mechanics.filter((m) => m.status !== 'inactive' || workOrders.some((wo) => String(wo.assignedMechanicId) === String(m.id))).map((m) => {
             const count = workOrders.filter((wo) => String(wo.assignedMechanicId) === String(m.id)).length;
             return (
               <button
@@ -837,9 +833,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                   className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
                 >
                   <option value="">-- Belum Ditugaskan --</option>
-                  {mechanics.map((m) => (
+                  {mechanics.filter((m) => m.status !== 'inactive').map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.position}) - {m.activeJobsCount} tugas aktif
+                      {m.name} ({m.position}) - {m.assignedJobsCount ?? 0} tugas aktif
                     </option>
                   ))}
                 </select>
@@ -873,7 +869,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
               <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Pilih Paket / Jasa Servis</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                  {serviceItems.map((s) => {
+                  {(serviceItems || []).map((s) => {
                     const isChecked = selectedServices.includes(s.id);
                     return (
                       <div
@@ -1039,7 +1035,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                   className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
                 >
                   <option value="">-- Belum Ditugaskan --</option>
-                  {mechanics.map((m) => (
+                  {mechanics.filter((m) => m.status !== 'inactive' || String(m.id) === String(assignedMechanicId)).map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name} ({m.position})
                     </option>
@@ -1073,7 +1069,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
               <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Paket / Jasa Servis</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                  {serviceItems.map((s) => {
+                  {(serviceItems || []).map((s) => {
                     const isChecked = selectedServices.includes(s.id);
                     return (
                       <div

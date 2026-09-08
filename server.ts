@@ -41,13 +41,17 @@ async function log(action: string, details: string, category: string, userRole =
 
 async function readWorkOrders() {
   const orders = await query(`
-    SELECT w.*, v.plate_number, v.brand, v.model, c.id AS customer_id, c.name AS customer_name, c.phone AS customer_phone,
+    SELECT w.*, v.plate_number, v.brand, v.model,
+           COALESCE(c.id, cv.id, 1) AS customer_id,
+           COALESCE(c.name, cv.name, 'Pelanggan Umum') AS customer_name,
+           COALESCE(c.phone, cv.phone, '') AS customer_phone,
            m.name AS mechanic_name, i.id AS invoice_id, i.payment_status, i.payment_method,
            i.subtotal_services, i.subtotal_spareparts, i.discount, i.grand_total,
            i.cash_tendered, i.change_amount, i.updated_at AS paid_at
     FROM work_orders w
     LEFT JOIN vehicles v ON v.id = w.vehicle_id
-    LEFT JOIN customers c ON c.id = v.customer_id
+    LEFT JOIN customers c ON c.id = w.customer_id
+    LEFT JOIN customers cv ON cv.id = v.customer_id
     LEFT JOIN mechanics m ON m.id = w.mechanic_id
     LEFT JOIN invoices i ON i.work_order_id = w.id
     ORDER BY w.created_at DESC, w.id DESC
@@ -94,7 +98,7 @@ async function readWorkOrders() {
 async function bootstrap() {
   const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders, deletionRequests] = await Promise.all([
     query('SELECT * FROM shop_settings WHERE id = 1'),
-    query('SELECT id, name, phone, address, email, username, created_at FROM customers ORDER BY name'),
+    query('SELECT id, name, phone, address, email, username, (password IS NOT NULL AND has_custom_password = 1) AS has_password, created_at FROM customers ORDER BY name'),
     query('SELECT v.*, c.name AS customer_name FROM vehicles v LEFT JOIN customers c ON c.id = v.customer_id ORDER BY v.id DESC'),
     query(`SELECT b.*, c.id AS customer_id, c.name AS customer_name, v.plate_number, v.brand, v.model
            FROM bookings b LEFT JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN customers c ON c.id=v.customer_id ORDER BY b.scheduled_date DESC, b.scheduled_time DESC`),
@@ -119,6 +123,7 @@ async function bootstrap() {
       address: row.address || '',
       email: row.email || '',
       username: row.username || undefined,
+      hasPassword: Boolean(row.has_password),
       createdAt: row.created_at
     })),
     vehicles: vehicles.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), customerName: row.customer_name, licensePlate: row.plate_number, brand: row.brand, model: row.model, year: Number(row.year), imageUrl: row.image_url || undefined })),
@@ -201,6 +206,24 @@ app.post('/api/deletion-requests/:id/approve', async (req, res, next) => {
     const table = DELETION_TARGETS[request.entity_type];
     if (!table) return res.status(400).json({ message: 'Tipe data tidak dikenal.' });
 
+    if (request.entity_type === 'mechanic') {
+      const [jobs]: any = await query('SELECT id FROM work_orders WHERE mechanic_id = ? LIMIT 1', [request.entity_id]);
+      if (jobs.length > 0) {
+        return res.status(409).json({ message: 'Mekanik tidak dapat dihapus karena memiliki riwayat pengerjaan SPK. Ubah status menjadi non-aktif.' });
+      }
+    }
+
+    if (request.entity_type === 'work_order') {
+      const parts: any = await query('SELECT sparepart_id, quantity FROM service_details WHERE work_order_id=? AND sparepart_id IS NOT NULL', [request.entity_id]);
+      for (const p of parts) {
+        await query('UPDATE spareparts SET stock=stock+? WHERE id=?', [p.quantity, p.sparepart_id]);
+        await query(
+          "INSERT INTO stock_transactions (sparepart_id, transaction_type, qty, reference_id, notes, created_at) VALUES (?, 'stock_in', ?, ?, 'Restorasi stok dari pembatalan/hapus SPK', NOW())",
+          [p.sparepart_id, p.quantity, request.entity_id]
+        );
+      }
+    }
+
     await query(`DELETE FROM ${table} WHERE id=?`, [request.entity_id]);
     await query(
       'UPDATE deletion_requests SET status=\'approved\', reviewed_by_name=?, reviewed_at=NOW(), updated_at=NOW() WHERE id=?',
@@ -266,7 +289,7 @@ app.post('/api/auth/login', async (req, res, next) => {
       const valid = await bcrypt.compare(password, staff.password);
       if (valid) {
         await log('Login Staf Sukses', `Staf ${staff.name} (${staff.role}) berhasil masuk.`, 'auth', staff.role, staff.id);
-        return res.json({ id: id(staff.id), name: staff.name, role: staff.role });
+        return res.json({ id: id(staff.id), name: staff.name, role: staff.role, username: staff.username, email: staff.email, phone: staff.phone });
       }
       return res.status(401).json({ message: 'Password salah untuk akun staf.' });
     }
@@ -281,12 +304,111 @@ app.post('/api/auth/login', async (req, res, next) => {
       const valid = await bcrypt.compare(password, cust.password);
       if (valid) {
         await log('Login Pelanggan Sukses', `Pelanggan ${cust.name} berhasil masuk.`, 'auth', 'user', cust.id);
-        return res.json({ id: id(cust.id), name: cust.name, role: 'user' });
+        return res.json({ id: id(cust.id), name: cust.name, role: 'user', username: cust.username, email: cust.email, phone: cust.phone, address: cust.address });
       }
       return res.status(401).json({ message: 'Password salah untuk akun pelanggan.' });
     }
 
     return res.status(401).json({ message: 'Username atau password tidak ditemukan.' });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/auth/change-password', async (req, res, next) => {
+  try {
+    const { userId, role, username, email, currentPassword, newPassword, isGoogleAuth } = req.body;
+    const cleanCurrent = String(currentPassword || '');
+    const cleanNew = String(newPassword || '');
+
+    if (!cleanNew) {
+      return res.status(400).json({ message: 'Password baru wajib diisi.' });
+    }
+
+    if (cleanNew.length < 3) {
+      return res.status(400).json({ message: 'Password baru minimal 3 karakter.' });
+    }
+
+    if (role === 'user') {
+      let custRows: any = [];
+      if (userId && /^\d+$/.test(String(userId))) {
+        custRows = await query('SELECT * FROM customers WHERE id = ? LIMIT 1', [userId]);
+      }
+      if (custRows.length === 0 && username) {
+        custRows = await query('SELECT * FROM customers WHERE LOWER(username) = ? LIMIT 1', [String(username).toLowerCase()]);
+      }
+      if (custRows.length === 0 && email) {
+        custRows = await query('SELECT * FROM customers WHERE LOWER(email) = ? LIMIT 1', [String(email).toLowerCase()]);
+      }
+      if (custRows.length === 0) {
+        return res.status(404).json({ message: 'Akun pelanggan tidak ditemukan.' });
+      }
+
+      const cust = custRows[0];
+      const hasCustomPassword = Boolean(cust.password && cust.has_custom_password);
+
+      // If user already has a custom/manual password set, they MUST enter current password
+      if (hasCustomPassword) {
+        if (!cleanCurrent) {
+          return res.status(400).json({ message: 'Kata sandi saat ini wajib diisi.' });
+        }
+        if (cleanCurrent === cleanNew) {
+          return res.status(400).json({ message: 'Kata sandi baru tidak boleh sama dengan kata sandi saat ini.' });
+        }
+        const valid = await bcrypt.compare(cleanCurrent, cust.password);
+        if (!valid) {
+          return res.status(400).json({ message: 'Kata sandi saat ini salah.' });
+        }
+      } else {
+        // User does not have a manual password yet (e.g. initial setup after Google OAuth)
+        if (cleanCurrent && cust.password) {
+          const valid = await bcrypt.compare(cleanCurrent, cust.password);
+          if (!valid) {
+            return res.status(400).json({ message: 'Kata sandi saat ini salah.' });
+          }
+        }
+      }
+
+      const hash = await bcrypt.hash(cleanNew, 12);
+      await query(
+        'UPDATE customers SET password = ?, has_custom_password = 1, updated_at = NOW() WHERE id = ?',
+        [hash, cust.id]
+      );
+      await log('Ganti Password Sukses', `Pelanggan ${cust.name} berhasil memperbarui kata sandi.`, 'auth', 'user', cust.id);
+      return res.json({ ok: true, message: 'Kata sandi berhasil diperbarui.' });
+    } else {
+      let staffRows: any = [];
+      if (userId && /^\d+$/.test(String(userId))) {
+        staffRows = await query('SELECT * FROM staff WHERE id = ? LIMIT 1', [userId]);
+      }
+      if (staffRows.length === 0 && username) {
+        staffRows = await query('SELECT * FROM staff WHERE LOWER(username) = ? LIMIT 1', [String(username).toLowerCase()]);
+      }
+      if (staffRows.length === 0 && role) {
+        staffRows = await query('SELECT * FROM staff WHERE role = ? LIMIT 1', [role]);
+      }
+      if (staffRows.length === 0) {
+        return res.status(404).json({ message: 'Akun staf tidak ditemukan.' });
+      }
+
+      const staff = staffRows[0];
+
+      if (!cleanCurrent) {
+        return res.status(400).json({ message: 'Password saat ini wajib diisi untuk akun staf.' });
+      }
+      if (cleanCurrent === cleanNew) {
+        return res.status(400).json({ message: 'Password baru tidak boleh sama dengan password saat ini.' });
+      }
+      if (staff.password) {
+        const valid = await bcrypt.compare(cleanCurrent, staff.password);
+        if (!valid) {
+          return res.status(400).json({ message: 'Password saat ini salah.' });
+        }
+      }
+
+      const hash = await bcrypt.hash(cleanNew, 12);
+      await query('UPDATE staff SET password = ?, updated_at = NOW() WHERE id = ?', [hash, staff.id]);
+      await log('Ganti Password Sukses', `Staf ${staff.name} (${staff.role}) berhasil memperbarui password.`, 'auth', staff.role, staff.id);
+      return res.json({ ok: true, message: 'Password berhasil diperbarui.' });
+    }
   } catch (error) { next(error); }
 });
 
@@ -305,7 +427,7 @@ app.post('/api/auth/register', async (req, res, next) => {
 
     const hash = await bcrypt.hash(String(password), 12);
     const result = await query<ResultSetHeader>(
-      'INSERT INTO customers (name, phone, email, username, password, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      'INSERT INTO customers (name, phone, email, username, password, address, has_custom_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
       [fullName, phone, cleanEmail, cleanUsername, hash, address]
     );
 
@@ -326,7 +448,7 @@ async function syncGoogleUser(email: string, name: string, phone = '081234567890
   if (staff.length > 0) {
     const s: any = staff[0];
     await log('Login Akun Google Staf', `Staf ${s.name} (${cleanEmail}) masuk via Google.`, 'auth', s.role, s.id);
-    return { id: id(s.id), name: s.name, role: s.role, email: s.email };
+    return { id: id(s.id), name: s.name, role: s.role, email: s.email, username: s.username };
   }
 
   // 2. Check in customers table
@@ -336,23 +458,25 @@ async function syncGoogleUser(email: string, name: string, phone = '081234567890
   );
   if (cust.length > 0) {
     const c: any = cust[0];
+    const customerUsername = c.username || cleanUsername;
+    if (!c.username) {
+      await query('UPDATE customers SET username = ? WHERE id = ?', [cleanUsername, c.id]);
+    }
     await log('Login Akun Google Pelanggan', `Pelanggan ${c.name} (${cleanEmail}) masuk via Google.`, 'auth', 'user', c.id);
-    return { id: id(c.id), name: c.name, role: 'user', email: c.email };
+    return { id: id(c.id), name: c.name, role: 'user', email: c.email, username: customerUsername };
   }
 
-  // 3. Create new customer entry directly
-  const randomPass = Math.random().toString(36).slice(-8) + Date.now();
-  const hash = await bcrypt.hash(randomPass, 10);
+  // 3. Create new customer entry directly (password NULL until user sets it manually)
   const displayName = name.trim() || cleanUsername;
 
   const result = await query<ResultSetHeader>(
-    'INSERT INTO customers (name, phone, email, username, password, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, \'\', NOW(), NOW())',
-    [displayName, phone, cleanEmail, cleanUsername, hash]
+    'INSERT INTO customers (name, phone, email, username, password, address, has_custom_password, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, \'\', 0, NOW(), NOW())',
+    [displayName, phone, cleanEmail, cleanUsername]
   );
   const customerId = result.insertId;
 
   await log('Pelanggan Google Terdaftar', `Akun baru ${displayName} (${cleanEmail}) terdaftar via Google.`, 'customer', 'user', customerId);
-  return { id: id(customerId), name: displayName, role: 'user', email: cleanEmail };
+  return { id: id(customerId), name: displayName, role: 'user', email: cleanEmail, username: cleanUsername };
 }
 
 app.post('/api/auth/google', async (req, res, next) => {
@@ -388,6 +512,12 @@ app.post('/api/auth/google-demo', async (req, res, next) => {
     const cleanName = String(name || cleanEmail.split('@')[0]).trim();
     const cleanPhone = String(phone || '081234567890').trim();
 
+    // Prevent privilege escalation: staff accounts must log in with username/password
+    const staffCheck: any = await query('SELECT id FROM staff WHERE LOWER(email) = ? LIMIT 1', [cleanEmail]);
+    if (staffCheck.length > 0) {
+      return res.status(403).json({ message: 'Akun staf dan pemilik wajib masuk menggunakan username dan kata sandi.' });
+    }
+
     const user = await syncGoogleUser(cleanEmail, cleanName, cleanPhone);
     res.json(user);
   } catch (error) { next(error); }
@@ -413,6 +543,15 @@ app.put('/api/customers/:id', async (req, res, next) => {
   try {
     const { name, phone, address = '', email = '', username = undefined, password = undefined } = req.body;
     
+    if (username) {
+      const cleanUsername = String(username).trim().toLowerCase();
+      const existsStaff = await query('SELECT id FROM staff WHERE LOWER(username) = ?', [cleanUsername]);
+      const existsCust = await query('SELECT id FROM customers WHERE LOWER(username) = ? AND id != ?', [cleanUsername, req.params.id]);
+      if (existsStaff.length > 0 || existsCust.length > 0) {
+        return res.status(409).json({ message: 'Username sudah digunakan oleh akun lain. Silakan pilih username lain.' });
+      }
+    }
+
     if (password && String(password).trim().length > 0) {
       const hash = await bcrypt.hash(String(password).trim(), 12);
       await query(
@@ -437,7 +576,24 @@ app.put('/api/customers/:id', async (req, res, next) => {
 
 app.delete('/api/customers/:id', async (req, res, next) => {
   try {
+    const orders: any = await query('SELECT v.id FROM vehicles v JOIN work_orders w ON w.vehicle_id=v.id WHERE v.customer_id=? LIMIT 1', [req.params.id]);
+    if (orders && orders.length > 0) {
+      return res.status(409).json({ message: 'Pelanggan tidak dapat dihapus karena memiliki riwayat pengerjaan SPK atau transaksi aktif.' });
+    }
+    await query('DELETE FROM vehicles WHERE customer_id=?', [req.params.id]);
     await query('DELETE FROM customers WHERE id=?', [req.params.id]);
+    res.sendStatus(204);
+  } catch (e) { next(e); }
+});
+
+app.put('/api/staff/:id', async (req, res, next) => {
+  try {
+    const { name, phone, email } = req.body;
+    await query(
+      'UPDATE staff SET name = COALESCE(?, name), phone = COALESCE(?, phone), email = COALESCE(?, email), updated_at = NOW() WHERE id = ?',
+      [name || null, phone || null, email || null, req.params.id]
+    );
+    await log('Profil Staf Diperbarui', `Profil staf ID ${req.params.id} (${name || 'Staf'}) diperbarui.`, 'staff');
     res.sendStatus(204);
   } catch (e) { next(e); }
 });
@@ -460,8 +616,9 @@ app.post('/api/bookings', async (req, res, next) => {
         vehicleId = latestVeh[0]?.id || 1;
       }
     }
-    const count: any = await query('SELECT COUNT(*) AS total FROM bookings WHERE scheduled_date=?', [b.date]);
-    const q = `Q-${String(Number(count[0].total) + 1).padStart(3, '0')}`;
+    const [maxQ]: any = await query("SELECT COALESCE(MAX(CAST(SUBSTRING(queue_number, 3) AS UNSIGNED)), 0) AS max_num FROM bookings WHERE scheduled_date=?", [b.date]);
+    const nextNum = (Number(maxQ[0]?.max_num) || 0) + 1;
+    const q = `Q-${String(nextNum).padStart(3, '0')}`;
     const code = `BKG-${Date.now()}`;
     const r = await query<ResultSetHeader>(
       'INSERT INTO bookings (vehicle_id,booking_code,scheduled_date,scheduled_time,complaint,estimated_duration_minutes,status,queue_number,created_at,updated_at) VALUES (?,?,?,?,?,?,\'pending\',?,NOW(),NOW())',
@@ -498,6 +655,10 @@ async function replaceDetails(connection: mysql.PoolConnection, orderId: number,
   );
   for (const old of oldDetails) {
     await connection.query('UPDATE spareparts SET stock=stock+? WHERE id=?', [Number(old.quantity), old.sparepart_id]);
+    await connection.query(
+      "INSERT INTO stock_transactions (sparepart_id, transaction_type, qty, reference_id, notes, created_at) VALUES (?, 'stock_in', ?, ?, 'Penyesuaian/Revisi SPK', NOW())",
+      [old.sparepart_id, Number(old.quantity), orderId]
+    );
   }
 
   // 2. Clear previous service_details for this order
@@ -543,25 +704,49 @@ app.post('/api/quick-checkin', async (req, res, next) => {
     const { plateNumber, customerName, phone, brand, model, year, complaint, mechanicId, services = [], spareParts = [], estimatedCompletionTime = '13:30', notes = '' } = req.body;
     await c.beginTransaction();
 
+    const cleanName = String(customerName || '').trim();
+    const cleanPhone = String(phone || '').trim();
     let customerId: number | null = null;
-    if (customerName) {
-      const [existingCust]: any = await c.query('SELECT id FROM customers WHERE LOWER(name) = ? OR (phone != \'\' AND phone = ?) LIMIT 1', [customerName.toLowerCase().trim(), phone?.trim() || '__none__']);
-      if (existingCust.length > 0) {
-        customerId = existingCust[0].id;
-        if (phone) await c.query('UPDATE customers SET phone=? WHERE id=?', [phone, customerId]);
+
+    if (cleanName) {
+      // 1. First priority: match existing customer by exact name
+      const [nameMatches]: any = await c.query('SELECT id, name, phone FROM customers WHERE LOWER(TRIM(name)) = LOWER(?) LIMIT 1', [cleanName]);
+      if (nameMatches.length > 0) {
+        customerId = nameMatches[0].id;
+        if (cleanPhone) {
+          await c.query('UPDATE customers SET phone=? WHERE id=?', [cleanPhone, customerId]);
+        }
       } else {
-        const [custRes]: any = await c.query('INSERT INTO customers (name, phone, address, created_at, updated_at) VALUES (?, ?, \'\', NOW(), NOW())', [customerName.trim(), phone || '08123456789']);
+        // Name is new -> Create a new customer specifically for this person!
+        const [custRes]: any = await c.query(
+          'INSERT INTO customers (name, phone, address, created_at, updated_at) VALUES (?, ?, \'\', NOW(), NOW())',
+          [cleanName, cleanPhone || '-']
+        );
         customerId = custRes.insertId;
       }
+    } else if (cleanPhone) {
+      // Name not provided, but phone is provided: lookup by phone
+      const [phoneMatches]: any = await c.query('SELECT id FROM customers WHERE phone = ? LIMIT 1', [cleanPhone]);
+      if (phoneMatches.length > 0) {
+        customerId = phoneMatches[0].id;
+      } else {
+        const [custRes]: any = await c.query(
+          'INSERT INTO customers (name, phone, address, created_at, updated_at) VALUES (?, ?, \'\', NOW(), NOW())',
+          ['Pelanggan Walk-in', cleanPhone]
+        );
+        customerId = custRes.insertId;
+      }
+    } else {
+      customerId = 1;
     }
 
     const cleanPlate = String(plateNumber || '').trim().toUpperCase();
     let vehicleId: number | null = null;
-    const [existingVeh]: any = await c.query('SELECT id, customer_id FROM vehicles WHERE UPPER(plate_number) = ? LIMIT 1', [cleanPlate]);
+    const [existingVeh]: any = await c.query('SELECT id, customer_id FROM vehicles WHERE UPPER(plate_number) = ? OR UPPER(REPLACE(plate_number, " ", "")) = ? LIMIT 1', [cleanPlate, cleanPlate.replace(/\s+/g, '')]);
     if (existingVeh.length > 0) {
       vehicleId = existingVeh[0].id;
-      if (customerId && (!existingVeh[0].customer_id || existingVeh[0].customer_id === 1)) {
-        await c.query('UPDATE vehicles SET customer_id=? WHERE id=?', [customerId, vehicleId]);
+      if (customerId) {
+        await c.query('UPDATE vehicles SET customer_id=?, brand=COALESCE(NULLIF(?, ""), brand), model=COALESCE(NULLIF(?, ""), model), updated_at=NOW() WHERE id=?', [customerId, brand || '', model || '', vehicleId]);
       }
     } else {
       const [vehRes]: any = await c.query('INSERT INTO vehicles (customer_id, plate_number, brand, model, year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())', [customerId || 1, cleanPlate, brand || 'Motor', model || 'Umum', Number(year) || new Date().getFullYear()]);
@@ -569,11 +754,14 @@ app.post('/api/quick-checkin', async (req, res, next) => {
     }
 
     const number = `WO-${Date.now()}`;
-    const [woRes]: any = await c.query('INSERT INTO work_orders (vehicle_id, mechanic_id, wo_number, complaint, diagnosis, estimated_completion_time, notes, status, priority, start_time, created_at, updated_at) VALUES (?, ?, ?, ?, \'\', ?, ?, \'waiting\', \'normal\', NOW(), NOW(), NOW())', [vehicleId, mechanicId || 1, number, complaint || 'Servis rutin', estimatedCompletionTime, notes]);
+    const [woRes]: any = await c.query(
+      'INSERT INTO work_orders (customer_id, vehicle_id, mechanic_id, wo_number, complaint, diagnosis, estimated_completion_time, notes, status, priority, start_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, \'\', ?, ?, \'waiting\', \'normal\', NOW(), NOW(), NOW())',
+      [customerId || 1, vehicleId, mechanicId || 1, number, complaint || 'Servis rutin', estimatedCompletionTime, notes]
+    );
     const workOrderId = woRes.insertId;
 
     await replaceDetails(c, workOrderId, services, spareParts);
-    await log('Servis Baru Masuk', `Pendaftaran motor ${cleanPlate} (${customerName || 'Walk-in'})`, 'work_order');
+    await log('Servis Baru Masuk', `Pendaftaran motor ${cleanPlate} (${cleanName || 'Walk-in'})`, 'work_order');
 
     await c.commit();
     res.status(201).json({ id: id(workOrderId), vehicleId: id(vehicleId), customerId: id(customerId) });
@@ -604,11 +792,20 @@ app.post('/api/work-orders', async (req, res, next) => {
       const [mechRows]: any = await c.query('SELECT id FROM mechanics WHERE name=? LIMIT 1', [w.assignedMechanicName || '']);
       mechanicId = mechRows[0]?.id || 1;
     }
+    let customerId = w.customerId;
+    if (typeof customerId === 'string' && !/^\d+$/.test(customerId)) {
+      const [custRows]: any = await c.query('SELECT id FROM customers WHERE name=? LIMIT 1', [w.customerName || '']);
+      customerId = custRows[0]?.id;
+    }
+    if (!customerId && vehicleId) {
+      const [vRows]: any = await c.query('SELECT customer_id FROM vehicles WHERE id=?', [vehicleId]);
+      customerId = vRows[0]?.customer_id || 1;
+    }
     await c.beginTransaction();
     const number = `WO-${Date.now()}`;
     const [r]: any = await c.query(
-      'INSERT INTO work_orders (vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',
-      [vehicleId, mechanicId || 1, w.bookingId || null, number, w.complaint, w.diagnosis || '', w.estimatedCompletionTime, w.notes || '']
+      'INSERT INTO work_orders (customer_id,vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',
+      [customerId || 1, vehicleId, mechanicId || 1, w.bookingId || null, number, w.complaint, w.diagnosis || '', w.estimatedCompletionTime, w.notes || '']
     );
     await replaceDetails(c, r.insertId, w.services, w.sparePartsUsed);
     if (w.bookingId) await c.query("UPDATE bookings SET status='confirmed',updated_at=NOW() WHERE id=?", [w.bookingId]);
@@ -645,113 +842,40 @@ app.delete('/api/work-orders/:id', async (req, res, next) => {
   }
 });
 
-app.post('/api/quick-checkin', async (req, res, next) => {
-  const c = await pool.getConnection();
-  try {
-    const {
-      plateNumber,
-      customerName = 'Pelanggan Umum',
-      phone = '',
-      brand = 'Honda',
-      model = 'Motor Matic',
-      year = new Date().getFullYear(),
-      complaint = 'Servis berkala',
-      mechanicId,
-      services = [],
-      spareParts = [],
-      estimatedCompletionTime = '14:30',
-      notes = ''
-    } = req.body;
-
-    await c.beginTransaction();
-
-    // 1. Customer
-    const cleanPhone = String(phone).trim();
-    const cleanName = String(customerName).trim() || 'Pelanggan Umum';
-    let cId: number;
-    const [existingCust]: any = await c.query(
-      'SELECT id FROM customers WHERE (phone != "" AND phone = ?) OR LOWER(name) = ? LIMIT 1',
-      [cleanPhone, cleanName.toLowerCase()]
-    );
-    if (existingCust.length > 0) {
-      cId = existingCust[0].id;
-    } else {
-      const [custRes]: any = await c.query(
-        'INSERT INTO customers (name, phone, address, created_at, updated_at) VALUES (?, ?, "", NOW(), NOW())',
-        [cleanName, cleanPhone]
-      );
-      cId = custRes.insertId;
-    }
-
-    // 2. Vehicle
-    const cleanPlate = String(plateNumber).trim().toUpperCase();
-    let vId: number;
-    const [existingVeh]: any = await c.query(
-      'SELECT id FROM vehicles WHERE UPPER(REPLACE(plate_number, " ", "")) = ? LIMIT 1',
-      [cleanPlate.replace(/\s+/g, '')]
-    );
-    if (existingVeh.length > 0) {
-      vId = existingVeh[0].id;
-    } else {
-      const [vehRes]: any = await c.query(
-        'INSERT INTO vehicles (customer_id, plate_number, brand, model, year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
-        [cId, cleanPlate, brand, model, Number(year) || new Date().getFullYear()]
-      );
-      vId = vehRes.insertId;
-    }
-
-    // 3. Work Order - starts in 'waiting' queue
-    const woNumber = `WO-${Date.now()}`;
-    const [woRes]: any = await c.query(
-      'INSERT INTO work_orders (vehicle_id, mechanic_id, wo_number, complaint, estimated_completion_time, notes, status, priority, start_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, "waiting", "normal", NOW(), NOW(), NOW())',
-      [vId, mechanicId || 1, woNumber, complaint, estimatedCompletionTime, notes]
-    );
-
-    const formattedServices = (services || []).map((s: any) => ({
-      serviceId: s.serviceId || s.id,
-      name: s.name,
-      price: s.price
-    }));
-
-    const formattedParts = (spareParts || []).map((p: any) => ({
-      partId: p.partId || p.id,
-      name: p.name,
-      quantity: p.quantity || 1,
-      pricePerUnit: p.pricePerUnit || 0,
-      totalPrice: (p.pricePerUnit || 0) * (p.quantity || 1)
-    }));
-
-    await replaceDetails(c, woRes.insertId, formattedServices, formattedParts);
-    await c.commit();
-    res.json({ id: id(woRes.insertId) });
-  } catch (e) {
-    await c.rollback();
-    next(e);
-  } finally {
-    c.release();
-  }
-});
-
 app.post('/api/work-orders/:id/checkout', async (req, res, next) => {
   const c = await pool.getConnection();
   try {
     const { discount = 0, paymentMethod = 'cash', cashTendered = null, changeAmount = null } = req.body;
     await c.beginTransaction();
+
+    const [existingInv]: any = await c.query('SELECT id FROM invoices WHERE work_order_id=? LIMIT 1 FOR UPDATE', [req.params.id]);
+    if (existingInv.length > 0) {
+      await c.rollback();
+      return res.status(409).json({ message: 'SPK ini sudah memiliki nota tagihan / telah lunas.' });
+    }
+
     const [details]: any = await c.query(
       `SELECT sd.*, s.name AS service_name, sp.name AS part_name FROM service_details sd LEFT JOIN services s ON s.id=sd.service_id LEFT JOIN spareparts sp ON sp.id=sd.sparepart_id WHERE sd.work_order_id=?`,
       [req.params.id]
     );
     const serviceCost = details.filter((d: any) => d.service_id).reduce((x: number, d: any) => x + Number(d.price), 0);
     const partCost = details.filter((d: any) => d.sparepart_id).reduce((x: number, d: any) => x + Number(d.price) * Number(d.quantity), 0);
-    const total = Math.max(0, serviceCost + partCost - Number(discount));
+
+    const [settings]: any = await c.query('SELECT tax_rate FROM shop_settings WHERE id=1 LIMIT 1');
+    const taxRate = Number(settings[0]?.tax_rate || 0);
+    const subtotal = Math.max(0, serviceCost + partCost - Number(discount));
+    const taxAmount = taxRate > 0 ? Math.round(subtotal * (taxRate / 100)) : 0;
+    const total = subtotal + taxAmount;
+
     const [cashiers]: any = await c.query("SELECT id FROM staff WHERE role='cashier' OR role='admin' ORDER BY id LIMIT 1");
     const cashierId = cashiers[0]?.id || 1;
     const inv = `INV-${Date.now()}`;
     await c.query(
-      "INSERT INTO invoices (work_order_id,cashier_user_id,invoice_number,subtotal_services,subtotal_spareparts,discount,tax,grand_total,payment_method,payment_status,cash_tendered,change_amount,created_at,updated_at) VALUES (?,?,?,?,?,?,0,?,?,'paid',?,?,NOW(),NOW())",
-      [req.params.id, cashierId, inv, serviceCost, partCost, discount, total, paymentMethod, cashTendered, changeAmount]
+      "INSERT INTO invoices (work_order_id,cashier_user_id,invoice_number,subtotal_services,subtotal_spareparts,discount,tax,grand_total,payment_method,payment_status,cash_tendered,change_amount,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'paid',?,?,NOW(),NOW())",
+      [req.params.id, cashierId, inv, serviceCost, partCost, discount, taxAmount, total, paymentMethod, cashTendered, changeAmount]
     );
     await c.query("UPDATE work_orders SET status='picked_up',picked_up_at=NOW(),updated_at=NOW() WHERE id=?", [req.params.id]);
+    await log('Pembayaran Kasir Diterima', `Pelunasan SPK #${req.params.id} (${inv}) senilai Rp ${total.toLocaleString('id-ID')} via ${paymentMethod.toUpperCase()}`, 'payment');
     await c.commit();
     res.sendStatus(204);
   } catch (e) {
@@ -764,12 +888,35 @@ app.post('/api/work-orders/:id/checkout', async (req, res, next) => {
 
 app.post('/api/mechanics',async(req,res,next)=>{try{const m=req.body;const r=await query<ResultSetHeader>('INSERT INTO mechanics (name,phone,status,specialization,created_at,updated_at) VALUES (?, ?,\'active\',?,NOW(),NOW())',[m.name,m.phone,m.position]);res.json({id:id(r.insertId)});}catch(e){next(e);}});
 app.put('/api/mechanics/:id',async(req,res,next)=>{try{const m=req.body;const status=m.status==='available'?'active':m.status==='busy'?'on_leave':m.status;await query('UPDATE mechanics SET name=?,phone=?,status=?,specialization=?,updated_at=NOW() WHERE id=?',[m.name,m.phone,status,m.position,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
-app.delete('/api/mechanics/:id',async(req,res,next)=>{try{await query('DELETE FROM mechanics WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+app.delete('/api/mechanics/:id', async (req, res, next) => {
+  try {
+    const orders: any = await query('SELECT id FROM work_orders WHERE mechanic_id=? LIMIT 1', [req.params.id]);
+    if (orders && orders.length > 0) {
+      return res.status(409).json({ message: 'Mekanik tidak dapat dihapus karena memiliki riwayat pengerjaan SPK. Ubah status menjadi non-aktif.' });
+    }
+    await query('DELETE FROM mechanics WHERE id=?', [req.params.id]);
+    res.sendStatus(204);
+  } catch (e) {
+    next(e);
+  }
+});
 
 app.post('/api/spare-parts',async(req,res,next)=>{try{const p=req.body;let suppliers:any=await query('SELECT id FROM suppliers WHERE name=?',[p.supplier]);let supplierId=suppliers[0]?.id;if(!supplierId){const r=await query<ResultSetHeader>('INSERT INTO suppliers (name,phone,address,created_at,updated_at) VALUES (?, \'-\', \'-\', NOW(), NOW())',[p.supplier]);supplierId=r.insertId;}const r=await query<ResultSetHeader>('INSERT INTO spareparts (supplier_id,sku,name,purchase_price,sell_price,stock,min_stock,unit,created_at,updated_at) VALUES (?,?,?,?,?,?,?,\'pcs\',NOW(),NOW())',[supplierId,p.sku,p.name,p.purchasePrice,p.sellingPrice,p.currentStock,p.minimumStock]);res.json({id:id(r.insertId)});}catch(e){next(e);}});
 app.put('/api/spare-parts/:id',async(req,res,next)=>{try{const p=req.body;await query('UPDATE spareparts SET sku=?,name=?,purchase_price=?,sell_price=?,stock=?,min_stock=?,updated_at=NOW() WHERE id=?',[p.sku,p.name,p.purchasePrice,p.sellingPrice,p.currentStock,p.minimumStock,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
 app.patch('/api/spare-parts/:id/restock',async(req,res,next)=>{try{const qty=Number(req.body.quantity||0);await query('UPDATE spareparts SET stock=stock+?,updated_at=NOW() WHERE id=?',[qty,req.params.id]);const parts:any=await query('SELECT supplier_id FROM spareparts WHERE id=?',[req.params.id]);const supplierId=parts[0]?.supplier_id||null;await query("INSERT INTO stock_transactions (sparepart_id,supplier_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?,?,'stock_in',?,'MANUAL-RESTOCK','Penambahan stok manual',NOW())",[req.params.id,supplierId,qty]);res.sendStatus(204);}catch(e){next(e);}});
-app.delete('/api/spare-parts/:id',async(req,res,next)=>{try{await query('DELETE FROM spareparts WHERE id=?',[req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+app.delete('/api/spare-parts/:id', async (req, res, next) => {
+  try {
+    const used: any = await query('SELECT id FROM service_details WHERE sparepart_id=? LIMIT 1', [req.params.id]);
+    if (used && used.length > 0) {
+      return res.status(409).json({ message: 'Suku cadang tidak dapat dihapus karena pernah digunakan dalam riwayat servis SPK.' });
+    }
+    await query('DELETE FROM stock_transactions WHERE sparepart_id=?', [req.params.id]);
+    await query('DELETE FROM spareparts WHERE id=?', [req.params.id]);
+    res.sendStatus(204);
+  } catch (e) {
+    next(e);
+  }
+});
 
 app.put('/api/settings',async(req,res,next)=>{try{const s=req.body;await query('UPDATE shop_settings SET name=?,address=?,phone=?,email=?,tax_rate=?,currency=\'IDR\',updated_at=NOW(3) WHERE id=1',[s.name,s.address,s.phone,s.email,s.taxRate]);res.sendStatus(204);}catch(e){next(e);}});
 
@@ -783,38 +930,72 @@ app.get('/api/public/track-status', async (req, res, next) => {
     const cleanPlate = rawQuery.replace(/\s+/g, '').toUpperCase();
     const cleanSearch = rawQuery.toUpperCase();
 
-    // 1. Search Work Orders first (Active / Recent)
-    const workOrders = await readWorkOrders();
-    const matchedWo = workOrders.find((w: any) => {
-      const p = String(w.licensePlate || '').replace(/\s+/g, '').toUpperCase();
-      const idStr = String(w.id || '').toUpperCase();
-      const bId = String(w.bookingId || '').toUpperCase();
-      return p === cleanPlate || p.includes(cleanPlate) || idStr === cleanSearch || bId === cleanSearch;
-    });
+    // 1. Search Work Orders directly in MySQL (indexed & fast)
+    const matchedWoRows: any = await query(`
+      SELECT w.id FROM work_orders w
+      LEFT JOIN vehicles v ON v.id = w.vehicle_id
+      WHERE UPPER(REPLACE(v.plate_number, ' ', '')) = ?
+         OR UPPER(w.id) = ?
+         OR UPPER(w.booking_id) = ?
+      ORDER BY w.id DESC
+      LIMIT 1
+    `, [cleanPlate, cleanSearch, cleanSearch]);
 
-    if (matchedWo) {
-      return res.json({
-        found: true,
-        type: 'work_order',
-        data: {
-          id: matchedWo.id,
-          licensePlate: matchedWo.licensePlate,
-          vehicleModel: matchedWo.vehicleModel,
-          customerName: matchedWo.customerName,
-          status: matchedWo.status,
-          complaint: matchedWo.complaint,
-          diagnosis: matchedWo.diagnosis,
-          assignedMechanicName: matchedWo.assignedMechanicName,
-          estimatedCompletionTime: matchedWo.estimatedCompletionTime,
-          paymentStatus: matchedWo.paymentStatus,
-          services: matchedWo.services,
-          sparePartsUsed: matchedWo.sparePartsUsed,
-          costs: matchedWo.costs,
-          createdAt: matchedWo.createdAt,
-          completedAt: matchedWo.completedAt,
-          pickedUpAt: matchedWo.pickedUpAt,
-        }
-      });
+    if (matchedWoRows.length > 0) {
+      const targetId = matchedWoRows[0].id;
+      const rows: any = await query(`
+        SELECT w.*, v.plate_number, v.brand, v.model, c.id AS customer_id, c.name AS customer_name, c.phone AS customer_phone,
+               m.name AS mechanic_name, i.id AS invoice_id, i.payment_status, i.payment_method,
+               i.subtotal_services, i.subtotal_spareparts, i.discount, i.grand_total,
+               i.cash_tendered, i.change_amount, i.updated_at AS paid_at
+        FROM work_orders w
+        LEFT JOIN vehicles v ON v.id = w.vehicle_id
+        LEFT JOIN customers c ON c.id = v.customer_id
+        LEFT JOIN mechanics m ON m.id = w.mechanic_id
+        LEFT JOIN invoices i ON i.work_order_id = w.id
+        WHERE w.id = ?
+        LIMIT 1
+      `, [targetId]);
+
+      if (rows.length > 0) {
+        const row = rows[0];
+        const details: any = await query(`
+          SELECT sd.*, s.name AS service_name, sp.name AS part_name
+          FROM service_details sd
+          LEFT JOIN services s ON s.id = sd.service_id
+          LEFT JOIN spareparts sp ON sp.id = sd.sparepart_id
+          WHERE sd.work_order_id = ?
+        `, [targetId]);
+        const services = details.filter((d: any) => d.service_id).map((d: any) => ({ serviceId: id(d.service_id), name: d.service_name, price: Number(d.price) }));
+        const sparePartsUsed = details.filter((d: any) => d.sparepart_id).map((d: any) => ({ partId: id(d.sparepart_id), name: d.part_name, quantity: Number(d.quantity), pricePerUnit: Number(d.price), totalPrice: Number(d.price) * Number(d.quantity) }));
+        const serviceCost = row.invoice_id ? Number(row.subtotal_services) : services.reduce((sum: number, item: any) => sum + item.price, 0);
+        const sparePartCost = row.invoice_id ? Number(row.subtotal_spareparts) : sparePartsUsed.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+        const discount = row.invoice_id ? Number(row.discount) : 0;
+        const total = row.invoice_id ? Number(row.grand_total) : Math.max(0, serviceCost + sparePartCost - discount);
+
+        return res.json({
+          found: true,
+          type: 'work_order',
+          data: {
+            id: id(row.id),
+            licensePlate: row.plate_number || 'N/A',
+            vehicleModel: `${row.brand || 'Motor'} ${row.model || 'Umum'}`.trim(),
+            customerName: row.customer_name || 'Pelanggan Umum',
+            status: uiWorkOrderStatus(row.status),
+            complaint: row.complaint || '',
+            diagnosis: row.diagnosis || '',
+            assignedMechanicName: row.mechanic_name || 'Mekanik BR Motor',
+            estimatedCompletionTime: row.estimated_completion_time ? String(row.estimated_completion_time).slice(0, 5) : '13:30',
+            paymentStatus: row.payment_status || 'unpaid',
+            services,
+            sparePartsUsed,
+            costs: { serviceCost, sparePartCost, discount, total },
+            createdAt: row.created_at,
+            completedAt: row.completed_at || undefined,
+            pickedUpAt: row.picked_up_at || undefined,
+          }
+        });
+      }
     }
 
     // 2. Search Bookings if no work order is active
@@ -925,11 +1106,12 @@ app.post('/api/public/booking', async (req, res, next) => {
     }
 
     // 3. Create Booking
-    const [countRows]: any = await c.query(
-      'SELECT COUNT(*) AS total FROM bookings WHERE scheduled_date = ?',
+    const [maxQRows]: any = await c.query(
+      "SELECT COALESCE(MAX(CAST(SUBSTRING(queue_number, 3) AS UNSIGNED)), 0) AS max_num FROM bookings WHERE scheduled_date = ?",
       [date]
     );
-    const queueNumber = `Q-${String(Number(countRows[0]?.total || 0) + 1).padStart(3, '0')}`;
+    const nextQNum = (Number(maxQRows[0]?.max_num) || 0) + 1;
+    const queueNumber = `Q-${String(nextQNum).padStart(3, '0')}`;
     const bookingCode = `BKG-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const mergedComplaint = [serviceType ? `[${serviceType}]` : '', complaint, notes].filter(Boolean).join(' - ');
 
@@ -974,6 +1156,9 @@ app.use((error: any, _req: express.Request, res: express.Response, _next: expres
   console.error(error);
   if (error.type === 'entity.too.large') {
     return res.status(413).json({ message: 'Ukuran foto motor terlalu besar. Gunakan gambar maksimal 2 MB.' });
+  }
+  if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+    return res.status(409).json({ message: 'Data tidak dapat dihapus karena masih terkait dengan riwayat pengerjaan atau transaksi bengkel.' });
   }
   return res.status(500).json({ message: error.message || 'Server database error' });
 });

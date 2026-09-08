@@ -15,12 +15,16 @@ import {
   MessageCircle,
   Calendar,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Receipt
 } from 'lucide-react';
+import { ThermalReceiptModal } from '../components/ThermalReceiptModal';
+import { formatCurrencyInput, parseCurrencyInput } from '../utils/inputFormatters';
 
 export const Payments: React.FC = () => {
   const {
     workOrders,
+    customers,
     processPayment,
     shopInfo,
     showToast,
@@ -36,10 +40,11 @@ export const Payments: React.FC = () => {
   const [cashGiven, setCashGiven] = useState<number>(0);
   const [discountInput, setDiscountInput] = useState<number>(0);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [showThermalModal, setShowThermalModal] = useState<boolean>(false);
 
-  // Orders filtered - show all unpaid work orders
+  // Orders filtered - only show unpaid work orders where motorcycle is completed and ready for pick-up
   const pendingOrders = workOrders.filter(
-    (wo) => wo.paymentStatus === 'unpaid'
+    (wo) => wo.paymentStatus === 'unpaid' && (wo.status === 'completed' || wo.status === 'picked_up')
   );
 
   const paidOrders = workOrders.filter(
@@ -106,7 +111,12 @@ export const Payments: React.FC = () => {
 
   const handleSendWhatsAppInvoice = () => {
     if (!selectedWO) return;
-    const cleanPhone = selectedWO.customerPhone?.replace(/\D/g, '') || '';
+    const rawPhone = selectedWO.customerPhone || customers.find((c) => String(c.id) === String(selectedWO.customerId))?.phone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '') || '';
+    if (!cleanPhone) {
+      showToast('Nomor WhatsApp pelanggan belum terdaftar pada data servis ini.', 'warning');
+      return;
+    }
     const phoneWithCountry = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
 
     const partsList = (selectedWO.sparePartsUsed || []).length > 0
@@ -138,7 +148,7 @@ export const Payments: React.FC = () => {
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Kasir & Pembayaran</h1>
             <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 uppercase">
-              {pendingOrders.length} SPK Tertunda
+              {pendingOrders.length} Siap Bayar
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
@@ -184,8 +194,11 @@ export const Payments: React.FC = () => {
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col max-h-[500px] overflow-y-auto shadow-2xs">
             {activeTab === 'pending' ? (
               pendingOrders.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-xs font-medium">
-                  Tidak ada tagihan tertunda. Seluruh pengerjaan telah dilunasi!
+                <div className="p-8 text-center text-slate-400 text-xs font-medium space-y-1">
+                  <p className="font-semibold text-slate-600">Tidak ada motor yang siap bayar.</p>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Motor harus menyelesaikan servis dan berstatus <strong>"Selesai & Siap Diambil"</strong> di Daftar Servis sebelum masuk kasir.
+                  </p>
                 </div>
               ) : (
                 pendingOrders.map((wo) => {
@@ -300,12 +313,14 @@ export const Payments: React.FC = () => {
                       <div className="flex items-center bg-white border border-slate-200 rounded-lg px-3 py-2">
                         <span className="text-slate-900 font-bold mr-1.5">{shopInfo.currency}</span>
                         <input
-                          type="number"
-                          min={0}
-                          max={subtotal}
-                          step="any"
-                          value={discountInput}
-                          onChange={(e) => setDiscountInput(parseFloat(e.target.value) || 0)}
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={formatCurrencyInput(discountInput)}
+                          onChange={(e) => {
+                            const val = parseCurrencyInput(e.target.value);
+                            setDiscountInput(Math.min(subtotal, val));
+                          }}
                           className="bg-transparent text-slate-900 font-bold focus:outline-none w-full font-mono text-xs"
                         />
                       </div>
@@ -320,12 +335,11 @@ export const Payments: React.FC = () => {
                         <div className="flex items-center bg-white border border-slate-200 rounded-lg px-3 py-2 mb-2">
                           <span className="text-slate-900 font-bold mr-1.5">{shopInfo.currency}</span>
                           <input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={cashGiven || ''}
-                            onChange={(e) => setCashGiven(parseFloat(e.target.value) || 0)}
-                            placeholder="e.g. 100000"
+                            type="text"
+                            inputMode="numeric"
+                            value={formatCurrencyInput(cashGiven)}
+                            onChange={(e) => setCashGiven(parseCurrencyInput(e.target.value))}
+                            placeholder="Contoh: 100.000"
                             className="bg-transparent text-slate-900 font-bold focus:outline-none w-full font-mono text-xs"
                           />
                         </div>
@@ -409,16 +423,25 @@ export const Payments: React.FC = () => {
                   <div className="flex items-center justify-center gap-2 flex-wrap pt-2">
                     <button
                       type="button"
+                      onClick={() => setShowThermalModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-lg cursor-pointer transition-all shadow-xs active:scale-98"
+                      title="Buka pratinjau struk thermal 58mm / 80mm"
+                    >
+                      <Receipt className="w-4 h-4" />
+                      Pratinjau Struk
+                    </button>
+                    <button
+                      type="button"
                       onClick={handlePrint}
-                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg cursor-pointer transition-all shadow-xs"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg cursor-pointer transition-all shadow-xs active:scale-98"
                     >
                       <Printer className="w-4 h-4" />
-                      Cetak Struk Thermal
+                      Cetak Nota
                     </button>
                     <button
                       type="button"
                       onClick={handleSendWhatsAppInvoice}
-                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer transition-all shadow-xs"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer transition-all shadow-xs active:scale-98"
                     >
                       <MessageCircle className="w-4 h-4" />
                       Kirim Nota WA
@@ -573,22 +596,30 @@ export const Payments: React.FC = () => {
             </div>
 
             <div className="space-y-2.5">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowThermalModal(true)}
+                  className="py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-98"
+                >
+                  <Receipt className="w-4 h-4 shrink-0" />
+                  Struk POS
+                </button>
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                  className="py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-98"
                 >
                   <Printer className="w-4 h-4 shrink-0" />
-                  Cetak Struk
+                  Cetak
                 </button>
                 <button
                   type="button"
                   onClick={handleSendWhatsAppInvoice}
-                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-98"
                 >
                   <MessageCircle className="w-4 h-4 shrink-0" />
-                  Kirim Nota WA
+                  Kirim WA
                 </button>
               </div>
 
@@ -684,6 +715,16 @@ export const Payments: React.FC = () => {
             <p>Simpan struk ini sebagai bukti</p>
           </div>
         </div>
+      )}
+
+      {selectedWO && (
+        <ThermalReceiptModal
+          isOpen={showThermalModal}
+          onClose={() => setShowThermalModal(false)}
+          workOrder={selectedWO}
+          shopInfo={shopInfo}
+          formatRupiah={formatRupiah}
+        />
       )}
     </div>
   );

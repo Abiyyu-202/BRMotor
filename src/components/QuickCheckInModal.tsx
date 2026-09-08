@@ -68,14 +68,15 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
   const [selectedParts, setSelectedParts] = useState<{ partId: string; quantity: number }[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const lastAutoFilledPlate = React.useRef<string>('');
 
   // Available mechanics
-  const activeMechanics = mechanics.filter((m) => m.status !== 'inactive');
+  const activeMechanics = (mechanics || []).filter((m) => m.status !== 'inactive');
 
   useEffect(() => {
     if (activeMechanics.length > 0 && !mechanicId) {
       const available = activeMechanics.find((m) => m.status === 'available');
-      setMechanicId(available?.id || activeMechanics[0].id);
+      setMechanicId(available?.id || activeMechanics[0]?.id || '1');
     }
   }, [activeMechanics, mechanicId]);
 
@@ -92,26 +93,31 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
 
   // Plate lookup auto-fill
   useEffect(() => {
-    const clean = plateNumber.trim().toUpperCase();
+    const clean = plateNumber.trim().toUpperCase().replace(/\s+/g, '');
     if (clean.length >= 3) {
-      const match = vehicles.find(
-        (v) => v.licensePlate.toUpperCase().replace(/\s+/g, '') === clean.replace(/\s+/g, '')
+      const match = (vehicles || []).find(
+        (v) => v.licensePlate && v.licensePlate.toUpperCase().replace(/\s+/g, '') === clean
       );
       if (match) {
         setMatchedVehicle(match);
-        setBrand(match.brand);
-        setModel(match.model);
-        setYear(match.year);
-        const owner = customers.find((c) => String(c.id) === String(match.customerId));
-        if (owner) {
-          setCustomerName(owner.name);
-          setPhone(owner.phone || '');
+        if (lastAutoFilledPlate.current !== clean) {
+          lastAutoFilledPlate.current = clean;
+          setBrand(match.brand || 'Honda');
+          setModel(match.model || '');
+          setYear(match.year || new Date().getFullYear());
+          const owner = (customers || []).find((c) => String(c.id) === String(match.customerId));
+          if (owner) {
+            setCustomerName(owner.name || '');
+            setPhone(owner.phone || '');
+          }
         }
       } else {
         setMatchedVehicle(null);
+        lastAutoFilledPlate.current = '';
       }
     } else {
       setMatchedVehicle(null);
+      lastAutoFilledPlate.current = '';
     }
   }, [plateNumber, vehicles, customers]);
 
@@ -136,18 +142,18 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
   };
 
   const handleAddPart = (partId: string) => {
-    const existing = selectedParts.find((p) => p.partId === partId);
+    const existing = (selectedParts || []).find((p) => p.partId === partId);
     if (existing) {
       setSelectedParts(
-        selectedParts.map((p) => (p.partId === partId ? { ...p, quantity: p.quantity + 1 } : p))
+        (selectedParts || []).map((p) => (p.partId === partId ? { ...p, quantity: p.quantity + 1 } : p))
       );
     } else {
-      setSelectedParts([...selectedParts, { partId, quantity: 1 }]);
+      setSelectedParts([...(selectedParts || []), { partId, quantity: 1 }]);
     }
   };
 
   const handleRemovePart = (partId: string) => {
-    setSelectedParts(selectedParts.filter((p) => p.partId !== partId));
+    setSelectedParts((selectedParts || []).filter((p) => p.partId !== partId));
   };
 
   const resetForm = () => {
@@ -159,6 +165,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
     setSelectedServices([]);
     setSelectedParts([]);
     setMatchedVehicle(null);
+    lastAutoFilledPlate.current = '';
   };
 
   const handleClose = () => {
@@ -199,14 +206,14 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
 
     setIsSubmitting(true);
     try {
-      const servicesPayload = selectedServices.map((s) => ({
+      const servicesPayload = (selectedServices || []).map((s) => ({
         serviceId: s.id,
         name: s.name,
         price: s.price
       }));
 
-      const partsPayload = selectedParts.map((item) => {
-        const part = spareParts.find((p) => p.id === item.partId);
+      const partsPayload = (selectedParts || []).map((item) => {
+        const part = (spareParts || []).find((p) => p.id === item.partId);
         return {
           partId: item.partId,
           quantity: item.quantity,
@@ -214,7 +221,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
         };
       });
 
-      const serviceNames = selectedServices.map((s) => s.name).join(', ');
+      const serviceNames = (selectedServices || []).map((s) => s.name).join(', ');
       const finalComplaint = serviceNames
         ? complaintNotes.trim()
           ? `${serviceNames} (Catatan: ${complaintNotes.trim()})`
@@ -247,9 +254,9 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
   };
 
   // Live Calculations
-  const servicesTotal = selectedServices.reduce((sum, s) => sum + s.price, 0);
-  const partsTotal = selectedParts.reduce((sum, item) => {
-    const p = spareParts.find((part) => part.id === item.partId);
+  const servicesTotal = (selectedServices || []).reduce((sum, s) => sum + s.price, 0);
+  const partsTotal = (selectedParts || []).reduce((sum, item) => {
+    const p = (spareParts || []).find((part) => part.id === item.partId);
     return sum + (p ? p.sellingPrice * item.quantity : 0);
   }, 0);
   const totalEstimate = servicesTotal + partsTotal;
@@ -543,8 +550,8 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
             {/* Selected parts list */}
             {selectedParts.length > 0 && (
               <div className="mt-2 space-y-1.5">
-                {selectedParts.map((item) => {
-                  const part = spareParts.find((p) => p.id === item.partId);
+                {(selectedParts || []).map((item) => {
+                  const part = (spareParts || []).find((p) => p.id === item.partId);
                   if (!part) return null;
                   return (
                     <div

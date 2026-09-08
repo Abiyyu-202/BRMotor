@@ -47,6 +47,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
   const {
     setIsAuthenticated,
     setCurrentRole,
+    setAccountRole,
     setCurrentUserName,
     setCurrentUserId,
     showToast,
@@ -189,9 +190,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
       const user = await res.json();
       if (!res.ok) throw new Error(user.message || 'Login dengan Google gagal.');
 
+      setAccountRole(user.role);
       setCurrentRole(user.role);
       setCurrentUserName(user.name);
       setCurrentUserId(String(user.id));
+      if (user.username) {
+        localStorage.setItem('br_motor_login_username', user.username);
+      }
+      localStorage.setItem('br_motor_login_provider', 'google');
       setIsAuthenticated(true);
       await refreshDatabase();
       setShowGoogleModal(false);
@@ -228,9 +234,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
       const user = await response.json();
       if (!response.ok) throw new Error(user.message || 'Login gagal.');
 
+      setAccountRole(user.role);
       setCurrentRole(user.role);
       setCurrentUserName(user.name);
       setCurrentUserId(String(user.id));
+      localStorage.setItem('br_motor_login_username', user.username || cleanUser);
+      localStorage.setItem('br_motor_login_provider', 'password');
       setIsAuthenticated(true);
       await refreshDatabase();
       showToast(`Selamat datang, ${user.name}!`, 'success');
@@ -262,9 +271,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
       const user = await response.json();
       if (!response.ok) throw new Error(user.message || 'Pendaftaran gagal.');
 
+      setAccountRole(user.role);
       setCurrentRole(user.role);
       setCurrentUserName(user.name);
       setCurrentUserId(String(user.id));
+      localStorage.setItem('br_motor_login_username', user.username || cleanUser);
+      localStorage.setItem('br_motor_login_provider', 'password');
       setIsAuthenticated(true);
       await refreshDatabase();
       showToast(`Akun ${user.name} berhasil dibuat.`, 'success');
@@ -303,9 +315,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
       const user = await res.json();
       if (!res.ok) throw new Error(user.message || 'Login gagal.');
 
+      setAccountRole(user.role);
       setCurrentRole(user.role);
       setCurrentUserName(user.name);
       setCurrentUserId(String(user.id));
+      if (user.username) {
+        localStorage.setItem('br_motor_login_username', user.username);
+      }
+      localStorage.setItem('br_motor_login_provider', 'google');
       setIsAuthenticated(true);
       await refreshDatabase();
       setShowGoogleModal(false);
@@ -423,13 +440,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
           {activeMode === 'signin' ? (
             <form onSubmit={handleSignIn} className="space-y-4">
               <div>
-                <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-600 mb-1">
-                  Username
+                <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-600 mb-1 flex items-center justify-between">
+                  <span>Username / Email / No. HP</span>
+                  <span className="text-[9px] text-slate-400 lowercase font-normal">
+                    {language === 'id' ? 'bisa salah satu' : 'any of these'}
+                  </span>
                 </label>
                 <input
                   required
                   type="text"
-                  placeholder="Masukkan username akun Anda"
+                  placeholder={
+                    language === 'id'
+                      ? 'Masukkan username, email, atau no. HP'
+                      : 'Enter username, email, or phone'
+                  }
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value);

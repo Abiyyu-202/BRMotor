@@ -23,6 +23,7 @@ import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { CustomerProfileModal } from './components/CustomerProfileModal';
 import { NotificationHistoryModal } from './components/NotificationHistoryModal';
+import { CommandPalette } from './components/CommandPalette';
 
 // Icons
 import {
@@ -46,13 +47,15 @@ import {
   Bell,
   User as UserIcon,
   Globe,
-  Home
+  Home,
+  Search
 } from 'lucide-react';
 
 function AppContent() {
   const {
     currentRole,
     setCurrentRole,
+    accountRole,
     currentUserId,
     currentUserName,
     customers,
@@ -71,7 +74,7 @@ function AppContent() {
     workOrders,
     createWorkOrder,
     mechanics,
-    services: serviceItems
+    serviceItems
   } = useWorkshop();
 
   // Landing page or login screen view state when unauthenticated
@@ -85,9 +88,17 @@ function AppContent() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenPalette = () => setIsCommandPaletteOpen(true);
+    window.addEventListener('open-command-palette', handleOpenPalette);
+    return () => window.removeEventListener('open-command-palette', handleOpenPalette);
+  }, []);
 
   // Prefill slot for direct Checked-In from Bookings -> Work Orders Form
   const [prefilledBooking, setPrefilledBooking] = useState<Booking | null>(null);
+  const [autoOpenBookingModal, setAutoOpenBookingModal] = useState(false);
 
   // Dynamic Real-time clock widget
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -137,15 +148,17 @@ function AppContent() {
   // Callback to handle booking check-in routing
   const handleCheckInDirect = (booking: Booking) => {
     // Check if work order already exists for this booking
-    const existingWO = workOrders.find((w) => String(w.bookingId) === String(booking.id));
+    const existingWO = (workOrders || []).find((w) => String(w.bookingId) === String(booking.id));
     if (!existingWO) {
-      const assignedMech = mechanics.find((m) => m.status === 'available') || mechanics[0];
-      const defaultService = serviceItems.find(
+      const mechList = mechanics || [];
+      const assignedMech = mechList.find((m) => m.status === 'available') || mechList[0];
+      const items = serviceItems || [];
+      const defaultService = items.find(
         (s) =>
-          s.name.toLowerCase().includes('ringan') ||
-          s.name.toLowerCase().includes('tune') ||
-          s.name.toLowerCase().includes('oli')
-      ) || serviceItems[0];
+          s?.name?.toLowerCase().includes('ringan') ||
+          s?.name?.toLowerCase().includes('tune') ||
+          s?.name?.toLowerCase().includes('oli')
+      ) || items[0];
 
       createWorkOrder({
         bookingId: booking.id,
@@ -187,13 +200,27 @@ function AppContent() {
   const renderActivePage = () => {
     switch (activeTab) {
       case 'Dashboard':
-        return <Dashboard setActiveTab={setActiveTab} />;
+        return (
+          <Dashboard
+            setActiveTab={setActiveTab}
+            onNewBooking={() => {
+              setAutoOpenBookingModal(true);
+              setActiveTab('Bookings');
+            }}
+          />
+        );
       case 'Customers':
         return <Customers />;
       case 'Vehicles':
         return <Vehicles />;
       case 'Bookings':
-        return <Bookings onCheckInDirect={handleCheckInDirect} />;
+        return (
+          <Bookings
+            onCheckInDirect={handleCheckInDirect}
+            autoOpenAddModal={autoOpenBookingModal}
+            onModalOpened={() => setAutoOpenBookingModal(false)}
+          />
+        );
       case 'Work Orders':
         return (
           <WorkOrders
@@ -282,8 +309,8 @@ function AppContent() {
     }
     if (itemName === 'Payments') {
       const count = currentRole === 'user'
-        ? workOrders.filter(w => userCustomerIds.includes(String(w.customerId)) && w.paymentStatus === 'unpaid').length
-        : workOrders.filter(w => w.paymentStatus === 'unpaid').length;
+        ? workOrders.filter(w => userCustomerIds.includes(String(w.customerId)) && w.paymentStatus === 'unpaid' && (w.status === 'completed' || w.status === 'picked_up')).length
+        : workOrders.filter(w => w.paymentStatus === 'unpaid' && (w.status === 'completed' || w.status === 'picked_up')).length;
       return count > 0 ? { count, color: 'bg-emerald-600 text-white' } : null;
     }
     if (itemName === 'Settings' && pendingDeletionCount > 0) {
@@ -468,6 +495,25 @@ function AppContent() {
       {/* 3. MAIN WORKSPACE VIEWPORT */}
       <div className="flex-1 flex flex-col min-w-0">
         
+        {/* Simulation Banner for Owner testing other roles */}
+        {accountRole === 'owner' && currentRole !== 'owner' && (
+          <div className="bg-slate-900 text-white text-xs font-semibold py-2 px-4 sm:px-6 flex items-center justify-between border-b border-slate-800 shrink-0 no-print">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>
+                Mode Simulasi Peran: <span className="uppercase font-bold text-amber-300">{currentRole}</span>
+                <span className="text-slate-400 ml-1.5 hidden sm:inline">(Akses asli: Owner Bengkel)</span>
+              </span>
+            </div>
+            <button
+              onClick={() => setCurrentRole('owner')}
+              className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded font-bold text-[11px] transition-all cursor-pointer shadow-xs active:scale-98"
+            >
+              Kembali ke Akses Owner →
+            </button>
+          </div>
+        )}
+
         {/* Top Header Navbar */}
         <header className="h-15 border-b border-slate-200 bg-white flex items-center justify-between px-4 sm:px-6 shrink-0 no-print">
           
@@ -486,6 +532,20 @@ function AppContent() {
 
           {/* Widgets */}
           <div className="flex items-center gap-2 sm:gap-2.5 text-xs font-semibold">
+            {/* Quick Command Search (Ctrl + K) Button */}
+            <button
+              type="button"
+              onClick={() => setIsCommandPaletteOpen(true)}
+              title="Pencarian Cepat (Ctrl + K)"
+              className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs group active:scale-98"
+            >
+              <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700" />
+              <span className="hidden sm:inline text-slate-500 group-hover:text-slate-800">Cari Cepat</span>
+              <kbd className="hidden md:inline-block text-[9px] font-mono font-bold bg-white text-slate-400 group-hover:text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 shadow-2xs">
+                Ctrl K
+              </kbd>
+            </button>
+
             {/* View Landing Page Button */}
             <button
               type="button"
@@ -557,6 +617,16 @@ function AppContent() {
       <NotificationHistoryModal
         isOpen={isNotifModalOpen}
         onClose={() => setIsNotifModalOpen(false)}
+      />
+
+      {/* Global Command Palette (Ctrl+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={(tab) => {
+          setActiveTab(tab);
+          setMobileSidebarOpen(false);
+        }}
       />
 
       {/* Global Toast portal rendering */}

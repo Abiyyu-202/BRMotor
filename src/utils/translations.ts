@@ -218,6 +218,13 @@ export const translations = {
       currency: "Mata Uang Symbol",
       saveSpecs: "Simpan Pengaturan",
       switchProfile: "Ganti Profil Pengguna",
+      changePassword: "Ganti Kata Sandi",
+      currentPassword: "Kata Sandi Saat Ini",
+      newPassword: "Kata Sandi Baru",
+      confirmPassword: "Konfirmasi Kata Sandi Baru",
+      savePassword: "Simpan Kata Sandi",
+      userProfile: "Pengaturan Profil Saya",
+      languageSettings: "Bahasa Tampilan",
     }
   },
 
@@ -433,6 +440,13 @@ export const translations = {
       currency: "Currency Symbol",
       saveSpecs: "Save Configurations",
       switchProfile: "Switch Staff Profile",
+      changePassword: "Change Password",
+      currentPassword: "Current Password",
+      newPassword: "New Password",
+      confirmPassword: "Confirm New Password",
+      savePassword: "Update Password",
+      userProfile: "My Profile Settings",
+      languageSettings: "Display Language",
     }
   }
 };

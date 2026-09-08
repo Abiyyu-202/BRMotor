@@ -42,6 +42,13 @@
     overflow-x: hidden;
   }
 
+  /* Native App Tactile Press Feedback */
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: scale(0.98);
+    transition: transform 0.06s ease-out;
+  }
+
   /* Consistent Tactile Card Utility */
   .glass-card {
     background: #ffffff;

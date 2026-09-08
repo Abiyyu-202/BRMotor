@@ -67,7 +67,7 @@ export const Vehicles: React.FC = () => {
   const userCustomer = useMemo(() => {
     if (currentRole !== 'user') return null;
     return (
-      customers.find(
+      (customers || []).find(
         (c) =>
           (currentUserId && String(c.id) === String(currentUserId)) ||
           (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase())
@@ -81,7 +81,7 @@ export const Vehicles: React.FC = () => {
     const ids = new Set<string>();
     if (currentUserId) ids.add(String(currentUserId));
     if (userCustomer?.id) ids.add(String(userCustomer.id));
-    customers.forEach((c) => {
+    (customers || []).forEach((c) => {
       if (currentUserName && c.name.toLowerCase() === currentUserName.toLowerCase()) {
         ids.add(String(c.id));
       }
@@ -246,14 +246,14 @@ export const Vehicles: React.FC = () => {
     }
   };
 
-  const confirmDeleteVehicle = () => {
+  const confirmDeleteVehicle = async () => {
     if (vehicleToDelete) {
-      deleteVehicle(vehicleToDelete);
-      if (selectedVehicle?.id === vehicleToDelete) {
+      const id = vehicleToDelete;
+      setVehicleToDelete(null);
+      if (selectedVehicle?.id === id) {
         setSelectedVehicleId(null);
       }
-      showToast('Data sepeda motor berhasil dihapus dari sistem.', 'success');
-      setVehicleToDelete(null);
+      await deleteVehicle(id);
     }
   };
 

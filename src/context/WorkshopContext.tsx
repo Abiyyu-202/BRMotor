@@ -35,10 +35,15 @@ interface WorkshopContextType {
   setShopInfo: React.Dispatch<React.SetStateAction<ShopInfo>>;
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
+  accountRole: UserRole;
+  setAccountRole: (role: UserRole) => void;
   currentUserName: string;
   setCurrentUserName: (name: string) => void;
+  currentUserLogin: string;
+  setCurrentUserLogin: (username: string) => void;
   currentUserId: string;
   setCurrentUserId: (id: string) => void;
+  changePassword: (currentPassword: string, newPassword: string, isGoogleAuth?: boolean) => Promise<{ ok: boolean; message: string }>;
   isAuthenticated: boolean;
   setIsAuthenticated: (val: boolean) => void;
   customers: Customer[];
@@ -48,6 +53,7 @@ interface WorkshopContextType {
   spareParts: SparePart[];
   mechanics: Mechanic[];
   serviceItems: ServiceItem[];
+  services: ServiceItem[];
   salesHistory: { id: string; date: string; amount: number; count: number }[];
   toasts: ToastMessage[];
   notificationHistory: NotificationHistoryItem[];
@@ -70,17 +76,17 @@ interface WorkshopContextType {
   // Customers
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Promise<Customer>;
   updateCustomer: (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => void;
-  deleteCustomer: (id: string) => void;
+  deleteCustomer: (id: string) => Promise<void> | void;
 
   // Vehicles
   addVehicle: (vehicle: Omit<Vehicle, 'id' | 'customerName'>) => Vehicle;
   updateVehicle: (id: string, updated: Omit<Vehicle, 'id' | 'customerId' | 'customerName'>) => void;
-  deleteVehicle: (id: string) => void;
+  deleteVehicle: (id: string) => Promise<void> | void;
 
   // Bookings
   addBooking: (booking: Omit<Booking, 'id' | 'queueNumber' | 'status' | 'createdAt' | 'customerName' | 'licensePlate' | 'vehicleModel'>) => Booking;
   updateBookingStatus: (id: string, status: Booking['status']) => void;
-  deleteBooking: (id: string) => void;
+  deleteBooking: (id: string) => Promise<void> | void;
 
   // Work Orders
   quickCheckIn: (payload: {
@@ -100,20 +106,20 @@ interface WorkshopContextType {
   createWorkOrder: (wo: Omit<WorkOrder, 'id' | 'status' | 'paymentStatus' | 'createdAt' | 'costs'>) => WorkOrder;
   updateWorkOrderStatus: (id: string, status: WorkOrderStatus) => void;
   updateWorkOrder: (id: string, updated: Partial<WorkOrder>) => void;
-  deleteWorkOrder: (id: string) => void;
+  deleteWorkOrder: (id: string) => Promise<void> | void;
   checkoutWorkOrder: (id: string, discount: number, paymentMethod?: WorkOrder['paymentMethod'], cashTendered?: number, changeAmount?: number) => void;
   processPayment: (id: string, paymentMethod?: WorkOrder['paymentMethod'], discount?: number, cashTendered?: number, changeAmount?: number) => void;
 
   // Spare Parts
   addSparePart: (part: Omit<SparePart, 'id'>) => void;
   updateSparePart: (id: string, updated: Omit<SparePart, 'id'>) => void;
-  deleteSparePart: (id: string) => void;
+  deleteSparePart: (id: string) => Promise<void> | void;
   restockSparePart: (id: string, quantity: number) => void;
 
   // Mechanics
   addMechanic: (mechanic: Omit<Mechanic, 'id' | 'assignedJobsCount' | 'completedJobsCount' | 'rating'>) => void;
   updateMechanic: (id: string, updated: Partial<Mechanic>) => void;
-  deleteMechanic: (id: string) => void;
+  deleteMechanic: (id: string) => Promise<void> | void;
 
   // Database JSON Operations
   exportDatabaseJSON: () => void;
@@ -136,14 +142,17 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Language state (permanently Indonesian 'id')
-  const [language, setLanguageState] = useState<Language>('id');
+  // Language state (defaults to 'id', configurable)
+  const [language, setLanguageState] = useState<Language>(() => {
+    return (localStorage.getItem('br_motor_language') as Language) || 'id';
+  });
 
-  const setLanguage = (_lang: Language) => {
-    setLanguageState('id');
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    localStorage.setItem('br_motor_language', lang);
   };
 
-  const t = translations['id'];
+  const t = translations[language] || translations['id'];
 
   // All operational data comes from /api/bootstrap (MySQL), never browser storage.
   const [shopInfo, setShopInfoState] = useState<ShopInfo>({ name: 'BR Motor', address: '', phone: '', email: '', taxRate: 0, currency: 'Rp' });
@@ -151,15 +160,35 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isAuthenticated, setIsAuthenticatedState] = useState<boolean>(() => {
     return localStorage.getItem('br_motor_auth') === 'true';
   });
+  const [accountRole, setAccountRoleState] = useState<UserRole>(() => {
+    return (localStorage.getItem('br_motor_account_role') as UserRole) ||
+           (localStorage.getItem('br_motor_role') as UserRole) ||
+           'user';
+  });
   const [currentRole, setCurrentRoleState] = useState<UserRole>(() => {
     return (localStorage.getItem('br_motor_role') as UserRole) || 'user';
   });
   const [currentUserName, setCurrentUserNameState] = useState<string>(() => {
     return localStorage.getItem('br_motor_username') || '';
   });
+  const [currentUserLogin, setCurrentUserLoginState] = useState<string>(() => {
+    return localStorage.getItem('br_motor_login_username') || '';
+  });
   const [currentUserId, setCurrentUserIdState] = useState<string>(() => {
     return localStorage.getItem('br_motor_userid') || '';
   });
+
+  const setAccountRole = (role: UserRole) => {
+    setAccountRoleState(role);
+    localStorage.setItem('br_motor_account_role', role);
+    setCurrentRoleState(role);
+    localStorage.setItem('br_motor_role', role);
+  };
+
+  const setCurrentUserLogin = (uname: string) => {
+    setCurrentUserLoginState(uname);
+    localStorage.setItem('br_motor_login_username', uname);
+  };
 
   const setIsAuthenticated = (val: boolean) => {
     setIsAuthenticatedState(val);
@@ -167,12 +196,20 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!val) {
       localStorage.removeItem('br_motor_auth');
       localStorage.removeItem('br_motor_role');
+      localStorage.removeItem('br_motor_account_role');
       localStorage.removeItem('br_motor_username');
       localStorage.removeItem('br_motor_userid');
+      localStorage.removeItem('br_motor_login_username');
+      localStorage.removeItem('br_motor_login_provider');
     }
   };
 
   const setCurrentRole = (role: UserRole) => {
+    const savedAccount = (localStorage.getItem('br_motor_account_role') as UserRole) || accountRole;
+    if (savedAccount !== 'owner' && role !== savedAccount) {
+      showToast('Hanya akun Owner yang memiliki wewenang untuk mengganti profil peran pengguna.', 'warning');
+      return;
+    }
     setCurrentRoleState(role);
     localStorage.setItem('br_motor_role', role);
     showToast(`Switched user profile to ${role.toUpperCase()}`, 'info');
@@ -186,6 +223,20 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const setCurrentUserId = (id: string) => {
     setCurrentUserIdState(id);
     localStorage.setItem('br_motor_userid', id);
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string, isGoogleAuth = false) => {
+    return await api<{ ok: boolean; message: string }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        userId: currentUserId,
+        role: currentRole,
+        username: currentUserName,
+        currentPassword,
+        newPassword,
+        isGoogleAuth,
+      }),
+    });
   };
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -216,15 +267,25 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const storedUsername = localStorage.getItem('br_motor_username');
     if (storedUserId) {
       const match = data.customers.find(c => String(c.id) === String(storedUserId));
-      if (match && match.name && match.name !== storedUsername) {
-        setCurrentUserNameState(match.name);
-        localStorage.setItem('br_motor_username', match.name);
+      if (match) {
+        if (match.name && match.name !== storedUsername) {
+          setCurrentUserNameState(match.name);
+          localStorage.setItem('br_motor_username', match.name);
+        }
+        if (match.username) {
+          setCurrentUserLoginState(match.username);
+          localStorage.setItem('br_motor_login_username', match.username);
+        }
       }
     } else if (storedUsername) {
       const match = data.customers.find(c => c.name.toLowerCase() === storedUsername.toLowerCase());
       if (match?.id) {
         setCurrentUserIdState(match.id);
         localStorage.setItem('br_motor_userid', match.id);
+        if (match.username) {
+          setCurrentUserLoginState(match.username);
+          localStorage.setItem('br_motor_login_username', match.username);
+        }
       }
     }
   }, []);
@@ -360,22 +421,22 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addAuditLog("Customer Updated", `Updated details for customer "${updated.name}" (ID: ${id})`, 'customer');
   };
 
-  const deleteCustomer = (id: string) => {
+  const deleteCustomer = async (id: string) => {
     if (!canDirectDelete(currentRole)) {
       showToast('Hanya akun Owner yang dapat menghapus data pelanggan langsung.', 'warning');
       return;
     }
     const target = customers.find((c) => c.id === id);
-    setCustomers((prev) => prev.filter((c) => c.id !== id));
-    // Also remove customer's vehicles to preserve relations
-    setVehicles((prev) => prev.filter((v) => v.customerId !== id));
-
-    void api(`/api/customers/${id}`, { method: 'DELETE' })
-      .then(refreshDatabase)
-      .catch((error) => showToast(error.message, 'error'));
-
-    showToast("Customer removed from database", "warning");
-    addAuditLog("Customer Deleted", `Removed customer "${target?.name || id}" and linked vehicles`, 'customer');
+    try {
+      await api(`/api/customers/${id}`, { method: 'DELETE' });
+      setCustomers((prev) => prev.filter((c) => c.id !== id));
+      setVehicles((prev) => prev.filter((v) => v.customerId !== id));
+      await refreshDatabase();
+      showToast('Data pelanggan berhasil dihapus.', 'success');
+      addAuditLog("Customer Deleted", `Removed customer "${target?.name || id}" and linked vehicles`, 'customer');
+    } catch (error: any) {
+      showToast(error.message || 'Gagal menghapus data pelanggan.', 'error');
+    }
   };
 
   // --- VEHICLE CRUD ---
@@ -420,18 +481,21 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addAuditLog("Vehicle Updated", `Updated vehicle record [${updated.licensePlate}] (${updated.brand} ${updated.model})`, 'customer');
   };
 
-  const deleteVehicle = (id: string) => {
+  const deleteVehicle = async (id: string) => {
     if (!canDirectDelete(currentRole)) {
       showToast('Hanya akun Owner yang dapat menghapus data kendaraan langsung.', 'warning');
       return;
     }
     const target = vehicles.find((v) => v.id === id);
-    setVehicles((prev) => prev.filter((v) => v.id !== id));
-    void api(`/api/vehicles/${id}`, { method: 'DELETE' })
-      .then(refreshDatabase)
-      .catch((error) => showToast(error.message, 'error'));
-    showToast("Vehicle record removed", "warning");
-    addAuditLog("Vehicle Deleted", `Removed vehicle [${target?.licensePlate || id}] from database`, 'customer');
+    try {
+      await api(`/api/vehicles/${id}`, { method: 'DELETE' });
+      setVehicles((prev) => prev.filter((v) => v.id !== id));
+      await refreshDatabase();
+      showToast('Data sepeda motor berhasil dihapus dari sistem.', 'success');
+      addAuditLog("Vehicle Deleted", `Removed vehicle [${target?.licensePlate || id}] from database`, 'customer');
+    } catch (error: any) {
+      showToast(error.message || 'Gagal menghapus data kendaraan.', 'error');
+    }
   };
 
   // --- BOOKING ENGINE ---
@@ -482,18 +546,21 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addAuditLog("Booking Updated", `Booking ${target?.queueNumber || id} for ${target?.customerName || 'customer'} marked as ${status.toUpperCase()}`, 'booking');
   };
 
-  const deleteBooking = (id: string) => {
+  const deleteBooking = async (id: string) => {
     if (!canDirectDelete(currentRole)) {
       showToast('Hanya akun Owner yang dapat menghapus data antrean booking langsung.', 'warning');
       return;
     }
     const target = bookings.find((b) => b.id === id);
-    setBookings((prev) => prev.filter((b) => b.id !== id));
-    void api(`/api/bookings/${id}`, { method: 'DELETE' })
-      .then(refreshDatabase)
-      .catch((error) => showToast(error.message, 'error'));
-    showToast("Data booking berhasil dihapus", "warning");
-    addAuditLog("Booking Deleted", `Dihapus booking ${target?.queueNumber || id}`, 'booking');
+    try {
+      await api(`/api/bookings/${id}`, { method: 'DELETE' });
+      setBookings((prev) => prev.filter((b) => b.id !== id));
+      await refreshDatabase();
+      showToast('Data booking berhasil dihapus.', 'success');
+      addAuditLog("Booking Deleted", `Dihapus booking ${target?.queueNumber || id}`, 'booking');
+    } catch (error: any) {
+      showToast(error.message || 'Gagal menghapus data booking.', 'error');
+    }
   };
 
   // --- WORK ORDER PROCESS ENGINE ---
@@ -537,10 +604,12 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       0
     );
     const total = serviceCost + sparePartCost;
+    const resolvedPhone = wo.customerPhone || customers.find((c) => String(c.id) === String(wo.customerId))?.phone || '';
 
     const newWorkOrder: WorkOrder = {
       ...wo,
       id: newId,
+      customerPhone: resolvedPhone,
       status: 'waiting',
       paymentStatus: 'unpaid',
       createdAt: new Date().toISOString(),
@@ -561,7 +630,10 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         return refreshDatabase();
       })
-      .catch((error) => showToast(error.message, 'error'));
+      .catch((error) => {
+        setWorkOrders((prev) => prev.filter((w) => w.id !== newId));
+        showToast(error.message, 'error');
+      });
 
     // Update mechanic status to 'busy' if assigned
     if (wo.assignedMechanicId) {
@@ -660,18 +732,21 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addAuditLog("Work Order Modified", `Work Order ${id} services, spare parts, or mechanic specs were modified`, 'work_order');
   };
 
-  const deleteWorkOrder = (id: string) => {
+  const deleteWorkOrder = async (id: string) => {
     if (!canDirectDelete(currentRole)) {
       showToast('Hanya akun Owner yang dapat menghapus SPK langsung.', 'warning');
       return;
     }
     const target = workOrders.find((wo) => wo.id === id);
-    setWorkOrders((prev) => prev.filter((wo) => wo.id !== id));
-    void api(`/api/work-orders/${id}`, { method: 'DELETE' })
-      .then(refreshDatabase)
-      .catch((error) => showToast(error.message, 'error'));
-    showToast("Perintah kerja / SPK berhasil dihapus", "warning");
-    addAuditLog("Work Order Deleted", `Dihapus perintah kerja ${target?.id || id}`, 'work_order');
+    try {
+      await api(`/api/work-orders/${id}`, { method: 'DELETE' });
+      setWorkOrders((prev) => prev.filter((wo) => wo.id !== id));
+      await refreshDatabase();
+      showToast('Perintah kerja / SPK berhasil dihapus.', 'success');
+      addAuditLog("Work Order Deleted", `Dihapus perintah kerja ${target?.id || id}`, 'work_order');
+    } catch (error: any) {
+      showToast(error.message || 'Gagal menghapus SPK.', 'error');
+    }
   };
 
   const checkoutWorkOrder = (
@@ -797,18 +872,21 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addAuditLog("Inventory Part Updated", `Updated details/prices for part "${updated.name}" (SKU: ${updated.sku.toUpperCase()})`, 'inventory');
   };
 
-  const deleteSparePart = (id: string) => {
+  const deleteSparePart = async (id: string) => {
     if (!canDirectDelete(currentRole)) {
       showToast('Hanya akun Owner yang dapat menghapus suku cadang langsung.', 'warning');
       return;
     }
     const target = spareParts.find((p) => p.id === id);
-    setSpareParts((prev) => prev.filter((p) => p.id !== id));
-    void api(`/api/spare-parts/${id}`, { method: 'DELETE' })
-      .then(refreshDatabase)
-      .catch((error) => showToast(error.message, 'error'));
-    showToast("Spare part removed from inventory", "warning");
-    addAuditLog("Inventory Part Deleted", `Removed part "${target?.name || id}" (SKU: ${target?.sku || 'N/A'}) from catalog`, 'inventory');
+    try {
+      await api(`/api/spare-parts/${id}`, { method: 'DELETE' });
+      setSpareParts((prev) => prev.filter((p) => p.id !== id));
+      await refreshDatabase();
+      showToast('Suku cadang berhasil dihapus dari inventaris.', 'success');
+      addAuditLog("Inventory Part Deleted", `Removed part "${target?.name || id}" (SKU: ${target?.sku || 'N/A'}) from catalog`, 'inventory');
+    } catch (error: any) {
+      showToast(error.message || 'Gagal menghapus suku cadang.', 'error');
+    }
   };
 
   const restockSparePart = (id: string, quantity: number) => {
@@ -855,18 +933,21 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addAuditLog("Staff Record Updated", `Updated active background file for technician "${target?.name || id}"`, 'staff');
   };
 
-  const deleteMechanic = (id: string) => {
+  const deleteMechanic = async (id: string) => {
     if (!canDirectDelete(currentRole)) {
       showToast('Hanya akun Owner yang dapat menghapus data mekanik langsung.', 'warning');
       return;
     }
     const target = mechanics.find((m) => m.id === id);
-    setMechanics((prev) => prev.filter((m) => m.id !== id));
-    void api(`/api/mechanics/${id}`, { method: 'DELETE' })
-      .then(refreshDatabase)
-      .catch((error) => showToast(error.message, 'error'));
-    showToast("Mechanic removed from shop database", "warning");
-    addAuditLog("Staff Record Removed", `Dismissed technician "${target?.name || id}" from active store registry`, 'staff');
+    try {
+      await api(`/api/mechanics/${id}`, { method: 'DELETE' });
+      setMechanics((prev) => prev.filter((m) => m.id !== id));
+      await refreshDatabase();
+      showToast('Data mekanik berhasil dihapus dari sistem.', 'success');
+      addAuditLog("Staff Record Removed", `Dismissed technician "${target?.name || id}" from active store registry`, 'staff');
+    } catch (error: any) {
+      showToast(error.message || 'Gagal menghapus data mekanik.', 'error');
+    }
   };
 
   // --- DELETION REQUESTS (admin needs owner approval) ---
@@ -921,13 +1002,15 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       auditLogs
     };
 
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dbExport, null, 2));
+    const blob = new Blob([JSON.stringify(dbExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("href", url);
     downloadAnchor.setAttribute("download", `database-bengkel-${shopInfo.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+    URL.revokeObjectURL(url);
 
     showToast(language === 'id' ? 'Database JSON berhasil diunduh!' : 'Database JSON exported successfully!', 'success');
   };
@@ -956,10 +1039,15 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setShopInfo,
         currentRole,
         setCurrentRole,
+        accountRole,
+        setAccountRole,
         currentUserName,
         setCurrentUserName,
+        currentUserLogin,
+        setCurrentUserLogin,
         currentUserId,
         setCurrentUserId,
+        changePassword,
         isAuthenticated,
         setIsAuthenticated,
         customers,
@@ -969,6 +1057,7 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         spareParts,
         mechanics,
         serviceItems,
+        services: serviceItems,
         salesHistory,
         toasts,
         notificationHistory,

@@ -20,6 +20,7 @@ import {
   Filter
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { formatCurrencyInput, parseCurrencyInput } from '../utils/inputFormatters';
 
 export const Inventory: React.FC = () => {
   const {
@@ -164,11 +165,11 @@ export const Inventory: React.FC = () => {
     setPartToDelete(id);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (partToDelete) {
-      deleteSparePart(partToDelete);
-      showToast('Suku cadang berhasil dihapus dari inventaris.', 'success');
+      const id = partToDelete;
       setPartToDelete(null);
+      await deleteSparePart(id);
     }
   };
 
@@ -316,7 +317,7 @@ export const Inventory: React.FC = () => {
                 <th className="px-4 py-3">Kategori</th>
                 <th className="px-4 py-3 text-right">Harga Modal</th>
                 <th className="px-4 py-3 text-right">Harga Jual</th>
-                <th className="px-4 py-3 text-center">Sisa Stok</th>
+                <th className="px-4 py-3 text-center">Status & Stok</th>
                 <th className="px-4 py-3">Supplier</th>
                 <th className="px-4 py-3 text-right">Aksi</th>
               </tr>
@@ -331,6 +332,10 @@ export const Inventory: React.FC = () => {
               ) : (
                 filteredParts.map((part) => {
                   const isLow = part.currentStock <= part.minimumStock;
+                  const isNearLow = !isLow && part.currentStock <= part.minimumStock * 1.5;
+                  const targetLevel = Math.max(part.minimumStock * 2, 10);
+                  const healthPercent = Math.min(100, Math.round((part.currentStock / targetLevel) * 100));
+
                   return (
                     <tr key={part.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3">
@@ -348,16 +353,46 @@ export const Inventory: React.FC = () => {
                       <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
                         {formatRupiah(part.sellingPrice)}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 font-mono font-bold px-2 py-0.5 rounded-md ${
-                            isLow
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          }`}
-                        >
-                          {part.currentStock} {isLow && '⚠️'}
-                        </span>
+                      <td className="px-4 py-3 min-w-[130px]">
+                        <div className="flex flex-col gap-1 max-w-[125px] mx-auto">
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`inline-flex items-center gap-1 font-mono font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                                isLow
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                  : isNearLow
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              }`}
+                            >
+                              {part.currentStock} {isLow ? '⚠️' : 'pcs'}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-mono">
+                              Min: {part.minimumStock}
+                            </span>
+                          </div>
+
+                          {/* Mini Health Gauge */}
+                          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200/50">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                isLow
+                                  ? 'bg-rose-500'
+                                  : isNearLow
+                                  ? 'bg-amber-500'
+                                  : 'bg-emerald-500'
+                              }`}
+                              style={{ width: `${Math.max(8, healthPercent)}%` }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between text-[9px]">
+                            <span className={`font-semibold ${isLow ? 'text-rose-600 font-bold' : isNearLow ? 'text-amber-600' : 'text-slate-400'}`}>
+                              {isLow ? 'Restock Segera' : isNearLow ? 'Stok Menipis' : 'Stok Aman'}
+                            </span>
+                            <span className="text-slate-400 font-mono text-[8px]">{healthPercent}%</span>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-600 text-[11px] truncate max-w-[140px]">
                         {part.supplier}
@@ -435,8 +470,8 @@ export const Inventory: React.FC = () => {
                     required
                     placeholder="Contoh: KMP-REM-01"
                     value={sku}
-                    onChange={(e) => setSku(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800"
+                    onChange={(e) => setSku(e.target.value.toUpperCase())}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-mono font-bold focus:outline-none focus:border-slate-800 uppercase"
                   />
                 </div>
                 <div>
@@ -454,30 +489,38 @@ export const Inventory: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Harga Beli (Modal)</label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    step="any"
-                    placeholder="Contoh: 35000"
-                    value={purchasePrice}
-                    onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Harga Modal</label>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-slate-400 font-semibold text-xs">Rp</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      required
+                      placeholder="0"
+                      value={formatCurrencyInput(purchasePrice)}
+                      onChange={(e) => setPurchasePrice(parseCurrencyInput(e.target.value))}
+                      className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-slate-900 placeholder-slate-400 font-mono font-bold focus:outline-none focus:border-slate-800"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Harga Jual</label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    step="any"
-                    placeholder="Contoh: 50000"
-                    value={sellingPrice}
-                    onChange={(e) => setSellingPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Harga Jual</label>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-slate-400 font-semibold text-xs">Rp</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      required
+                      placeholder="0"
+                      value={formatCurrencyInput(sellingPrice)}
+                      onChange={(e) => setSellingPrice(parseCurrencyInput(e.target.value))}
+                      className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-slate-900 placeholder-slate-400 font-mono font-bold focus:outline-none focus:border-slate-800"
+                    />
+                  </div>
                 </div>
               </div>
 

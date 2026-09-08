@@ -12,6 +12,7 @@ export interface Customer {
   address: string;
   email?: string;
   username?: string;
+  hasPassword?: boolean;
   createdAt: string;
 }
 
