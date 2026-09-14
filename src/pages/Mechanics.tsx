@@ -142,6 +142,7 @@ export const Mechanics: React.FC = () => {
   }, [selectedMech, workOrders]);
 
   const confirmDeleteMechanic = async () => {
+    if (currentRole !== 'owner') return;
     if (selectedMech) {
       const id = selectedMech.id;
       setMechanicToDelete(null);

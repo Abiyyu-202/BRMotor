@@ -27,6 +27,7 @@ export const HiddenStaffArchive: React.FC<HiddenStaffArchiveProps> = ({ onBack }
     showToast,
     formatRupiah,
     addAuditLog,
+    currentRole,
   } = useWorkshop();
 
   const [selectedMechDetail, setSelectedMechDetail] = useState<Mechanic | null>(null);
@@ -69,6 +70,7 @@ export const HiddenStaffArchive: React.FC<HiddenStaffArchiveProps> = ({ onBack }
   };
 
   const handleConfirmPermanentDelete = async () => {
+    if (currentRole !== 'owner') return;
     if (mechToDeletePermanent) {
       const id = mechToDeletePermanent.id;
       setMechToDeletePermanent(null);
@@ -219,7 +221,7 @@ export const HiddenStaffArchive: React.FC<HiddenStaffArchiveProps> = ({ onBack }
                       <FileText className="w-3.5 h-3.5" />
                     </button>
 
-                    {!hasSPK && (
+                    {!hasSPK && currentRole === 'owner' && (
                       <button
                         type="button"
                         onClick={() => setMechToDeletePermanent(m)}

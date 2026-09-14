@@ -57,8 +57,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     currentRole
   } = useWorkshop();
 
-  // Role permissions
-  const canTriggerDelete = (role: UserRole) => role === 'owner' || role === 'admin';
+  // Role permissions - only owner can delete
+  const canTriggerDelete = (role: UserRole) => role === 'owner';
   const canDeleteDirectly = (role: UserRole) => role === 'owner';
 
   // Filters & Search
@@ -159,7 +159,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
 
   // Handle open create modal
   const handleOpenCreateModal = () => {
-    setSelectedCustomerId((customers || []).length > 0 ? customers[0].id : '');
+    const firstActive = (customers || []).find((c) => c.status !== 'inactive');
+    setSelectedCustomerId(firstActive ? firstActive.id : '');
     setSelectedVehicleId('');
     setAssignedMechanicId((mechanics || []).length > 0 ? mechanics[0].id : '');
     setComplaint('');
@@ -415,18 +416,18 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     setAdvancingWO(null);
   };
 
-  // Handle Delete Work Order
+  // Handle Delete Work Order (Only Owner)
   const handleDeleteWorkOrder = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (canDeleteDirectly(currentRole)) {
-      setWoToDelete(id);
-    } else {
-      requestDelete('workorder', id, `SPK Servis: ${id}`);
-      showToast('Permintaan hapus SPK telah diajukan ke Pemilik (Owner).', 'info');
+    if (currentRole !== 'owner') {
+      showToast('Akses ditolak. Hanya Owner yang memiliki izin menghapus SPK.', 'warning');
+      return;
     }
+    setWoToDelete(id);
   };
 
   const confirmDeleteWO = async () => {
+    if (currentRole !== 'owner') return;
     if (woToDelete) {
       const id = woToDelete;
       setWoToDelete(null);
@@ -706,7 +707,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                             </button>
                           )}
 
-                          {canTriggerDelete(currentRole) && (
+                          {currentRole === 'owner' && (
                             <button
                               type="button"
                               onClick={(e) => handleDeleteWorkOrder(wo.id, e)}
@@ -793,7 +794,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                   className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
                 >
                   <option value="" disabled>-- Pilih Pelanggan --</option>
-                  {customers.map((c) => (
+                  {(customers || []).filter((c) => c.status !== 'inactive').map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} ({c.phone})
                     </option>
@@ -988,7 +989,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
             <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0 bg-slate-50">
               <h3 className="font-bold text-slate-900 uppercase tracking-wide text-xs">Penyesuaian Teknis SPK ({editingWO.id})</h3>
               <div className="flex items-center gap-2">
-                {canTriggerDelete(currentRole) && (
+                {currentRole === 'owner' && (
                   <button
                     type="button"
                     onClick={() => handleDeleteWorkOrder(editingWO.id)}

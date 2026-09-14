@@ -729,7 +729,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.customers.totalCustomers}</p>
             <span className="block text-sm font-extrabold text-slate-900 mt-0.5">
-              {customers.length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'orang' : 'users'}</span>
+              {(customers || []).filter((c) => c.status !== 'inactive').length} <span className="text-[10px] font-normal text-slate-400">{language === 'id' ? 'orang' : 'users'}</span>
             </span>
           </div>
         </button>

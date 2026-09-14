@@ -166,6 +166,7 @@ export const Inventory: React.FC = () => {
   };
 
   const confirmDelete = async () => {
+    if (currentRole !== 'owner') return;
     if (partToDelete) {
       const id = partToDelete;
       setPartToDelete(null);

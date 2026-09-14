@@ -75,8 +75,9 @@ interface WorkshopContextType {
 
   // Customers
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Promise<Customer>;
-  updateCustomer: (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => void;
-  deleteCustomer: (id: string) => Promise<void> | void;
+  updateCustomer: (id: string, updated: Partial<Omit<Customer, 'id' | 'createdAt'>>) => void;
+  deleteCustomer: (id: string, permanent?: boolean) => Promise<void> | void;
+  reactivateCustomer: (id: string) => Promise<void> | void;
 
   // Vehicles
   addVehicle: (vehicle: Omit<Vehicle, 'id' | 'customerName'>) => Vehicle;
@@ -395,8 +396,8 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const updateCustomer = (id: string, updated: Omit<Customer, 'id' | 'createdAt'>) => {
-    if (String(id) === String(currentUserId) || String(id) === localStorage.getItem('br_motor_userid')) {
+  const updateCustomer = (id: string, updated: Partial<Omit<Customer, 'id' | 'createdAt'>>) => {
+    if (updated.name && (String(id) === String(currentUserId) || String(id) === localStorage.getItem('br_motor_userid'))) {
       setCurrentUserNameState(updated.name);
       localStorage.setItem('br_motor_username', updated.name);
     }
@@ -404,38 +405,66 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setCustomers((prev) =>
       prev.map((c) => (c.id === id ? { ...c, ...updated } : c))
     );
-    // Update customerName in vehicles and workOrders / bookings denormalized strings
-    setVehicles((prev) =>
-      prev.map((v) => (v.customerId === id ? { ...v, customerName: updated.name } : v))
-    );
-    setBookings((prev) =>
-      prev.map((b) => (b.customerId === id ? { ...b, customerName: updated.name } : b))
-    );
-    setWorkOrders((prev) =>
-      prev.map((wo) => (wo.customerId === id ? { ...wo, customerName: updated.name } : wo))
-    );
+    // Update customerName in vehicles and workOrders / bookings denormalized strings if name changed
+    if (updated.name) {
+      setVehicles((prev) =>
+        prev.map((v) => (v.customerId === id ? { ...v, customerName: updated.name! } : v))
+      );
+      setBookings((prev) =>
+        prev.map((b) => (b.customerId === id ? { ...b, customerName: updated.name! } : b))
+      );
+      setWorkOrders((prev) =>
+        prev.map((wo) => (wo.customerId === id ? { ...wo, customerName: updated.name! } : wo))
+      );
+    }
     void api(`/api/customers/${id}`, { method: 'PUT', body: JSON.stringify(updated) })
       .then(refreshDatabase)
       .catch((error) => showToast(error.message, 'error'));
-    showToast("Customer details updated", "success");
-    addAuditLog("Customer Updated", `Updated details for customer "${updated.name}" (ID: ${id})`, 'customer');
+    showToast("Data pelanggan berhasil diperbarui", "success");
+    const target = customers.find((c) => c.id === id);
+    addAuditLog("Customer Updated", `Updated details for customer "${updated.name || target?.name || id}" (ID: ${id})`, 'customer');
   };
 
-  const deleteCustomer = async (id: string) => {
+  const deleteCustomer = async (id: string, permanent: boolean = false) => {
     if (!canDirectDelete(currentRole)) {
-      showToast('Hanya akun Owner yang dapat menghapus data pelanggan langsung.', 'warning');
+      showToast('Hanya akun Owner yang dapat menghapus data pelanggan.', 'warning');
       return;
     }
     const target = customers.find((c) => c.id === id);
     try {
-      await api(`/api/customers/${id}`, { method: 'DELETE' });
-      setCustomers((prev) => prev.filter((c) => c.id !== id));
-      setVehicles((prev) => prev.filter((v) => v.customerId !== id));
-      await refreshDatabase();
-      showToast('Data pelanggan berhasil dihapus.', 'success');
-      addAuditLog("Customer Deleted", `Removed customer "${target?.name || id}" and linked vehicles`, 'customer');
+      if (permanent) {
+        await api(`/api/customers/${id}?permanent=true`, { method: 'DELETE' });
+        setCustomers((prev) => prev.filter((c) => c.id !== id));
+        setVehicles((prev) => prev.filter((v) => v.customerId !== id));
+        await refreshDatabase();
+        showToast('Data pelanggan berhasil dihapus permanen.', 'success');
+        addAuditLog("Customer Deleted Permanently", `Dihapus permanen data pelanggan "${target?.name || id}"`, 'customer');
+      } else {
+        // Soft delete / non-aktifkan
+        await api(`/api/customers/${id}`, { method: 'DELETE' });
+        setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, status: 'inactive' } : c));
+        await refreshDatabase();
+        showToast(`Pelanggan "${target?.name || ''}" telah dinonaktifkan dari daftar aktif.`, 'info');
+        addAuditLog("Customer Deactivated", `Pelanggan "${target?.name || id}" dinonaktifkan dari daftar aktif.`, 'customer');
+      }
     } catch (error: any) {
-      showToast(error.message || 'Gagal menghapus data pelanggan.', 'error');
+      showToast(error.message || 'Gagal memproses data pelanggan.', 'error');
+    }
+  };
+
+  const reactivateCustomer = async (id: string) => {
+    const target = customers.find((c) => c.id === id);
+    try {
+      await api(`/api/customers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'active' }),
+      });
+      setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, status: 'active' } : c));
+      await refreshDatabase();
+      showToast(`Pelanggan "${target?.name || ''}" berhasil diaktifkan kembali!`, 'success');
+      addAuditLog("Customer Reactivated", `Pelanggan "${target?.name || id}" dipulihkan dari arsip ke daftar aktif.`, 'customer');
+    } catch (error: any) {
+      showToast(error.message || 'Gagal mengaktifkan kembali pelanggan.', 'error');
     }
   };
 
@@ -954,13 +983,17 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const pendingDeletionCount = deletionRequests.filter((r) => r.status === 'pending').length;
 
   const requestDelete = async (entityType: DeletableEntityType, entityId: string, entityLabel: string) => {
-    const res = await api<DeletionRequest[]>('/api/deletion-requests', {
-      method: 'POST',
-      body: JSON.stringify({ entityType, entityId, entityLabel, requestedByName: currentUserName, requestedByRole: currentRole }),
-    });
-    setDeletionRequests(res);
-    showToast(`Penghapusan ${entityLabel} menunggu persetujuan owner.`, 'info');
-    addAuditLog('Deletion Requested', currentUserName + ' (' + currentRole + ') requested deletion of ' + entityType + ' ' + entityLabel, 'staff');
+    try {
+      const res = await api<DeletionRequest[]>('/api/deletion-requests', {
+        method: 'POST',
+        body: JSON.stringify({ entityType, entityId, entityLabel, requestedByName: currentUserName, requestedByRole: currentRole }),
+      });
+      setDeletionRequests(res);
+      showToast(`Penghapusan ${entityLabel} menunggu persetujuan owner.`, 'info');
+      addAuditLog('Deletion Requested', currentUserName + ' (' + currentRole + ') requested deletion of ' + entityType + ' ' + entityLabel, 'staff');
+    } catch (error: any) {
+      showToast(error.message || 'Gagal mengajukan permintaan hapus.', 'error');
+    }
   };
 
   const approveDeletion = async (requestId: string) => {
@@ -1071,6 +1104,7 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addCustomer,
         updateCustomer,
         deleteCustomer,
+        reactivateCustomer,
         addVehicle,
         updateVehicle,
         deleteVehicle,

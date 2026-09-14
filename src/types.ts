@@ -5,6 +5,8 @@
 
 export type UserRole = 'owner' | 'admin' | 'mechanic' | 'cashier' | 'user';
 
+export type CustomerStatus = 'active' | 'inactive';
+
 export interface Customer {
   id: string;
   name: string;
@@ -13,6 +15,7 @@ export interface Customer {
   email?: string;
   username?: string;
   hasPassword?: boolean;
+  status?: CustomerStatus;
   createdAt: string;
 }
 

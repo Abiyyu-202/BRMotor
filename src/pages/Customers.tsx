@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { Customer, Vehicle, WorkOrder } from '../types';
 import {
@@ -21,10 +21,15 @@ import {
   PlusCircle,
   FileText,
   Bell,
-  Sparkles
+  Sparkles,
+  Shield,
+  Eye,
+  EyeOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { ServiceReminderModal } from '../components/ServiceReminderModal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { HiddenCustomerArchive } from './HiddenCustomerArchive';
 
 export const Customers: React.FC = () => {
   const {
@@ -42,14 +47,39 @@ export const Customers: React.FC = () => {
     currentRole
   } = useWorkshop();
 
-  // Role permissions
-  const canTriggerDelete = (role: string) => role === 'owner' || role === 'admin';
+  // Role permissions - same as mechanics (Owner has delete authorization)
+  const canTriggerAdd = (role: string) => role === 'owner' || role === 'admin';
+  const canTriggerDelete = (role: string) => role === 'owner';
   const canDeleteDirectly = (role: string) => role === 'owner';
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    customers.length > 0 ? customers[0] : null
+  // Only active customers are displayed on main page
+  const activeCustomers = useMemo(
+    () => (customers || []).filter((c) => c.status !== 'inactive'),
+    [customers]
   );
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  // Hidden Customer Archive Vault States
+  const [showSecretArchive, setShowSecretArchive] = useState(false);
+  const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState(false);
+  const [passcode, setPasscode] = useState('');
+  const [passcodeError, setPasscodeError] = useState('');
+  const [showPasscode, setShowPasscode] = useState(false);
+  const secretClickCount = useRef(0);
+  const secretClickTimer = useRef<any>(null);
+
+  // Sync selectedCustomer with active list
+  useEffect(() => {
+    if (activeCustomers.length > 0) {
+      if (!selectedCustomer || !activeCustomers.some((c) => c.id === selectedCustomer.id)) {
+        setSelectedCustomer(activeCustomers[0]);
+      }
+    } else {
+      setSelectedCustomer(null);
+    }
+  }, [activeCustomers, selectedCustomer]);
 
   // Modal: Add/Edit Customer
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,20 +99,24 @@ export const Customers: React.FC = () => {
   // Modal: Service Reminder
   const [isReminderOpen, setIsReminderOpen] = useState(false);
 
-  // Filtered customers
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone.includes(searchTerm)
+  // Filtered active customers
+  const filteredCustomers = useMemo(
+    () =>
+      activeCustomers.filter(
+        (c) =>
+          c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.phone.includes(searchTerm)
+      ),
+    [activeCustomers, searchTerm]
   );
 
   // Related vehicles and work orders
   const customerVehicles = selectedCustomer
-    ? vehicles.filter((v) => v.customerId === selectedCustomer.id)
+    ? (vehicles || []).filter((v) => v.customerId === selectedCustomer.id)
     : [];
 
   const customerWorkOrders = selectedCustomer
-    ? workOrders.filter((wo) => wo.customerId === selectedCustomer.id)
+    ? (workOrders || []).filter((wo) => wo.customerId === selectedCustomer.id)
     : [];
 
   const handleOpenAddModal = () => {
@@ -127,25 +161,84 @@ export const Customers: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (canDeleteDirectly(currentRole)) {
-      setCustomerToDelete(id);
-    } else {
-      const c = customers.find((cust) => cust.id === id);
-      requestDelete('customer', id, `Pelanggan: ${c ? c.name : id}`);
-      showToast('Permintaan hapus pelanggan telah dikirim ke Owner.', 'info');
+    if (currentRole !== 'owner') {
+      showToast('Akses ditolak. Hanya Owner yang memiliki izin menghapus data pelanggan.', 'warning');
+      return;
     }
+    setCustomerToDelete(id);
   };
 
+  const selectedCustToDelete = useMemo(
+    () => (customers || []).find((c) => c.id === customerToDelete),
+    [customers, customerToDelete]
+  );
+
+  const custHasHistory = useMemo(() => {
+    if (!selectedCustToDelete) return false;
+    return (
+      (workOrders || []).some((w) => String(w.customerId) === String(selectedCustToDelete.id)) ||
+      (vehicles || []).some((v) => String(v.customerId) === String(selectedCustToDelete.id))
+    );
+  }, [selectedCustToDelete, workOrders, vehicles]);
+
   const confirmDelete = async () => {
+    if (currentRole !== 'owner') return;
     if (customerToDelete) {
       const id = customerToDelete;
       setCustomerToDelete(null);
       if (selectedCustomer?.id === id) {
         setSelectedCustomer(null);
       }
-      await deleteCustomer(id);
+      // Soft delete: sets status to 'inactive'
+      await deleteCustomer(id, false);
     }
   };
+
+  // Keyboard shortcut listener for hidden archive (Ctrl+Shift+H or Alt+H)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'h')) ||
+        (e.altKey && (e.key === 'H' || e.key === 'h'))
+      ) {
+        e.preventDefault();
+        setIsPasscodeModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handlePasscodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const validCodes = ['9988', 'brmotor2026', 'brmotor-secret', 'owner123'];
+    if (validCodes.includes(passcode.trim())) {
+      setPasscode('');
+      setPasscodeError('');
+      setIsPasscodeModalOpen(false);
+      setShowSecretArchive(true);
+      showToast('Otorisasi berhasil. Membuka vault arsip pelanggan non-aktif.', 'success');
+    } else {
+      setPasscodeError('Kode otorisasi tidak valid.');
+    }
+  };
+
+  const handleSecretBadgeClick = () => {
+    secretClickCount.current += 1;
+    if (secretClickTimer.current) clearTimeout(secretClickTimer.current);
+    secretClickTimer.current = setTimeout(() => {
+      secretClickCount.current = 0;
+    }, 1500);
+
+    if (secretClickCount.current >= 3) {
+      secretClickCount.current = 0;
+      setIsPasscodeModalOpen(true);
+    }
+  };
+
+  if (showSecretArchive) {
+    return <HiddenCustomerArchive onBack={() => setShowSecretArchive(false)} />;
+  }
 
   const handleSaveVehicle = (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,9 +270,20 @@ export const Customers: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight">{t.customers.title}</h1>
-            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 uppercase">
-              {customers.length} Pelanggan
+            <span
+              onClick={handleSecretBadgeClick}
+              className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 uppercase cursor-pointer select-none transition-transform active:scale-95"
+            >
+              {activeCustomers.length} Pelanggan
             </span>
+            <button
+              type="button"
+              onClick={() => setIsPasscodeModalOpen(true)}
+              className="opacity-0 hover:opacity-20 transition-opacity text-slate-400 p-0.5 cursor-pointer"
+              aria-label="Customer Vault"
+            >
+              <Shield className="w-3.5 h-3.5" />
+            </button>
           </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
             {language === 'id'
@@ -276,11 +380,11 @@ export const Customers: React.FC = () => {
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
-                  {canTriggerDelete(currentRole) && (
+                  {currentRole === 'owner' && (
                     <button
                       onClick={() => handleDelete(selectedCustomer.id)}
                       className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-md transition-colors"
-                      title={canDeleteDirectly(currentRole) ? 'Hapus Pelanggan' : 'Minta Persetujuan Hapus'}
+                      title="Hapus Pelanggan"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -573,14 +677,115 @@ export const Customers: React.FC = () => {
         onClose={() => setIsReminderOpen(false)}
       />
 
-      {/* CONFIRM DELETE MODAL */}
+      {/* CONFIRM DELETE / DEACTIVATE MODAL */}
       <ConfirmModal
         isOpen={!!customerToDelete}
-        title="Hapus Pelanggan"
-        message="Apakah Anda yakin ingin menghapus data pelanggan ini dari sistem?"
+        title={custHasHistory ? 'Nonaktifkan Pelanggan' : 'Hapus Pelanggan'}
+        message={
+          custHasHistory
+            ? `Pelanggan "${selectedCustToDelete?.name}" memiliki riwayat transaksi/kendaraan (${customerWorkOrders.length} SPK, ${customerVehicles.length} motor). Untuk menjaga keutuhan riwayat transaksi bengkel, data pelanggan akan dinonaktifkan dari daftar aktif dan dipindahkan ke arsip rahasia.`
+            : `Apakah Anda yakin ingin menghapus data pelanggan "${selectedCustToDelete?.name}" dari sistem?`
+        }
+        confirmLabel={custHasHistory ? 'Nonaktifkan Pelanggan' : 'Hapus'}
+        type={custHasHistory ? 'warning' : 'danger'}
         onConfirm={confirmDelete}
         onClose={() => setCustomerToDelete(null)}
       />
+
+      {/* MASTER SECURITY PASSCODE MODAL FOR HIDDEN CUSTOMER ARCHIVE */}
+      {isPasscodeModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-xl p-6 shadow-2xl text-white animate-scale-in relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsPasscodeModalOpen(false);
+                setPasscode('');
+                setPasscodeError('');
+              }}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-amber-400/10 border border-amber-400/30 text-amber-400 rounded-xl">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold uppercase tracking-wide text-white">
+                  Otorisasi Vault Rahasia
+                </h3>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Akses Terbatas - Arsip Pelanggan Non-Aktif
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+              Masukkan kode otorisasi master untuk membuka arsip rahasia pelanggan non-aktif:
+            </p>
+
+            <form onSubmit={handlePasscodeSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Master Passcode / PIN
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasscode ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    placeholder="Masukkan kode rahasia..."
+                    value={passcode}
+                    onChange={(e) => {
+                      setPasscode(e.target.value);
+                      if (passcodeError) setPasscodeError('');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 text-white rounded-lg px-3 py-2.5 text-sm font-mono tracking-widest focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasscode(!showPasscode)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    {showPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {passcodeError && (
+                  <p className="text-xs text-rose-400 font-bold mt-1.5 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    {passcodeError}
+                  </p>
+                )}
+                <p className="text-[10px] text-slate-500 mt-1 italic">
+                  Petunjuk Kode Master: <strong>9988</strong> atau <strong>brmotor2026</strong>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPasscodeModalOpen(false);
+                    setPasscode('');
+                    setPasscodeError('');
+                  }}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md active:scale-98"
+                >
+                  Buka Vault
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

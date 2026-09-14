@@ -28,13 +28,13 @@ export const canDirectDelete = canDeleteDirectly;
 
 /**
  * Does this role need owner approval before a deletion is executed?
- * True for admin; mechanic / cashier / user cannot delete at all.
+ * All non-owner deletion is disabled (only owner can delete).
  */
-export function needsDeletionApproval(role: UserRole): boolean {
-  return role === 'admin';
+export function needsDeletionApproval(_role: UserRole): boolean {
+  return false;
 }
 
-/** Whether the role is allowed to trigger any kind of delete (direct or request). */
+/** Whether the role is allowed to trigger any kind of delete. ONLY OWNER. */
 export function canTriggerDelete(role: UserRole): boolean {
-  return canDeleteDirectly(role) || needsDeletionApproval(role);
+  return role === 'owner';
 }

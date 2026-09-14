@@ -189,7 +189,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     // 5. Customers
     if (['owner', 'admin'].includes(currentRole)) {
-      (customers || []).forEach((c) => {
+      (customers || []).filter((c) => c.status !== 'inactive').forEach((c) => {
         allItems.push({
           id: `cust-${c.id}`,
           category: 'Pelanggan',

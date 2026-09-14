@@ -98,7 +98,7 @@ async function readWorkOrders() {
 async function bootstrap() {
   const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders, deletionRequests] = await Promise.all([
     query('SELECT * FROM shop_settings WHERE id = 1'),
-    query('SELECT id, name, phone, address, email, username, (password IS NOT NULL AND has_custom_password = 1) AS has_password, created_at FROM customers ORDER BY name'),
+    query('SELECT id, name, phone, address, email, username, (password IS NOT NULL AND has_custom_password = 1) AS has_password, status, created_at FROM customers ORDER BY name'),
     query('SELECT v.*, c.name AS customer_name FROM vehicles v LEFT JOIN customers c ON c.id = v.customer_id ORDER BY v.id DESC'),
     query(`SELECT b.*, c.id AS customer_id, c.name AS customer_name, v.plate_number, v.brand, v.model
            FROM bookings b LEFT JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN customers c ON c.id=v.customer_id ORDER BY b.scheduled_date DESC, b.scheduled_time DESC`),
@@ -124,6 +124,7 @@ async function bootstrap() {
       email: row.email || '',
       username: row.username || undefined,
       hasPassword: Boolean(row.has_password),
+      status: (row.status === 'inactive' ? 'inactive' : 'active') as 'active' | 'inactive',
       createdAt: row.created_at
     })),
     vehicles: vehicles.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id), customerName: row.customer_name, licensePlate: row.plate_number, brand: row.brand, model: row.model, year: Number(row.year), imageUrl: row.image_url || undefined })),
@@ -145,6 +146,7 @@ const DELETION_TARGETS: Record<string, string> = {
   vehicle: 'vehicles',
   booking: 'bookings',
   work_order: 'work_orders',
+  workorder: 'work_orders',
   sparepart: 'spareparts',
   mechanic: 'mechanics',
 };
@@ -211,6 +213,21 @@ app.post('/api/deletion-requests/:id/approve', async (req, res, next) => {
       if (jobs.length > 0) {
         return res.status(409).json({ message: 'Mekanik tidak dapat dihapus karena memiliki riwayat pengerjaan SPK. Ubah status menjadi non-aktif.' });
       }
+    }
+
+    if (request.entity_type === 'customer') {
+      await query("UPDATE customers SET status='inactive', updated_at=NOW() WHERE id=?", [request.entity_id]);
+      await query(
+        'UPDATE deletion_requests SET status=\'approved\', reviewed_by_name=?, reviewed_at=NOW(), updated_at=NOW() WHERE id=?',
+        [String(req.body?.reviewedByName || 'owner').slice(0, 120), req.params.id],
+      );
+      await log(
+        'Pelanggan Dinonaktifkan',
+        `Owner menyetujui permintaan hapus pelanggan "${request.entity_label}" (ID: ${request.entity_id}) dari ${request.requested_by_name}. Data pelanggan telah dipindahkan ke arsip non-aktif.`,
+        'customer',
+        'owner',
+      );
+      return res.json(await readDeletionRequests());
     }
 
     if (request.entity_type === 'work_order') {
@@ -301,6 +318,9 @@ app.post('/api/auth/login', async (req, res, next) => {
     );
     if (custRows.length > 0) {
       const cust: any = custRows[0];
+      if (cust.status === 'inactive') {
+        return res.status(403).json({ message: 'Akun pelanggan ini berstatus non-aktif. Silakan hubungi pihak bengkel untuk mengaktifkan kembali akun Anda.' });
+      }
       const valid = await bcrypt.compare(password, cust.password);
       if (valid) {
         await log('Login Pelanggan Sukses', `Pelanggan ${cust.name} berhasil masuk.`, 'auth', 'user', cust.id);
@@ -525,14 +545,15 @@ app.post('/api/auth/google-demo', async (req, res, next) => {
 
 app.post('/api/customers', async (req, res, next) => {
   try {
-    const { name, phone, address = '', email = '', username = null, password = null } = req.body;
+    const { name, phone, address = '', email = '', username = null, password = null, status = 'active' } = req.body;
     let hash = null;
     if (password) {
       hash = await bcrypt.hash(String(password), 10);
     }
+    const cleanStatus = status === 'inactive' ? 'inactive' : 'active';
     const r = await query<ResultSetHeader>(
-      'INSERT INTO customers (name, phone, address, email, username, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
-      [name, phone, address, email, username, hash]
+      'INSERT INTO customers (name, phone, address, email, username, password, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      [name, phone, address, email, username, hash, cleanStatus]
     );
     await log('Pelanggan dibuat', req.body.name, 'customer');
     res.json({ id: id(r.insertId) });
@@ -541,8 +562,20 @@ app.post('/api/customers', async (req, res, next) => {
 
 app.put('/api/customers/:id', async (req, res, next) => {
   try {
-    const { name, phone, address = '', email = '', username = undefined, password = undefined } = req.body;
+    const { name, phone, address = '', email = '', username = undefined, password = undefined, status = undefined } = req.body;
     
+    // Quick status toggle (reactivation / deactivation)
+    if (status !== undefined && name === undefined && phone === undefined) {
+      const cleanStatus = status === 'inactive' ? 'inactive' : 'active';
+      await query('UPDATE customers SET status=?, updated_at=NOW() WHERE id=?', [cleanStatus, req.params.id]);
+      await log(
+        cleanStatus === 'inactive' ? 'Pelanggan Dinonaktifkan' : 'Pelanggan Diaktifkan',
+        `Status pelanggan ID ${req.params.id} diubah menjadi ${cleanStatus}.`,
+        'customer'
+      );
+      return res.sendStatus(204);
+    }
+
     if (username) {
       const cleanUsername = String(username).trim().toLowerCase();
       const existsStaff = await query('SELECT id FROM staff WHERE LOWER(username) = ?', [cleanUsername]);
@@ -552,36 +585,49 @@ app.put('/api/customers/:id', async (req, res, next) => {
       }
     }
 
+    const cleanStatus = status ? (status === 'inactive' ? 'inactive' : 'active') : null;
+
     if (password && String(password).trim().length > 0) {
       const hash = await bcrypt.hash(String(password).trim(), 12);
       await query(
-        'UPDATE customers SET name=?, phone=?, address=?, email=?, username=COALESCE(?, username), password=?, updated_at=NOW() WHERE id=?',
-        [name, phone, address, email, username || null, hash, req.params.id]
+        'UPDATE customers SET name=?, phone=?, address=?, email=?, username=COALESCE(?, username), password=?, status=COALESCE(?, status), updated_at=NOW() WHERE id=?',
+        [name, phone, address, email, username || null, hash, cleanStatus, req.params.id]
       );
     } else if (username !== undefined) {
       await query(
-        'UPDATE customers SET name=?, phone=?, address=?, email=?, username=?, updated_at=NOW() WHERE id=?',
-        [name, phone, address, email, username || null, req.params.id]
+        'UPDATE customers SET name=?, phone=?, address=?, email=?, username=?, status=COALESCE(?, status), updated_at=NOW() WHERE id=?',
+        [name, phone, address, email, username || null, cleanStatus, req.params.id]
       );
     } else {
       await query(
-        'UPDATE customers SET name=?, phone=?, address=?, email=?, updated_at=NOW() WHERE id=?',
-        [name, phone, address, email, req.params.id]
+        'UPDATE customers SET name=?, phone=?, address=?, email=?, status=COALESCE(?, status), updated_at=NOW() WHERE id=?',
+        [name, phone, address, email, cleanStatus, req.params.id]
       );
     }
-    await log('Profil Pelanggan Diperbarui', `Data profil pelanggan ${name} diperbarui.`, 'customer');
+    await log('Profil Pelanggan Diperbarui', `Data profil pelanggan ${name || req.params.id} diperbarui.`, 'customer');
     res.sendStatus(204);
   } catch (e) { next(e); }
 });
 
 app.delete('/api/customers/:id', async (req, res, next) => {
   try {
-    const orders: any = await query('SELECT v.id FROM vehicles v JOIN work_orders w ON w.vehicle_id=v.id WHERE v.customer_id=? LIMIT 1', [req.params.id]);
-    if (orders && orders.length > 0) {
-      return res.status(409).json({ message: 'Pelanggan tidak dapat dihapus karena memiliki riwayat pengerjaan SPK atau transaksi aktif.' });
+    const isPermanent = req.query.permanent === 'true';
+    if (isPermanent) {
+      const orders: any = await query('SELECT v.id FROM vehicles v JOIN work_orders w ON w.vehicle_id=v.id WHERE v.customer_id=? LIMIT 1', [req.params.id]);
+      if (orders && orders.length > 0) {
+        return res.status(409).json({ message: 'Pelanggan tidak dapat dihapus permanen karena memiliki riwayat pengerjaan SPK atau transaksi aktif.' });
+      }
+      await query('DELETE FROM vehicles WHERE customer_id=?', [req.params.id]);
+      await query('DELETE FROM customers WHERE id=?', [req.params.id]);
+      await log('Pelanggan Dihapus Permanen', `Data pelanggan ID ${req.params.id} dihapus permanen dari sistem.`, 'customer');
+      return res.sendStatus(204);
     }
-    await query('DELETE FROM vehicles WHERE customer_id=?', [req.params.id]);
-    await query('DELETE FROM customers WHERE id=?', [req.params.id]);
+
+    // Default: Soft delete (Status dibuat non-aktif)
+    await query("UPDATE customers SET status='inactive', updated_at=NOW() WHERE id=?", [req.params.id]);
+    const target: any = await query('SELECT name FROM customers WHERE id=? LIMIT 1', [req.params.id]);
+    const custName = target[0]?.name || `ID ${req.params.id}`;
+    await log('Pelanggan Dinonaktifkan', `Pelanggan "${custName}" dinonaktifkan dari daftar aktif (soft-delete).`, 'customer');
     res.sendStatus(204);
   } catch (e) { next(e); }
 });
@@ -804,8 +850,8 @@ app.post('/api/work-orders', async (req, res, next) => {
     await c.beginTransaction();
     const number = `WO-${Date.now()}`;
     const [r]: any = await c.query(
-      'INSERT INTO work_orders (customer_id,vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',
-      [customerId || 1, vehicleId, mechanicId || 1, w.bookingId || null, number, w.complaint, w.diagnosis || '', w.estimatedCompletionTime, w.notes || '']
+      'INSERT INTO work_orders (customer_id,vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',
+      [customerId || 1, vehicleId, mechanicId || 1, w.bookingId || null, number, w.complaint || 'Servis rutin', w.diagnosis || '', w.estimatedCompletionTime || '14:00', w.notes || '']
     );
     await replaceDetails(c, r.insertId, w.services, w.sparePartsUsed);
     if (w.bookingId) await c.query("UPDATE bookings SET status='confirmed',updated_at=NOW() WHERE id=?", [w.bookingId]);

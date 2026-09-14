@@ -945,7 +945,7 @@ export const Settings: React.FC = () => {
           {/* Right Column (1 Gridwide): Quick Switch User role & Deletion Approvals (Owner Only) */}
           <div className="space-y-6">
             {renderRoleSwitcherCard()}
-            <DeletionApprovalPanel />
+            {currentRole === 'owner' && <DeletionApprovalPanel />}
           </div>
         </div>
       )}

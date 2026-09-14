@@ -41,8 +41,8 @@ export const Vehicles: React.FC = () => {
     currentRole
   } = useWorkshop();
 
-  // Role permissions
-  const canTriggerDelete = (role: UserRole) => role === 'owner' || role === 'admin' || role === 'user';
+  // Role permissions - only owner can delete
+  const canTriggerDelete = (role: UserRole) => role === 'owner';
   const canDeleteDirectly = (role: UserRole) => role === 'owner';
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -139,11 +139,12 @@ export const Vehicles: React.FC = () => {
 
   const handleOpenAddModal = () => {
     setVehicleToEdit(null);
+    const firstActiveCust = (customers || []).find((c) => c.status !== 'inactive');
     if (currentRole === 'user') {
-      const effectiveCustId = userCustomer?.id || currentUserId || (customers.length > 0 ? customers[0].id : '');
+      const effectiveCustId = userCustomer?.id || currentUserId || (firstActiveCust ? firstActiveCust.id : '');
       setCustomerId(effectiveCustId);
     } else {
-      setCustomerId(customers.length > 0 ? customers[0].id : '');
+      setCustomerId(firstActiveCust ? firstActiveCust.id : '');
     }
     setBrand('Honda');
     setModel('');
@@ -237,16 +238,15 @@ export const Vehicles: React.FC = () => {
   const handleDelete = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
-    if (canDeleteDirectly(currentRole)) {
-      setVehicleToDelete(id);
-    } else {
-      const v = vehicles.find((item) => item.id === id);
-      requestDelete('vehicle', id, `Motor: ${v ? `${v.brand} ${v.model} [${v.licensePlate}]` : id}`);
-      showToast('Permintaan hapus kendaraan telah dikirim ke Owner.', 'info');
+    if (currentRole !== 'owner') {
+      showToast('Akses ditolak. Hanya Owner yang memiliki izin menghapus data kendaraan.', 'warning');
+      return;
     }
+    setVehicleToDelete(id);
   };
 
   const confirmDeleteVehicle = async () => {
+    if (currentRole !== 'owner') return;
     if (vehicleToDelete) {
       const id = vehicleToDelete;
       setVehicleToDelete(null);
@@ -338,12 +338,12 @@ export const Vehicles: React.FC = () => {
                         </p>
                       </div>
 
-                      {canTriggerDelete(currentRole) && (
+                      {currentRole === 'owner' && (
                         <button
                           type="button"
                           onClick={(e) => handleDelete(v.id, e)}
                           className="p-1.5 ml-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors cursor-pointer shrink-0"
-                          title={canDeleteDirectly(currentRole) ? 'Hapus Kendaraan' : 'Minta Persetujuan Hapus'}
+                          title="Hapus Kendaraan"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -371,12 +371,12 @@ export const Vehicles: React.FC = () => {
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
-                  {canTriggerDelete(currentRole) && (
+                  {currentRole === 'owner' && (
                     <button
                       type="button"
                       onClick={() => handleDelete(selectedVehicle.id)}
                       className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer border border-rose-200 font-bold text-xs rounded-md transition-colors"
-                      title={canDeleteDirectly(currentRole) ? 'Hapus Kendaraan' : 'Minta Persetujuan Hapus'}
+                      title="Hapus Kendaraan"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -589,7 +589,7 @@ export const Vehicles: React.FC = () => {
                     className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
                   >
                     <option value="" disabled>-- Pilih Pelanggan Terdaftar --</option>
-                    {customers.map((c) => (
+                    {(customers || []).filter((c) => c.status !== 'inactive').map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.phone})
                       </option>

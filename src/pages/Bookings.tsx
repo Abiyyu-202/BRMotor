@@ -63,8 +63,8 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
     currentRole
   } = useWorkshop();
 
-  // Role permissions
-  const canTriggerDelete = (role: UserRole) => role === 'owner' || role === 'admin';
+  // Role permissions - only owner can delete
+  const canTriggerDelete = (role: UserRole) => role === 'owner';
   const canDeleteDirectly = (role: UserRole) => role === 'owner';
 
   // Live hardware clock tracker
@@ -326,6 +326,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
   };
 
   const confirmDeleteBooking = async () => {
+    if (currentRole !== 'owner') return;
     if (bookingToDelete) {
       const id = bookingToDelete.id;
       setBookingToDelete(null);
@@ -503,18 +504,14 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
                       <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md ${statusBadge}`}>
                         {statusLabel}
                       </span>
-                      {canTriggerDelete(currentRole) && (
+                      {currentRole === 'owner' && (
                         <button
                           type="button"
                           onClick={() => {
-                            if (canDeleteDirectly(currentRole)) {
-                              setBookingToDelete({ id: b.id, queueNumber: b.queueNumber });
-                            } else {
-                              requestDelete('booking', b.id, `Booking ${b.queueNumber} - ${b.customerName}`);
-                            }
+                            setBookingToDelete({ id: b.id, queueNumber: b.queueNumber });
                           }}
                           className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
-                          title={canDeleteDirectly(currentRole) ? 'Hapus Booking' : 'Minta Persetujuan Hapus'}
+                          title="Hapus Booking"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -630,7 +627,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
                     className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
                   >
                     <option value="" disabled>-- Pilih pelanggan --</option>
-                    {customers.map((c) => (
+                    {(customers || []).filter((c) => c.status !== 'inactive').map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.phone})
                       </option>
