@@ -43,7 +43,7 @@ const getTomorrowDateStr = () => {
 };
 
 interface BookingsProps {
-  onCheckInDirect: (booking: Booking) => void;
+  onCheckInDirect: (booking: Booking, customData?: { mechanicId: string; serviceIds: string[] }) => void;
   autoOpenAddModal?: boolean;
   onModalOpened?: () => void;
 }
@@ -53,6 +53,10 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
     bookings,
     customers,
     vehicles,
+    workOrders,
+    mechanics,
+    serviceItems,
+    formatRupiah,
     addBooking,
     updateBookingStatus,
     deleteBooking,
@@ -75,9 +79,14 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
   }, []);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState(() => getLocalDateStr());
   const [statusFilter, setStatusFilter] = useState<'all' | BookingStatus>('pending');
   const [bookingToDelete, setBookingToDelete] = useState<{ id: string; queueNumber: string } | null>(null);
+
+  // Check-In Confirmation Modal State
+  const [checkInBooking, setCheckInBooking] = useState<Booking | null>(null);
+  const [checkInMechanicId, setCheckInMechanicId] = useState('');
+  const [checkInServiceIds, setCheckInServiceIds] = useState<string[]>([]);
 
   // Modal State
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -260,15 +269,27 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
   };
 
   // Check schedule conflict
+  // Slot dianggap terisi hanya jika ada booking yang masih aktif (belum selesai)
   const isTimeSlotOccupied = useMemo(() => {
     if (!scheduleDate || !scheduleTime) return false;
-    return bookings.some(
-      (b) =>
-        b.date === scheduleDate &&
-        (b.time || '').slice(0, 5) === scheduleTime.slice(0, 5) &&
-        b.status !== 'cancelled'
-    );
-  }, [bookings, scheduleDate, scheduleTime]);
+    return bookings.some((b) => {
+      if (b.date !== scheduleDate || (b.time || '').slice(0, 5) !== scheduleTime.slice(0, 5)) {
+        return false;
+      }
+      if (b.status === 'cancelled' || (b.status as any) === 'completed') {
+        return false;
+      }
+      const relatedWo = (workOrders || []).find(
+        (wo) =>
+          String(wo.bookingId) === String(b.id) ||
+          (String(wo.vehicleId) === String(b.vehicleId) && wo.createdAt?.slice(0, 10) === b.date)
+      );
+      if (relatedWo && (relatedWo.status === 'completed' || relatedWo.status === 'picked_up')) {
+        return false; // Order sudah selesai, jam available lagi
+      }
+      return true;
+    });
+  }, [bookings, workOrders, scheduleDate, scheduleTime]);
 
   const handleCreateBookingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -476,19 +497,33 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
           </div>
         ) : (
           filteredBookings.map((b) => {
+            const isOrderFinished = (() => {
+              if (b.status === 'completed') return true;
+              const relatedWo = (workOrders || []).find(
+                (wo) =>
+                  String(wo.bookingId) === String(b.id) ||
+                  (String(wo.vehicleId) === String(b.vehicleId) && wo.createdAt?.slice(0, 10) === b.date)
+              );
+              return relatedWo ? (relatedWo.status === 'completed' || relatedWo.status === 'picked_up') : false;
+            })();
+
             const statusLabel =
-              b.status === 'pending'
-                ? 'Menunggu Antrean'
+              b.status === 'cancelled'
+                ? 'Dibatalkan'
+                : b.status === 'completed' || isOrderFinished
+                ? 'Selesai (Slot Bebas)'
                 : b.status === 'checked-in'
                 ? 'Sudah Check-In'
-                : 'Dibatalkan';
+                : 'Menunggu Antrean';
 
             const statusBadge =
-              b.status === 'pending'
-                ? 'bg-amber-100 text-amber-900 border border-amber-200'
+              b.status === 'cancelled'
+                ? 'bg-slate-100 text-slate-500 border border-slate-200'
+                : b.status === 'completed' || isOrderFinished
+                ? 'bg-blue-100 text-blue-900 border border-blue-200'
                 : b.status === 'checked-in'
                 ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                : 'bg-slate-100 text-slate-500 border border-slate-200';
+                : 'bg-amber-100 text-amber-900 border border-amber-200';
 
             return (
               <div
@@ -551,7 +586,7 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
                 </div>
 
                 {/* Foot Action Controls based on status */}
-                {b.status === 'pending' && (
+                {b.status === 'pending' && !isOrderFinished && (
                   <div className="flex gap-2 border-t border-slate-100 pt-3 shrink-0">
                     <button
                       type="button"
@@ -566,7 +601,11 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
                     {['owner', 'admin', 'cashier'].includes(currentRole) && (
                       <button
                         type="button"
-                        onClick={() => onCheckInDirect(b)}
+                        onClick={() => {
+                          setCheckInBooking(b);
+                          setCheckInMechanicId('');
+                          setCheckInServiceIds([]);
+                        }}
                         className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 rounded-lg text-[10px] font-bold text-white flex items-center justify-center gap-1 cursor-pointer shadow-2xs transition-all"
                       >
                         CHECK-IN (SPK)
@@ -576,11 +615,11 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
                   </div>
                 )}
 
-                {b.status === 'checked-in' && (
+                {b.status === 'checked-in' && !isOrderFinished && (
                   <div className="border-t border-slate-100 pt-3 shrink-0 flex items-center justify-between gap-2">
                     <div className="py-1.5 px-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold flex items-center gap-1.5 flex-1 min-w-0">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span className="truncate">Sudah Check-In</span>
+                      <span className="truncate">Sedang Diproses</span>
                     </div>
                     {['owner', 'admin', 'cashier'].includes(currentRole) && (
                       <button
@@ -593,6 +632,15 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
                         <span>LIHAT SPK</span>
                       </button>
                     )}
+                  </div>
+                )}
+
+                {(b.status === 'completed' || isOrderFinished) && (
+                  <div className="border-t border-slate-100 pt-3 shrink-0 flex items-center justify-between gap-2">
+                    <div className="py-1.5 px-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg text-[10px] font-bold flex items-center gap-1.5 flex-1 min-w-0">
+                      <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span className="truncate">Servis Selesai • Slot Jam Tersedia Kembali</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -782,6 +830,142 @@ export const Bookings: React.FC<BookingsProps> = ({ onCheckInDirect, autoOpenAdd
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-98"
                 >
                   Simpan Booking
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Check-In Confirmation & Mechanic Selection Modal */}
+      {checkInBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-scale-in">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center">
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Konfirmasi Check-In Servis</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Antrean: {checkInBooking.queueNumber} ({checkInBooking.licensePlate})</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCheckInBooking(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!checkInMechanicId) {
+                  showToast('Pilih mekanik yang akan bertugas menangani motor ini!', 'warning');
+                  return;
+                }
+                const b = checkInBooking;
+                setCheckInBooking(null);
+                onCheckInDirect(b, {
+                  mechanicId: checkInMechanicId,
+                  serviceIds: checkInServiceIds
+                });
+              }}
+              className="mt-4 space-y-4 text-xs"
+            >
+              {/* Unit & Customer Info Banner */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 text-[11px]">Pelanggan:</span>
+                  <span className="font-bold text-slate-800">{checkInBooking.customerName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 text-[11px]">Sepeda Motor:</span>
+                  <span className="font-bold text-slate-800">{checkInBooking.vehicleModel} ({checkInBooking.licensePlate})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 text-[11px]">Jadwal:</span>
+                  <span className="font-bold text-slate-800">{checkInBooking.date} • {checkInBooking.time} WIB</span>
+                </div>
+                {checkInBooking.notes && (
+                  <div className="pt-1 border-t border-slate-200/60 text-[11px] text-slate-600">
+                    <span className="font-semibold text-slate-700">Keluhan: </span>
+                    {checkInBooking.notes}
+                  </div>
+                )}
+              </div>
+
+              {/* Mechanic Picker: No default Adi! */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Tugaskan Mekanik <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  required
+                  value={checkInMechanicId}
+                  onChange={(e) => setCheckInMechanicId(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800 text-xs"
+                >
+                  <option value="">-- Pilih Mekanik yang Bertugas --</option>
+                  {(mechanics || [])
+                    .filter((m) => m.status !== 'inactive')
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.specialization || 'Mekanik'})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Service packages: Optional, no default Ganti Oli! */}
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                  Pilih Paket Servis Awal (Opsional)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                  {(serviceItems || []).map((svc) => {
+                    const isSelected = checkInServiceIds.includes(svc.id);
+                    return (
+                      <div
+                        key={svc.id}
+                        onClick={() => {
+                          if (isSelected) {
+                            setCheckInServiceIds(checkInServiceIds.filter((id) => id !== svc.id));
+                          } else {
+                            setCheckInServiceIds([...checkInServiceIds, svc.id]);
+                          }
+                        }}
+                        className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between text-[11px] transition-all ${
+                          isSelected
+                            ? 'bg-slate-900 border-slate-900 text-white font-bold'
+                            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="truncate pr-1">{svc.name}</span>
+                        <span className="font-mono text-[10px] shrink-0">{formatRupiah(svc.price)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCheckInBooking(null)}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={!checkInMechanicId}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-98"
+                >
+                  Konfirmasi Check-In & Buat SPK
                 </button>
               </div>
             </form>

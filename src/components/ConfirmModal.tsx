@@ -45,7 +45,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fade-in">
-      <div className="bg-white border border-slate-200 w-full max-w-sm rounded-xl p-5 shadow-2xl space-y-4 text-slate-900 animate-scale-up">
+      <div className="bg-white border border-slate-200 w-full max-w-sm rounded-xl p-5 shadow-2xl space-y-4 text-slate-900 animate-scale-in">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className={`p-2.5 rounded-lg border ${

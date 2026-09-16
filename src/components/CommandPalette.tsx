@@ -10,6 +10,7 @@ import {
   Calendar,
   CreditCard,
   BarChart3,
+  ClipboardList,
   Settings as SettingsIcon,
   UserCheck,
   ArrowRight,
@@ -98,6 +99,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       { name: 'Vehicles', label: 'Data Kendaraan', desc: 'Basis data motor pelanggan, plat nomor, dan tahun', icon: Bike, roles: ['owner', 'admin'] },
       { name: 'Customers', label: 'Data Pelanggan', desc: 'Buku kontak pelanggan dan riwayat kendaraan', icon: Users, roles: ['owner', 'admin'] },
       { name: 'Reports', label: 'Laporan Keuangan', desc: 'Laporan laba rugi, omzet harian, dan grafik', icon: BarChart3, roles: ['owner', 'admin'] },
+      { name: 'Rekapan', label: 'Rekapan Servis', desc: 'Ringkasan pengerjaan tindakan, suku cadang, dan biaya servis', icon: ClipboardList, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
       { name: 'Settings', label: 'Pengaturan Bengkel', desc: 'Profil toko, ganti kata sandi, dan sistem', icon: SettingsIcon, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
     ];
 

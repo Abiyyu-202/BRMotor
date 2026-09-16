@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
+import { validateIndonesianPlate } from '../utils/inputFormatters';
 import {
   Wrench,
   Bike,
@@ -40,10 +41,18 @@ import {
 
 interface LandingPageProps {
   onOpenLogin: () => void;
+  isLoggedIn?: boolean;
+  userName?: string;
+  onOpenDashboard?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
-  const { shopInfo, formatRupiah, serviceItems, spareParts, addBooking, bookings, refreshDatabase, showToast } = useWorkshop();
+export const LandingPage: React.FC<LandingPageProps> = ({
+  onOpenLogin,
+  isLoggedIn = false,
+  userName = '',
+  onOpenDashboard
+}) => {
+  const { shopInfo, formatRupiah, serviceItems, spareParts, addBooking, bookings, workOrders, refreshDatabase, showToast } = useWorkshop();
 
   // Mobile menu state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -85,7 +94,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
   const [phone, setPhone] = useState('');
   
   // Indonesian License Plate 3-Part State with Word Limiter
-  const [platePrefix, setPlatePrefix] = useState('B');
+  const [platePrefix, setPlatePrefix] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
   const [plateSuffix, setPlateSuffix] = useState('');
 
@@ -126,12 +135,32 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
   };
 
   // Check booked slots for currently selected date
+  // Slot jam hanya dianggap terisi jika order/booking di jam tersebut masih aktif (belum selesai).
+  // Jika order/SPK di jam tersebut sudah selesai ('completed' atau 'picked_up') atau booking 'cancelled' / 'completed',
+  // maka slot jam tersebut otomatis available lagi.
   const bookedSlotsOnDate = React.useMemo(() => {
     if (!bookings) return [];
     return bookings
-      .filter((b) => normalizeDate(b.date) === normalizeDate(bookingDate) && b.status !== 'cancelled')
+      .filter((b) => {
+        if (normalizeDate(b.date) !== normalizeDate(bookingDate)) return false;
+        if (b.status === 'cancelled' || b.status === 'completed') return false;
+
+        // Cek apakah ada work order (SPK) terkait yang sudah selesai
+        const relatedWo = (workOrders || []).find(
+          (wo) =>
+            String(wo.bookingId) === String(b.id) ||
+            (String(wo.vehicleId) === String(b.vehicleId) &&
+              normalizeDate(wo.createdAt) === normalizeDate(b.date))
+        );
+
+        if (relatedWo && (relatedWo.status === 'completed' || relatedWo.status === 'picked_up')) {
+          return false; // Order sudah selesai, jam jadi available lagi
+        }
+
+        return true;
+      })
       .map((b) => b.time.slice(0, 5));
-  }, [bookings, bookingDate]);
+  }, [bookings, workOrders, bookingDate]);
 
   const isDateToday = normalizeDate(bookingDate) === todayStr;
 
@@ -209,8 +238,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
     e.preventDefault();
     const fullPlateNumber = `${platePrefix.trim()} ${plateNumber.trim()} ${plateSuffix.trim()}`.trim().toUpperCase();
 
-    if (!customerName.trim() || !phone.trim() || !platePrefix.trim() || !plateNumber.trim() || !bookingDate) {
+    if (!customerName.trim() || !phone.trim() || !platePrefix.trim() || !plateNumber.trim() || !plateSuffix.trim() || !bookingDate) {
       showToast('Harap lengkapi nama, nomor telepon, dan plat nomor motor dengan benar.', 'warning');
+      return;
+    }
+
+    const plateValidation = validateIndonesianPlate(fullPlateNumber);
+    if (!plateValidation.isValid) {
+      showToast(plateValidation.message || 'Format plat nomor tidak valid. Contoh: B 1234 BKM', 'warning');
       return;
     }
 
@@ -345,7 +380,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-900 selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-900 selection:text-white relative overflow-x-clip">
       
       {/* 1. TOP ANNOUNCEMENT STRIP & STICKY NAVBAR */}
       <div className="sticky top-0 z-50 bg-white border-b border-slate-200">
@@ -363,10 +398,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
 
         {/* 2. STICKY NAVBAR */}
         <header className="bg-white/95 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between gap-3 lg:gap-4">
             
             {/* Brand Logo & Name */}
-            <a href="#beranda" className="flex items-center gap-3 group">
+            <a href="#beranda" className="flex items-center gap-3 group shrink-0">
               <img
                 src="/BR-Motor_Logo.png"
                 alt="BR Motor Logo"
@@ -386,7 +421,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
             </a>
 
             {/* Desktop Nav Links */}
-            <nav className="hidden lg:flex items-center gap-6 text-xs font-semibold text-slate-600">
+            <nav className="hidden lg:flex items-center gap-3 xl:gap-5 text-xs font-semibold text-slate-600 whitespace-nowrap shrink-0">
               <a href="#beranda" className="hover:text-slate-900 transition-colors">Beranda</a>
               <a href="#lacak" className="hover:text-slate-900 transition-colors">Lacak Motor</a>
               <a href="#layanan" className="hover:text-slate-900 transition-colors">Layanan & Harga</a>
@@ -399,18 +434,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
             </nav>
 
             {/* Action CTAs */}
-            <div className="hidden sm:flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={onOpenLogin}
-                className="px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
-              >
-                <LogIn className="w-3.5 h-3.5 text-slate-500" />
-                <span>Masuk</span>
-              </button>
+            <div className="hidden sm:flex items-center gap-2 shrink-0 ml-2 lg:ml-3 pl-2 lg:pl-3 border-l border-slate-200">
+              {isLoggedIn ? (
+                <button
+                  type="button"
+                  onClick={onOpenDashboard || onOpenLogin}
+                  title="Buka Dashboard Konsol Bengkel"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 transition-all cursor-pointer shadow-2xs flex items-center gap-2 group active:scale-98 shrink-0"
+                >
+                  <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                    {userName ? userName.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <span className="font-semibold text-xs max-w-[110px] truncate">{userName || 'Dashboard'}</span>
+                  <span className="text-[10px] text-slate-400 group-hover:text-slate-600 font-medium">→</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenLogin}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer shadow-2xs flex items-center gap-1.5 shrink-0"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Masuk</span>
+                </button>
+              )}
               <a
                 href="#booking"
-                className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all cursor-pointer shadow-xs flex items-center gap-1.5 active:scale-98"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all cursor-pointer shadow-xs flex items-center gap-1.5 active:scale-98 shrink-0"
               >
                 <Calendar className="w-3.5 h-3.5" />
                 <span>Booking</span>
@@ -429,7 +479,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
 
           {/* Mobile Navigation Drawer */}
           {mobileMenuOpen && (
-            <div className="lg:hidden bg-white border-t border-slate-200 p-5 space-y-4 shadow-lg animate-slide-up">
+            <div className="lg:hidden bg-white border-t border-slate-200 p-5 space-y-4 shadow-lg animate-slide-down origin-top">
               <nav className="flex flex-col space-y-3 text-sm font-semibold text-slate-700">
                 <a onClick={() => setMobileMenuOpen(false)} href="#beranda" className="hover:text-slate-900 py-1">Beranda</a>
                 <a onClick={() => setMobileMenuOpen(false)} href="#lacak" className="hover:text-slate-900 py-1">Lacak Status Motor</a>
@@ -442,16 +492,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                 <a onClick={() => setMobileMenuOpen(false)} href="#kontak" className="hover:text-slate-900 py-1">Lokasi & Jam Buka</a>
               </nav>
               <div className="pt-3 border-t border-slate-200 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    onOpenLogin();
-                  }}
-                  className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-lg font-bold text-xs uppercase tracking-wider cursor-pointer"
-                >
-                  Masuk Konsol
-                </button>
+                {isLoggedIn ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      if (onOpenDashboard) onOpenDashboard();
+                      else onOpenLogin();
+                    }}
+                    className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-xs uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+                  >
+                    <div className="w-4.5 h-4.5 rounded-full bg-white/20 text-white flex items-center justify-center text-[10px] font-bold">
+                      {userName ? userName.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                    <span>Konsol: {userName || 'Dashboard'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenLogin();
+                    }}
+                    className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-lg font-bold text-xs uppercase tracking-wider cursor-pointer"
+                  >
+                    Masuk Konsol
+                  </button>
+                )}
                 <a
                   onClick={() => setMobileMenuOpen(false)}
                   href="#booking"
@@ -1374,7 +1441,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
                       setBookingSuccessData(null);
                       setCustomerName('');
                       setPhone('');
-                      setPlatePrefix('B');
+                      setPlatePrefix('');
                       setPlateNumber('');
                       setPlateSuffix('');
                       setModel('');
@@ -1535,6 +1602,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenLogin }) => {
 
                         <div>
                           <input
+                            required
                             type="text"
                             maxLength={3}
                             placeholder="BKM"

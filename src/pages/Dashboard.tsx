@@ -40,6 +40,12 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
   const [inputAddress, setInputAddress] = useState('');
   const [hoveredPoint, setHoveredPoint] = useState<{ date: string; amount: number; x: number; y: number } | null>(null);
 
+  // Client Portal Tabs & Pagination States
+  const [ticketTab, setTicketTab] = useState<'active' | 'archived'>('active');
+  const [ticketPage, setTicketPage] = useState(1);
+  const [bookingTab, setBookingTab] = useState<'active' | 'archived'>('active');
+  const [bookingPage, setBookingPage] = useState(1);
+
   const {
     workOrders,
     customers,
@@ -77,6 +83,34 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
     const clientBookings = bookings.filter((b) => userVehicleIds.includes(b.vehicleId) || userCustomerIds.includes(String(b.customerId)));
     const clientWorkOrders = workOrders.filter((w) => userCustomerIds.includes(String(w.customerId)));
 
+    const activeWorkOrders = clientWorkOrders.filter(
+      (w) => w.status !== 'picked_up' && (w.status !== 'completed' || w.paymentStatus !== 'paid')
+    );
+    const archivedWorkOrders = clientWorkOrders.filter(
+      (w) => w.status === 'picked_up' || (w.status === 'completed' && w.paymentStatus === 'paid')
+    );
+    const currentTicketList = ticketTab === 'active' ? activeWorkOrders : archivedWorkOrders;
+    const TICKETS_PER_PAGE = 4;
+    const totalTicketPages = Math.max(1, Math.ceil(currentTicketList.length / TICKETS_PER_PAGE));
+    const paginatedTickets = currentTicketList.slice(
+      (ticketPage - 1) * TICKETS_PER_PAGE,
+      ticketPage * TICKETS_PER_PAGE
+    );
+
+    const activeBookings = clientBookings.filter(
+      (b) => b.status !== 'completed' && b.status !== 'cancelled'
+    );
+    const archivedBookings = clientBookings.filter(
+      (b) => b.status === 'completed' || b.status === 'cancelled'
+    );
+    const currentBookingList = bookingTab === 'active' ? activeBookings : archivedBookings;
+    const BOOKINGS_PER_PAGE = 4;
+    const totalBookingPages = Math.max(1, Math.ceil(currentBookingList.length / BOOKINGS_PER_PAGE));
+    const paginatedBookings = currentBookingList.slice(
+      (bookingPage - 1) * BOOKINGS_PER_PAGE,
+      bookingPage * BOOKINGS_PER_PAGE
+    );
+
     const getFriendlyStatus = (status: string) => {
       if (language === 'id') {
         switch (status) {
@@ -89,7 +123,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
           case 'quality_control':
             return { label: 'Pengujian / Quality Check', desc: 'Pengerjaan selesai. Sedang dilakukan uji coba kelaikan & pengencangan baut.', color: 'bg-blue-100 text-black border-2 border-black' };
           case 'completed':
-            return { label: 'Motor Siap Diambil!', desc: 'Seluruh perbaikan selesai. Silakan lakukan pembayaran di meja kasir.', color: 'bg-emerald-100 text-black border-2 border-black animate-pulse' };
+            return { label: 'Motor Siap Diambil!', desc: 'Seluruh perbaikan selesai. Silakan lakukan pembayaran di meja kasir.', color: 'bg-emerald-100 text-black border-2 border-black' };
           case 'picked_up':
             return { label: 'Selesai & Diserahkan', desc: 'Nota telah lunas dan kendaraan telah dibawa pulang.', color: 'bg-slate-200 text-black border-2 border-black' };
           default:
@@ -106,7 +140,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
         case 'quality_control':
           return { label: 'Quality Verification', desc: 'Work complete. Carrying out torque checks and test run.', color: 'bg-blue-100 text-black border-2 border-black' };
         case 'completed':
-          return { label: 'Ready for Collection!', desc: 'Ready for pick-up. Settle cashier payment at your convenience.', color: 'bg-emerald-100 text-black border-2 border-black animate-pulse' };
+          return { label: 'Ready for Collection!', desc: 'Ready for pick-up. Settle cashier payment at your convenience.', color: 'bg-emerald-100 text-black border-2 border-black' };
         case 'picked_up':
           return { label: 'Completed & Released', desc: 'Invoice settled and vehicle delivered to owner.', color: 'bg-slate-200 text-black border-2 border-black' };
         default:
@@ -149,7 +183,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div className="space-y-2">
               <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block animate-ping" />
+                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block" />
                 {language === 'id' ? 'Sesi Pelanggan Aktif' : 'Connected client session'}
               </div>
               <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">
@@ -228,152 +262,245 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
           </div>
         </div>
 
-        {/* ACTIVE WORK TICKETS / REPAIRS */}
+        {/* WORK TICKETS / REPAIRS (ACTIVE VS ARCHIVED) */}
         <div className="space-y-4">
-          <h2 className="text-xs font-bold tracking-wider uppercase border-b border-slate-200 pb-2 flex items-center gap-2 text-slate-700">
-            <Wrench className="w-4 h-4 text-slate-800" />
-            {language === 'id' ? `Tiket Servis Aktif (${clientWorkOrders.length})` : `Active Service Tickets (${clientWorkOrders.length})`}
-          </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
+            <h2 className="text-xs font-bold tracking-wider uppercase flex items-center gap-2 text-slate-700">
+              <Wrench className="w-4 h-4 text-slate-800" />
+              {ticketTab === 'active'
+                ? (language === 'id' ? `Tiket Servis Aktif (${activeWorkOrders.length})` : `Active Service Tickets (${activeWorkOrders.length})`)
+                : (language === 'id' ? `Arsip & Riwayat Servis Selesai (${archivedWorkOrders.length})` : `Archived Completed Services (${archivedWorkOrders.length})`)}
+            </h2>
 
-          {clientWorkOrders.length === 0 ? (
-            <div className="p-8 bg-white border border-dashed border-slate-200 rounded-xl text-center space-y-3">
-              <p className="text-xs text-slate-500 font-medium">
-                {language === 'id' ? 'Tidak ada tiket servis yang sedang berjalan saat ini.' : 'No active repair tickets found on our stand right now.'}
-              </p>
+            {/* Toggle Tabs */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200 self-start sm:self-auto">
               <button
                 type="button"
-                onClick={() => setActiveTab('Bookings')}
-                className="text-xs font-bold text-slate-900 underline"
+                onClick={() => {
+                  setTicketTab('active');
+                  setTicketPage(1);
+                }}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  ticketTab === 'active'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
               >
-                {language === 'id' ? 'Ingin melakukan pendaftaran servis? Klik di sini →' : 'Need to book a diagnostic check? Schedule here →'}
+                {language === 'id' ? `Servis Berjalan (${activeWorkOrders.length})` : `In-Progress (${activeWorkOrders.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTicketTab('archived');
+                  setTicketPage(1);
+                }}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  ticketTab === 'archived'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                {language === 'id' ? `Arsip Selesai (${archivedWorkOrders.length})` : `Archived (${archivedWorkOrders.length})`}
               </button>
             </div>
+          </div>
+
+          {currentTicketList.length === 0 ? (
+            <div className="p-8 bg-white border border-dashed border-slate-200 rounded-xl text-center space-y-3">
+              <p className="text-xs text-slate-500 font-medium">
+                {ticketTab === 'active'
+                  ? (language === 'id' ? 'Tidak ada tiket servis yang sedang berjalan saat ini.' : 'No active repair tickets found on our stand right now.')
+                  : (language === 'id' ? 'Belum ada riwayat servis yang telah di-checkout / selesai.' : 'No archived completed service tickets found.')}
+              </p>
+              {ticketTab === 'active' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('Bookings')}
+                  className="text-xs font-bold text-slate-900 underline"
+                >
+                  {language === 'id' ? 'Ingin melakukan pendaftaran servis? Klik di sini →' : 'Need to book a diagnostic check? Schedule here →'}
+                </button>
+              )}
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-              {clientWorkOrders.map((wo) => {
-                const step = getFriendlyStatus(wo.status);
-                const currentStageIdx =
-                  wo.status === 'waiting' || wo.status === 'waiting_parts'
-                    ? 0
-                    : wo.status === 'in_progress'
-                    ? 1
-                    : wo.status === 'quality_control'
-                    ? 2
-                    : 3;
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+                {paginatedTickets.map((wo) => {
+                  const step = getFriendlyStatus(wo.status);
+                  const isArchivedTicket = wo.status === 'picked_up' || (wo.status === 'completed' && wo.paymentStatus === 'paid');
+                  const currentStageIdx =
+                    wo.status === 'waiting' || wo.status === 'waiting_parts'
+                      ? 0
+                      : wo.status === 'in_progress'
+                      ? 1
+                      : wo.status === 'quality_control'
+                      ? 2
+                      : 3;
 
-                const stages = [
-                  { num: 1, title: 'Antrean', desc: 'Diagnosa Masuk' },
-                  { num: 2, title: 'Servis', desc: 'Pengerjaan Pit' },
-                  { num: 3, title: 'Uji QC', desc: 'Tes Kelaikan' },
-                  { num: 4, title: 'Selesai', desc: 'Siap Diambil' }
-                ];
+                  const stages = [
+                    { num: 1, title: 'Antrean', desc: 'Diagnosa Masuk' },
+                    { num: 2, title: 'Servis', desc: 'Pengerjaan Pit' },
+                    { num: 3, title: 'Uji QC', desc: 'Tes Kelaikan' },
+                    { num: 4, title: 'Selesai', desc: isArchivedTicket ? 'Sudah Diambil' : 'Siap Diambil' }
+                  ];
 
-                return (
-                  <div key={wo.id} className="p-5 sm:p-6 bg-white border border-slate-200 rounded-xl flex flex-col justify-between space-y-5 shadow-xs hover:shadow-md transition-all">
-                    <div className="space-y-4">
-                      {/* Card Header: Plate & Status */}
-                      <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
-                            SPK: {wo.id}
-                          </span>
-                          <span className="text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md uppercase">
-                            {wo.licensePlate}
-                          </span>
+                  return (
+                    <div key={wo.id} className="p-5 sm:p-6 bg-white border border-slate-200 rounded-xl flex flex-col justify-between space-y-5 shadow-xs hover:shadow-md transition-all">
+                      <div className="space-y-4">
+                        {/* Card Header: Plate & Status */}
+                        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
+                              SPK: {wo.id}
+                            </span>
+                            <span className="text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md uppercase">
+                              {wo.licensePlate}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
+                            <Clock className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Target: <strong className="text-slate-900">{wo.estimatedCompletionTime || '14:30'} WIB</strong></span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span>Target: <strong className="text-slate-900">{wo.estimatedCompletionTime || '14:30'} WIB</strong></span>
+                        
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="font-extrabold text-base sm:text-lg text-slate-900 uppercase tracking-tight">{wo.vehicleModel}</h3>
+                            {isArchivedTicket && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                Checkout Selesai & Lunas
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 italic mt-0.5">
+                            &quot;{wo.complaint || (language === 'id' ? 'Servis berkala harian' : 'Standard maintenance tuning')}&quot;
+                          </p>
                         </div>
-                      </div>
-                      
-                      <div>
-                        <h3 className="font-extrabold text-base sm:text-lg text-slate-900 uppercase tracking-tight">{wo.vehicleModel}</h3>
-                        <p className="text-xs text-slate-600 italic mt-0.5">
-                          &quot;{wo.complaint || (language === 'id' ? 'Servis berkala harian' : 'Standard maintenance tuning')}&quot;
-                        </p>
-                      </div>
 
-                      {/* --- VISUAL 4-STEP PROGRESS STEPPER --- */}
-                      <div className="pt-2 pb-1">
-                        <div className="relative flex items-center justify-between">
-                          {/* Stepper connecting background bar */}
-                          <div className="absolute left-4 right-4 top-4 -translate-y-1/2 h-1 bg-slate-100 -z-0" />
-                          <div
-                            className="absolute left-4 top-4 -translate-y-1/2 h-1 bg-emerald-500 transition-all duration-500 -z-0"
-                            style={{ width: `${(currentStageIdx / 3) * 88}%` }}
-                          />
+                        {/* --- VISUAL 4-STEP PROGRESS STEPPER --- */}
+                        <div className="pt-2 pb-1">
+                          <div className="relative flex items-center justify-between">
+                            {/* Stepper connecting background bar */}
+                            <div className="absolute left-4 right-4 top-4 -translate-y-1/2 h-1 bg-slate-100 -z-0" />
+                            <div
+                              className="absolute left-4 top-4 -translate-y-1/2 h-1 bg-emerald-500 transition-all duration-500 -z-0"
+                              style={{ width: `${(currentStageIdx / 3) * 88}%` }}
+                            />
 
-                          {/* Stage Nodes */}
-                          {stages.map((st, idx) => {
-                            const isDone = idx < currentStageIdx;
-                            const isCurrent = idx === currentStageIdx;
+                            {/* Stage Nodes */}
+                            {stages.map((st, idx) => {
+                              const isDone = isArchivedTicket ? true : idx < currentStageIdx;
+                              const isCurrent = isArchivedTicket ? false : idx === currentStageIdx;
 
-                            return (
-                              <div key={st.num} className="flex flex-col items-center text-center relative z-10">
-                                <div
-                                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                                    isDone
-                                      ? 'bg-emerald-500 text-white shadow-2xs'
-                                      : isCurrent
-                                      ? 'bg-slate-900 text-white ring-3 ring-slate-100 shadow-sm scale-105'
-                                      : 'bg-white border-2 border-slate-200 text-slate-400'
-                                  }`}
-                                >
-                                  {isDone ? '✓' : st.num}
+                              return (
+                                <div key={st.num} className="flex flex-col items-center text-center relative z-10">
+                                  <div
+                                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                                      isDone
+                                        ? 'bg-emerald-500 text-white shadow-2xs'
+                                        : isCurrent
+                                        ? 'bg-slate-900 text-white ring-3 ring-slate-100 shadow-sm scale-105'
+                                        : 'bg-white border-2 border-slate-200 text-slate-400'
+                                    }`}
+                                  >
+                                    {isDone ? '✓' : st.num}
+                                  </div>
+                                  <span className={`text-[11px] font-bold mt-1.5 ${isCurrent ? 'text-slate-900' : isDone ? 'text-emerald-700' : 'text-slate-400'}`}>
+                                    {st.title}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 hidden sm:block font-medium">
+                                    {st.desc}
+                                  </span>
                                 </div>
-                                <span className={`text-[11px] font-bold mt-1.5 ${isCurrent ? 'text-slate-900' : isDone ? 'text-emerald-700' : 'text-slate-400'}`}>
-                                  {st.title}
-                                </span>
-                                <span className="text-[9px] text-slate-400 hidden sm:block font-medium">
-                                  {st.desc}
-                                </span>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Status Badge Note */}
+                        <div className={`p-3 rounded-lg ${step.color} space-y-0.5 border border-slate-200/60`}>
+                          <p className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-current" />
+                            {step.label}
+                          </p>
+                          <p className="text-[11px] font-medium leading-relaxed">
+                            {step.desc}
+                          </p>
+                        </div>
+
+                        {/* Live Cost Preview Breakdown */}
+                        <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-lg space-y-1.5 text-xs">
+                          <div className="flex justify-between items-center text-slate-600">
+                            <span>Jasa Servis ({wo.services.length} item):</span>
+                            <span className="font-semibold text-slate-800">{formatRupiah(wo.costs.serviceCost)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-slate-600">
+                            <span>Suku Cadang ({wo.sparePartsUsed.length} item):</span>
+                            <span className="font-semibold text-slate-800">{formatRupiah(wo.costs.sparePartCost)}</span>
+                          </div>
+                          <div className="flex justify-between items-center font-extrabold text-slate-900 pt-1.5 border-t border-slate-200">
+                            <span>{isArchivedTicket ? 'Total Biaya Lunas:' : 'Estimasi Total Sementara:'}</span>
+                            <span className="text-sm font-mono text-slate-900">{formatRupiah(wo.costs.total)}</span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Active Status Badge Note */}
-                      <div className={`p-3 rounded-lg ${step.color} space-y-0.5 border border-slate-200/60`}>
-                        <p className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-current animate-ping" />
-                          {step.label}
-                        </p>
-                        <p className="text-[11px] font-medium leading-relaxed">
-                          {step.desc}
-                        </p>
-                      </div>
-
-                      {/* Live Cost Preview Breakdown */}
-                      <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-lg space-y-1.5 text-xs">
-                        <div className="flex justify-between items-center text-slate-600">
-                          <span>Jasa Servis ({wo.services.length} item):</span>
-                          <span className="font-semibold text-slate-800">{formatRupiah(wo.costs.serviceCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-slate-600">
-                          <span>Suku Cadang & Oli ({wo.sparePartsUsed.length} item):</span>
-                          <span className="font-semibold text-slate-800">{formatRupiah(wo.costs.sparePartCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center font-extrabold text-slate-900 pt-1.5 border-t border-slate-200">
-                          <span>Estimasi Total Sementara:</span>
-                          <span className="text-sm font-mono text-slate-900">{formatRupiah(wo.costs.total)}</span>
-                        </div>
+                      <div className="border-t border-slate-100 pt-3 flex justify-between items-center text-xs text-slate-500 font-medium">
+                        <span className="flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-slate-400" />
+                          Mekanik PJ: <strong className="text-slate-900">{wo.assignedMechanicName}</strong>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {new Date(wo.createdAt).toLocaleDateString('id-ID')}
+                        </span>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
 
-                    <div className="border-t border-slate-100 pt-3 flex justify-between items-center text-xs text-slate-500 font-medium">
-                      <span className="flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-slate-400" />
-                        Mekanik PJ: <strong className="text-slate-900">{wo.assignedMechanicName}</strong>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        {new Date(wo.createdAt).toLocaleDateString('id-ID')}
-                      </span>
-                    </div>
+              {/* Pagination Controls */}
+              {totalTicketPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                  <span className="text-xs text-slate-500 font-medium">
+                    {language === 'id'
+                      ? `Menampilkan halaman ${ticketPage} dari ${totalTicketPages} (${currentTicketList.length} total tiket)`
+                      : `Showing page ${ticketPage} of ${totalTicketPages} (${currentTicketList.length} total tickets)`}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={ticketPage <= 1}
+                      onClick={() => setTicketPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      ← {language === 'id' ? 'Sebelumnya' : 'Previous'}
+                    </button>
+                    {Array.from({ length: totalTicketPages }, (_, i) => i + 1).map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setTicketPage(num)}
+                        className={`w-8 h-8 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                          ticketPage === num
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={ticketPage >= totalTicketPages}
+                      onClick={() => setTicketPage((p) => Math.min(totalTicketPages, p + 1))}
+                      className="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      {language === 'id' ? 'Selanjutnya' : 'Next'} →
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -429,29 +556,68 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
             )}
           </div>
 
-          {/* UPCOMING BOOKING ORDERS */}
+          {/* UPCOMING & ARCHIVED BOOKING ORDERS */}
           <div className="space-y-4">
-            <h2 className="text-xs font-bold tracking-wider uppercase border-b border-slate-200 pb-2 flex items-center gap-2 text-slate-700">
-              <Calendar className="w-4 h-4 text-slate-800" />
-              {language === 'id' ? `Jadwal Booking Servis (${clientBookings.length})` : `Scheduled Appointment Bookings (${clientBookings.length})`}
-            </h2>
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2 flex-wrap">
+              <h2 className="text-xs font-bold tracking-wider uppercase flex items-center gap-2 text-slate-700">
+                <Calendar className="w-4 h-4 text-slate-800" />
+                {bookingTab === 'active'
+                  ? (language === 'id' ? `Jadwal Booking Aktif (${activeBookings.length})` : `Active Bookings (${activeBookings.length})`)
+                  : (language === 'id' ? `Riwayat Booking (${archivedBookings.length})` : `Booking History (${archivedBookings.length})`)}
+              </h2>
 
-            {clientBookings.length === 0 ? (
-              <div className="p-6 bg-white border border-dashed border-slate-200 rounded-xl text-center py-8">
-                <p className="text-xs text-slate-500 font-medium mb-3">
-                  {language === 'id' ? 'Belum ada tanggal reservasi booking mendatang.' : 'No future booking dates reserved.'}
-                </p>
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
                 <button
                   type="button"
-                  onClick={() => (onNewBooking ? onNewBooking() : setActiveTab('Bookings'))}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-xs text-white font-bold uppercase tracking-wider rounded-lg transition-all"
+                  onClick={() => {
+                    setBookingTab('active');
+                    setBookingPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    bookingTab === 'active'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
                 >
-                  {t.dashboard.newBooking}
+                  {language === 'id' ? `Aktif (${activeBookings.length})` : `Active (${activeBookings.length})`}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBookingTab('archived');
+                    setBookingPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    bookingTab === 'archived'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {language === 'id' ? `Riwayat (${archivedBookings.length})` : `History (${archivedBookings.length})`}
+                </button>
+              </div>
+            </div>
+
+            {currentBookingList.length === 0 ? (
+              <div className="p-6 bg-white border border-dashed border-slate-200 rounded-xl text-center py-8">
+                <p className="text-xs text-slate-500 font-medium mb-3">
+                  {bookingTab === 'active'
+                    ? (language === 'id' ? 'Belum ada jadwal reservasi booking aktif.' : 'No active upcoming booking reservations.')
+                    : (language === 'id' ? 'Belum ada riwayat booking lampau.' : 'No completed booking history found.')}
+                </p>
+                {bookingTab === 'active' && (
+                  <button
+                    type="button"
+                    onClick={() => (onNewBooking ? onNewBooking() : setActiveTab('Bookings'))}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-xs text-white font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer"
+                  >
+                    {t.dashboard.newBooking}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
-                {clientBookings.map((b) => (
+                {paginatedBookings.map((b) => (
                   <div key={b.id} className="p-3.5 bg-white border border-slate-200 rounded-lg space-y-2 shadow-2xs">
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md uppercase">
@@ -462,6 +628,8 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
                           ? 'bg-emerald-100 text-emerald-800'
                           : b.status === 'cancelled'
                           ? 'bg-rose-100 text-rose-800'
+                          : b.status === 'completed'
+                          ? 'bg-blue-100 text-blue-800'
                           : 'bg-amber-100 text-amber-800'
                       }`}>
                         {b.status}
@@ -480,6 +648,33 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
                     </div>
                   </div>
                 ))}
+
+                {/* Booking Pagination Controls */}
+                {totalBookingPages > 1 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Hal {bookingPage} / {totalBookingPages}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={bookingPage <= 1}
+                        onClick={() => setBookingPage((p) => Math.max(1, p - 1))}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        disabled={bookingPage >= totalBookingPages}
+                        onClick={() => setBookingPage((p) => Math.min(totalBookingPages, p + 1))}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -488,8 +683,8 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
 
         {/* Quick Address Modal */}
         {isAddressModalOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4 animate-scale-in">
               <div className="flex items-center justify-between">
                 <h3 className="font-extrabold text-sm sm:text-base text-slate-900 uppercase tracking-wider flex items-center gap-2">
                   <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
@@ -1033,7 +1228,7 @@ export const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; onNewBoo
               {sortedMechanics.map((m) => {
                 let statusColor = 'bg-slate-400';
                 if (m.status === 'available') statusColor = 'bg-emerald-500';
-                else if (m.status === 'busy') statusColor = 'bg-amber-500 animate-pulse';
+                else if (m.status === 'busy') statusColor = 'bg-amber-500';
 
                 return (
                   <div key={m.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">

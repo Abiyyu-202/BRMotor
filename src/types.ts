@@ -31,7 +31,7 @@ export interface Vehicle {
 }
 
 export type BookingType = 'walk-in' | 'scheduled';
-export type BookingStatus = 'pending' | 'checked-in' | 'cancelled';
+export type BookingStatus = 'pending' | 'checked-in' | 'cancelled' | 'completed';
 
 export interface Booking {
   id: string;
@@ -118,6 +118,16 @@ export interface SparePart {
   currentStock: number;
   minimumStock: number;
   supplier: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type MechanicStatus = 'available' | 'busy' | 'inactive';

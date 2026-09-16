@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { Vehicle, WorkOrder, UserRole } from '../types';
 import {
@@ -21,7 +21,9 @@ import {
   X,
   CheckCircle,
   HelpCircle,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
@@ -136,6 +138,27 @@ export const Vehicles: React.FC = () => {
           selectedVehicle.licensePlate.toUpperCase().replace(/\s/g, '')
     );
   }, [selectedVehicle, workOrders]);
+
+  // Pagination for Service History
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PER_PAGE = 3;
+
+  const totalHistoryPages = Math.ceil(selectedVehicleHistory.length / HISTORY_PER_PAGE) || 1;
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [selectedVehicle?.id]);
+
+  useEffect(() => {
+    if (historyPage > totalHistoryPages) {
+      setHistoryPage(1);
+    }
+  }, [historyPage, totalHistoryPages]);
+
+  const paginatedHistory = useMemo(() => {
+    const startIndex = (historyPage - 1) * HISTORY_PER_PAGE;
+    return selectedVehicleHistory.slice(startIndex, startIndex + HISTORY_PER_PAGE);
+  }, [selectedVehicleHistory, historyPage]);
 
   const handleOpenAddModal = () => {
     setVehicleToEdit(null);
@@ -453,7 +476,7 @@ export const Vehicles: React.FC = () => {
                   <div>
                     <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2">
                       <History className="w-4 h-4 text-slate-900" />
-                      Buku Servis Digital Motor
+                      Riwayat Servis
                     </h3>
                     <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                       Catatan riwayat perbaikan, diagnosa teknisi, pergantian oli & suku cadang
@@ -469,88 +492,138 @@ export const Vehicles: React.FC = () => {
                     Belum ada riwayat SPK atau servis yang terekam pada motor ini.
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {selectedVehicleHistory.map((wo) => {
-                      const serviceDate = new Date(wo.createdAt).toLocaleDateString('id-ID', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric'
-                      });
+                  <>
+                    <div className="space-y-4">
+                      {paginatedHistory.map((wo) => {
+                        const serviceDate = new Date(wo.createdAt).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric'
+                        });
 
-                      return (
-                        <div
-                          key={wo.id}
-                          className="p-4 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 text-xs space-y-3 transition-colors"
-                        >
-                          {/* Row Header */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[11px]">
-                                {wo.id}
-                              </span>
-                              <span className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
-                                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                {serviceDate}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-slate-500">
-                                Mekanik: <strong className="text-slate-800">{wo.assignedMechanicName || 'Teknisi BR Motor'}</strong>
-                              </span>
-                              <span className="text-[9px] font-bold uppercase bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700">
-                                {wo.status}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Diagnosis and Problem Details */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
-                            <div className="p-2.5 bg-white rounded-md border border-slate-200/80">
-                              <p className="text-[9px] font-bold uppercase text-slate-400 flex items-center gap-1">
-                                <FileText className="w-3 h-3 text-slate-400" /> Keluhan Pengendara
-                              </p>
-                              <p className="text-slate-800 font-medium mt-1">{wo.complaint || 'Pemeriksaan rutin'}</p>
-                            </div>
-                            <div className="p-2.5 bg-white rounded-md border border-slate-200/80">
-                              <p className="text-[9px] font-bold uppercase text-slate-400 flex items-center gap-1">
-                                <Wrench className="w-3 h-3 text-slate-400" /> Tindakan & Diagnosa
-                              </p>
-                              <p className="text-slate-800 font-medium mt-1">{wo.diagnosis || 'Servis berkala standar bengkel'}</p>
-                            </div>
-                          </div>
-
-                          {/* Parts and Services table snapshot */}
-                          {(wo.services?.length > 0 || wo.sparePartsUsed?.length > 0) && (
-                            <div className="space-y-1.5 pt-1">
-                              <p className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Item Pengerjaan & Suku Cadang</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {wo.services?.map((s, idx) => (
-                                  <span key={idx} className="bg-slate-200/60 text-slate-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
-                                    Jasa: {s.name}
-                                  </span>
-                                ))}
-                                {wo.sparePartsUsed?.map((p, idx) => (
-                                  <span key={idx} className="bg-slate-200/60 text-slate-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
-                                    Part: {p.name} ({p.quantity}x)
-                                  </span>
-                                ))}
+                        return (
+                          <div
+                            key={wo.id}
+                            className="p-4 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 text-xs space-y-3 transition-colors"
+                          >
+                            {/* Row Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[11px]">
+                                  {wo.id}
+                                </span>
+                                <span className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                  {serviceDate}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-slate-500">
+                                  Mekanik: <strong className="text-slate-800">{wo.assignedMechanicName || 'Teknisi BR Motor'}</strong>
+                                </span>
+                                <span className="text-[9px] font-bold uppercase bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700">
+                                  {wo.status}
+                                </span>
                               </div>
                             </div>
-                          )}
 
-                          {/* Total Cost footer */}
-                          <div className="flex items-center justify-end pt-2 border-t border-slate-200/60">
-                            <div className="flex items-center">
-                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-2">Total Biaya:</span>
-                              <span className="font-mono font-bold text-slate-900 text-xs">
-                                {formatRupiah(wo.costs?.total || 0)}
-                              </span>
+                            {/* Diagnosis and Problem Details */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                              <div className="p-2.5 bg-white rounded-md border border-slate-200/80">
+                                <p className="text-[9px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                                  <FileText className="w-3 h-3 text-slate-400" /> Keluhan Pengendara
+                                </p>
+                                <p className="text-slate-800 font-medium mt-1">{wo.complaint || 'Pemeriksaan rutin'}</p>
+                              </div>
+                              <div className="p-2.5 bg-white rounded-md border border-slate-200/80">
+                                <p className="text-[9px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                                  <Wrench className="w-3 h-3 text-slate-400" /> Tindakan & Diagnosa
+                                </p>
+                                <p className="text-slate-800 font-medium mt-1">{wo.diagnosis || 'Servis berkala standar bengkel'}</p>
+                              </div>
+                            </div>
+
+                            {/* Parts and Services table snapshot */}
+                            {(wo.services?.length > 0 || wo.sparePartsUsed?.length > 0) && (
+                              <div className="space-y-1.5 pt-1">
+                                <p className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Item Pengerjaan & Suku Cadang</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {wo.services?.map((s, idx) => (
+                                    <span key={idx} className="bg-slate-200/60 text-slate-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                                      Jasa: {s.name}
+                                    </span>
+                                  ))}
+                                  {wo.sparePartsUsed?.map((p, idx) => (
+                                    <span key={idx} className="bg-slate-200/60 text-slate-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                                      Part: {p.name} ({p.quantity}x)
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Total Cost footer */}
+                            <div className="flex items-center justify-end pt-2 border-t border-slate-200/60">
+                              <div className="flex items-center">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-2">Total Biaya:</span>
+                                <span className="font-mono font-bold text-slate-900 text-xs">
+                                  {formatRupiah(wo.costs?.total || 0)}
+                                </span>
+                              </div>
                             </div>
                           </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalHistoryPages > 1 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          Halaman <strong className="text-slate-800">{historyPage}</strong> dari{' '}
+                          <strong className="text-slate-800">{totalHistoryPages}</strong> ({selectedVehicleHistory.length} total servis)
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setHistoryPage((p) => Math.max(p - 1, 1))}
+                            disabled={historyPage <= 1}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                            Prev
+                          </button>
+
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: totalHistoryPages }, (_, idx) => idx + 1).map((pageNum) => (
+                              <button
+                                key={pageNum}
+                                type="button"
+                                onClick={() => setHistoryPage(pageNum)}
+                                className={`w-6 h-6 rounded-md text-[11px] font-bold transition-colors ${
+                                  historyPage === pageNum
+                                    ? 'bg-slate-900 text-white'
+                                    : 'text-slate-600 hover:bg-slate-100 border border-slate-200 bg-white'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            ))}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setHistoryPage((p) => Math.min(p + 1, totalHistoryPages))}
+                            disabled={historyPage >= totalHistoryPages}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Next
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

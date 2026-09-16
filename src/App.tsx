@@ -20,6 +20,7 @@ import { Mechanics } from './pages/Mechanics';
 import { Inventory } from './pages/Inventory';
 import { Payments } from './pages/Payments';
 import { Reports } from './pages/Reports';
+import { Rekapan } from './pages/Rekapan';
 import { Settings } from './pages/Settings';
 import { CustomerProfileModal } from './components/CustomerProfileModal';
 import { NotificationHistoryModal } from './components/NotificationHistoryModal';
@@ -38,6 +39,7 @@ import {
   CreditCard,
   BarChart3,
   TrendingUp,
+  ClipboardList,
   Settings as SettingsIcon,
   Menu,
   X,
@@ -134,6 +136,7 @@ function AppContent() {
     { name: 'Mechanics', icon: Users, roles: ['owner', 'admin'] },
     { name: 'Inventory', icon: Package, roles: ['owner', 'admin', 'mechanic'] },
     { name: 'Reports', icon: TrendingUp, roles: ['owner', 'admin'] },
+    { name: 'Rekapan', icon: ClipboardList, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] },
     { name: 'Settings', icon: SettingsIcon, roles: ['owner', 'admin', 'mechanic', 'cashier', 'user'] }
   ].filter(item => item.roles.includes(currentRole));
 
@@ -146,19 +149,26 @@ function AppContent() {
   }, [currentRole]);
 
   // Callback to handle booking check-in routing
-  const handleCheckInDirect = (booking: Booking) => {
+  const handleCheckInDirect = (booking: Booking, customData?: { mechanicId: string; serviceIds: string[] }) => {
     // Check if work order already exists for this booking
     const existingWO = (workOrders || []).find((w) => String(w.bookingId) === String(booking.id));
     if (!existingWO) {
       const mechList = mechanics || [];
-      const assignedMech = mechList.find((m) => m.status === 'available') || mechList[0];
+      const assignedMech = customData?.mechanicId
+        ? mechList.find((m) => String(m.id) === String(customData.mechanicId))
+        : mechList.find((m) => m.status === 'available');
+
       const items = serviceItems || [];
-      const defaultService = items.find(
-        (s) =>
-          s?.name?.toLowerCase().includes('ringan') ||
-          s?.name?.toLowerCase().includes('tune') ||
-          s?.name?.toLowerCase().includes('oli')
-      ) || items[0];
+      const chosenServices = (customData?.serviceIds && customData.serviceIds.length > 0)
+        ? customData.serviceIds
+            .map((id) => items.find((item) => item.id === id))
+            .filter(Boolean)
+            .map((s) => ({
+              serviceId: s!.id,
+              name: s!.name,
+              price: s!.price,
+            }))
+        : [];
 
       createWorkOrder({
         bookingId: booking.id,
@@ -169,17 +179,9 @@ function AppContent() {
         vehicleModel: booking.vehicleModel,
         complaint: booking.notes || 'Pemeriksaan & Servis Rutin (Booking Online)',
         diagnosis: 'Diterima dari antrean booking reservasi.',
-        assignedMechanicId: assignedMech?.id || '1',
+        assignedMechanicId: assignedMech?.id || '',
         assignedMechanicName: assignedMech?.name || 'Mekanik BR Motor',
-        services: defaultService
-          ? [
-              {
-                serviceId: defaultService.id,
-                name: defaultService.name,
-                price: defaultService.price,
-              },
-            ]
-          : [],
+        services: chosenServices,
         sparePartsUsed: [],
         estimatedCompletionTime: booking.time || '14:00',
         notes: booking.notes || `Antrean ${booking.queueNumber}`,
@@ -236,6 +238,8 @@ function AppContent() {
         return <Payments />;
       case 'Reports':
         return <Reports />;
+      case 'Rekapan':
+        return <Rekapan />;
       case 'Settings':
         return <Settings />;
       default:
@@ -247,7 +251,10 @@ function AppContent() {
     if (unauthView === 'landing') {
       return (
         <>
-          <LandingPage onOpenLogin={() => setUnauthView('login')} />
+          <LandingPage
+            onOpenLogin={() => setUnauthView('login')}
+            isLoggedIn={false}
+          />
           <Toasts />
         </>
       );
@@ -262,22 +269,15 @@ function AppContent() {
 
   if (showLandingPreview) {
     return (
-      <div className="relative">
-        <div className="bg-slate-900 text-white text-xs font-bold py-2.5 px-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-50 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>Mode Pratinjau Website Landing Page • Masuk sebagai: <span className="uppercase text-white font-bold">{currentRole}</span> ({currentUserName || 'Staf'})</span>
-          </div>
-          <button
-            onClick={() => setShowLandingPreview(false)}
-            className="px-3 py-1.5 bg-white text-slate-900 hover:bg-slate-100 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs"
-          >
-            Kembali ke Konsol Bengkel →
-          </button>
-        </div>
-        <LandingPage onOpenLogin={() => setShowLandingPreview(false)} />
+      <>
+        <LandingPage
+          onOpenLogin={() => setShowLandingPreview(false)}
+          isLoggedIn={true}
+          userName={currentUserName}
+          onOpenDashboard={() => setShowLandingPreview(false)}
+        />
         <Toasts />
-      </div>
+      </>
     );
   }
 
@@ -406,8 +406,14 @@ function AppContent() {
 
       {/* 2. SIDEBAR NAVIGATION - MOBILE DRAWER */}
       {mobileSidebarOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 lg:hidden flex no-print">
-          <div className="w-64 bg-white h-full border-r border-slate-200 p-4 flex flex-col justify-between animate-fade-in text-slate-900">
+        <div
+          onClick={() => setMobileSidebarOpen(false)}
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 lg:hidden flex no-print animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-64 bg-white h-full border-r border-slate-200 p-4 flex flex-col justify-between text-slate-900 animate-slide-in-left shadow-2xl"
+          >
             <div>
               {/* Brand Header */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
@@ -499,7 +505,7 @@ function AppContent() {
         {accountRole === 'owner' && currentRole !== 'owner' && (
           <div className="bg-slate-900 text-white text-xs font-semibold py-2 px-4 sm:px-6 flex items-center justify-between border-b border-slate-800 shrink-0 no-print">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
               <span>
                 Mode Simulasi Peran: <span className="uppercase font-bold text-amber-300">{currentRole}</span>
                 <span className="text-slate-400 ml-1.5 hidden sm:inline">(Akses asli: Owner Bengkel)</span>
@@ -546,16 +552,6 @@ function AppContent() {
               </kbd>
             </button>
 
-            {/* View Landing Page Button */}
-            <button
-              type="button"
-              onClick={() => setShowLandingPreview(true)}
-              title="Buka Website Beranda"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 hover:text-slate-900 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs active:scale-98"
-            >
-              <Home className="w-3.5 h-3.5 text-slate-600" />
-              <span>Beranda</span>
-            </button>
 
             {/* User Profile Pill for Customer */}
             {currentRole === 'user' && (

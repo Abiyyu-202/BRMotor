@@ -75,9 +75,11 @@ export const Customers: React.FC = () => {
     if (activeCustomers.length > 0) {
       if (!selectedCustomer || !activeCustomers.some((c) => c.id === selectedCustomer.id)) {
         setSelectedCustomer(activeCustomers[0]);
+        setHistoryPage(1);
       }
     } else {
       setSelectedCustomer(null);
+      setHistoryPage(1);
     }
   }, [activeCustomers, selectedCustomer]);
 
@@ -98,6 +100,7 @@ export const Customers: React.FC = () => {
 
   // Modal: Service Reminder
   const [isReminderOpen, setIsReminderOpen] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
 
   // Filtered active customers
   const filteredCustomers = useMemo(
@@ -118,6 +121,13 @@ export const Customers: React.FC = () => {
   const customerWorkOrders = selectedCustomer
     ? (workOrders || []).filter((wo) => wo.customerId === selectedCustomer.id)
     : [];
+
+  const HISTORY_PER_PAGE = 5;
+  const totalHistoryPages = Math.max(1, Math.ceil(customerWorkOrders.length / HISTORY_PER_PAGE));
+  const paginatedHistory = customerWorkOrders.slice(
+    (historyPage - 1) * HISTORY_PER_PAGE,
+    historyPage * HISTORY_PER_PAGE
+  );
 
   const handleOpenAddModal = () => {
     setEditingCustomer(null);
@@ -343,7 +353,10 @@ export const Customers: React.FC = () => {
                   return (
                     <div
                       key={c.id}
-                      onClick={() => setSelectedCustomer(c)}
+                      onClick={() => {
+                        setSelectedCustomer(c);
+                        setHistoryPage(1);
+                      }}
                       className={`p-3.5 sm:p-4 cursor-pointer transition-all flex items-center justify-between ${
                         isActive ? 'bg-slate-100 border-l-4 border-l-slate-900' : 'bg-white hover:bg-slate-50'
                       }`}
@@ -466,7 +479,7 @@ export const Customers: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {customerWorkOrders.map((wo) => {
+                    {paginatedHistory.map((wo) => {
                       const dateStr = new Date(wo.createdAt).toLocaleDateString('id-ID', {
                         day: 'numeric',
                         month: 'short',
@@ -506,6 +519,47 @@ export const Customers: React.FC = () => {
                         </div>
                       );
                     })}
+
+                    {/* Pagination Controls for Customer History */}
+                    {customerWorkOrders.length > 5 && (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          Menampilkan {(historyPage - 1) * HISTORY_PER_PAGE + 1} - {Math.min(historyPage * HISTORY_PER_PAGE, customerWorkOrders.length)} dari {customerWorkOrders.length} riwayat servis
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={historyPage <= 1}
+                            onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                            className="px-2.5 py-1 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                          >
+                            ← Sebelumnya
+                          </button>
+                          {Array.from({ length: totalHistoryPages }, (_, i) => i + 1).map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setHistoryPage(num)}
+                              className={`w-7 h-7 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                                historyPage === num
+                                  ? 'bg-slate-900 text-white'
+                                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            disabled={historyPage >= totalHistoryPages}
+                            onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                            className="px-2.5 py-1 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                          >
+                            Selanjutnya →
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

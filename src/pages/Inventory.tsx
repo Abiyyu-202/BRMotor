@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { SparePart } from '../types';
 import {
@@ -25,10 +25,12 @@ import { formatCurrencyInput, parseCurrencyInput } from '../utils/inputFormatter
 export const Inventory: React.FC = () => {
   const {
     spareParts,
+    suppliers,
     addSparePart,
     updateSparePart,
     deleteSparePart,
     restockSparePart,
+    addSupplier,
     showToast,
     formatRupiah,
     t,
@@ -42,13 +44,15 @@ export const Inventory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [onlyLowStock, setOnlyLowStock] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PARTS_PER_PAGE = 5;
 
-  // Modal State
+  // Modal State for Spare Parts
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<SparePart | null>(null);
   const [partToDelete, setPartToDelete] = useState<string | null>(null);
 
-  // Form states
+  // Form states for Spare Parts
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [category, setCategory] = useState('');
@@ -58,30 +62,83 @@ export const Inventory: React.FC = () => {
   const [minimumStock, setMinimumStock] = useState<number | ''>('');
   const [supplier, setSupplier] = useState('');
 
-  // Quick category pills
-  const quickCategories = [
-    { id: 'all', label: 'Semua Kategori' },
-    { id: 'Oli & Pelumas', label: 'Oli & Pelumas' },
-    { id: 'Pengereman', label: 'Pengereman' },
-    { id: 'Mesin & CVT', label: 'Mesin & CVT' },
-    { id: 'Kelistrikan', label: 'Kelistrikan' },
-    { id: 'Roda & Ban', label: 'Roda & Ban' },
-  ];
+  // Modal State for Supplier
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierPhone, setSupplierPhone] = useState('');
+  const [supplierEmail, setSupplierEmail] = useState('');
+  const [supplierAddress, setSupplierAddress] = useState('');
+  const [isSubmittingSupplier, setIsSubmittingSupplier] = useState(false);
+
+  // Dynamic category pills extracted from real inventory
+  const availableCategories = useMemo(() => {
+    const defaultList = ['Oli & Pelumas', 'Pengereman', 'Mesin & CVT', 'Kelistrikan', 'Roda & Ban'];
+    const catSet = new Set<string>(defaultList);
+    spareParts.forEach((p) => {
+      if (p.category && p.category.trim() && p.category !== 'Umum') {
+        catSet.add(p.category.trim());
+      }
+    });
+    return [
+      { id: 'all', label: 'Semua Kategori' },
+      ...Array.from(catSet).map((c) => ({ id: c, label: c }))
+    ];
+  }, [spareParts]);
 
   // Filtered parts
-  const filteredParts = spareParts.filter((part) => {
-    const matchesSearch =
-      part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      part.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      part.supplier.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredParts = useMemo(() => {
+    return spareParts.filter((part) => {
+      const matchesSearch =
+        part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        part.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        part.supplier.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesCategory =
-      categoryFilter === 'all' || part.category.toLowerCase().includes(categoryFilter.toLowerCase());
+      const matchesCategory =
+        categoryFilter === 'all' || part.category.toLowerCase().includes(categoryFilter.toLowerCase());
 
-    const matchesLowStock = onlyLowStock ? part.currentStock <= part.minimumStock : true;
+      const matchesLowStock = onlyLowStock ? part.currentStock <= part.minimumStock : true;
 
-    return matchesSearch && matchesCategory && matchesLowStock;
-  });
+      return matchesSearch && matchesCategory && matchesLowStock;
+    });
+  }, [spareParts, searchTerm, categoryFilter, onlyLowStock]);
+
+  const totalPartPages = Math.max(1, Math.ceil(filteredParts.length / PARTS_PER_PAGE));
+  const paginatedParts = useMemo(() => {
+    return filteredParts.slice(
+      (currentPage - 1) * PARTS_PER_PAGE,
+      currentPage * PARTS_PER_PAGE
+    );
+  }, [filteredParts, currentPage, PARTS_PER_PAGE]);
+
+  const handleSaveSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supplierName.trim()) {
+      showToast('Nama supplier wajib diisi!', 'warning');
+      return;
+    }
+    setIsSubmittingSupplier(true);
+    try {
+      await addSupplier({
+        name: supplierName.trim(),
+        phone: supplierPhone.trim(),
+        email: supplierEmail.trim(),
+        address: supplierAddress.trim()
+      });
+      // If add part modal is open, auto-fill the supplier input
+      if (isModalOpen) {
+        setSupplier(supplierName.trim());
+      }
+      setIsSupplierModalOpen(false);
+      setSupplierName('');
+      setSupplierPhone('');
+      setSupplierEmail('');
+      setSupplierAddress('');
+    } catch {
+      // Error handled in context
+    } finally {
+      setIsSubmittingSupplier(false);
+    }
+  };
 
   const handleOpenAddModal = () => {
     if (!canTriggerAdd(currentRole)) {
@@ -206,19 +263,36 @@ export const Inventory: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAddModal}
-          className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98"
-        >
-          <Plus className="w-4 h-4" />
-          {t.inventory.addPart}
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setSupplierName('');
+              setSupplierPhone('');
+              setSupplierEmail('');
+              setSupplierAddress('');
+              setIsSupplierModalOpen(true);
+            }}
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-98"
+          >
+            <Truck className="w-4 h-4 text-slate-700" />
+            + Form Supplier
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenAddModal}
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98"
+          >
+            <Plus className="w-4 h-4" />
+            {t.inventory.addPart}
+          </button>
+        </div>
       </div>
 
       {/* Stats overview boxes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div 
-          onClick={() => { setCategoryFilter('all'); setOnlyLowStock(false); }}
+          onClick={() => { setCategoryFilter('all'); setOnlyLowStock(false); setCurrentPage(1); }}
           className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs cursor-pointer hover:border-slate-300 transition-all"
         >
           <div>
@@ -229,7 +303,7 @@ export const Inventory: React.FC = () => {
         </div>
 
         <div 
-          onClick={() => setOnlyLowStock(!onlyLowStock)}
+          onClick={() => { setOnlyLowStock(!onlyLowStock); setCurrentPage(1); }}
           className={`p-4 rounded-xl border flex items-center justify-between shadow-2xs cursor-pointer transition-all ${
             onlyLowStock 
               ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-400/20' 
@@ -262,13 +336,16 @@ export const Inventory: React.FC = () => {
       {/* Filter and query bar */}
       <div className="p-4 bg-white rounded-xl border border-slate-200 flex flex-col gap-3 shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Quick Category Pills */}
+          {/* Dynamic Category Pills */}
           <div className="flex flex-wrap items-center gap-1.5">
             <Filter className="w-4 h-4 text-slate-400 mr-1 shrink-0" />
-            {quickCategories.map((cat) => (
+            {availableCategories.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => setCategoryFilter(cat.id)}
+                onClick={() => {
+                  setCategoryFilter(cat.id);
+                  setCurrentPage(1);
+                }}
                 className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
                   categoryFilter === cat.id
                     ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
@@ -283,7 +360,10 @@ export const Inventory: React.FC = () => {
           {/* Low Stock Toggle Button */}
           <button
             type="button"
-            onClick={() => setOnlyLowStock(!onlyLowStock)}
+            onClick={() => {
+              setOnlyLowStock(!onlyLowStock);
+              setCurrentPage(1);
+            }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border shrink-0 ${
               onlyLowStock
                 ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
@@ -302,7 +382,10 @@ export const Inventory: React.FC = () => {
             type="text"
             placeholder="Cari suku cadang berdasarkan nama, kode part, atau supplier..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
             className="bg-transparent text-slate-900 placeholder-slate-400 focus:outline-none w-full font-medium"
           />
         </div>
@@ -331,7 +414,7 @@ export const Inventory: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredParts.map((part) => {
+                paginatedParts.map((part) => {
                   const isLow = part.currentStock <= part.minimumStock;
                   const isNearLow = !isLow && part.currentStock <= part.minimumStock * 1.5;
                   const targetLevel = Math.max(part.minimumStock * 2, 10);
@@ -411,7 +494,7 @@ export const Inventory: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleOpenEditModal(part)}
-                            title="Edit Data"
+                            title="Edit"
                             className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors cursor-pointer"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
@@ -435,6 +518,47 @@ export const Inventory: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Inventory Pagination Controls */}
+        {filteredParts.length > 5 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white border-t border-slate-200 text-xs">
+            <span className="text-[11px] text-slate-500 font-medium">
+              Menampilkan {(currentPage - 1) * PARTS_PER_PAGE + 1} - {Math.min(currentPage * PARTS_PER_PAGE, filteredParts.length)} dari {filteredParts.length} suku cadang
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                ← Sebelumnya
+              </button>
+              {Array.from({ length: totalPartPages }, (_, i) => i + 1).map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setCurrentPage(num)}
+                  className={`w-7 h-7 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                    currentPage === num
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={currentPage >= totalPartPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPartPages, p + 1))}
+                className="px-2.5 py-1 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Selanjutnya →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MODAL: ADD / EDIT SPARE PART */}
@@ -553,15 +677,36 @@ export const Inventory: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Pemasok / Supplier</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Pemasok / Supplier</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupplierName('');
+                      setSupplierPhone('');
+                      setSupplierEmail('');
+                      setSupplierAddress('');
+                      setIsSupplierModalOpen(true);
+                    }}
+                    className="text-[10px] text-amber-600 hover:text-amber-700 font-bold underline cursor-pointer"
+                  >
+                    + Supplier Baru
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
+                  list="inventory-supplier-options"
                   placeholder="Contoh: PT Sumber Rejeki Motor / AHM"
                   value={supplier}
                   onChange={(e) => setSupplier(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800"
                 />
+                <datalist id="inventory-supplier-options">
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.name} />
+                  ))}
+                </datalist>
               </div>
 
               <div className="pt-2 flex justify-end gap-2.5 border-t border-slate-100">
@@ -577,6 +722,107 @@ export const Inventory: React.FC = () => {
                   className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-bold transition-all cursor-pointer shadow-xs"
                 >
                   {t.actions.save}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: FORM SUPPLIER BARU */}
+      {isSupplierModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-xl overflow-hidden shadow-2xl animate-scale-in">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-900 text-white">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-amber-400 text-slate-950 rounded-md font-bold">
+                  <Truck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold uppercase text-xs tracking-wider">
+                    Form Pendaftaran Supplier
+                  </h3>
+                  <p className="text-[10px] text-slate-300">
+                    Input data supplier resmi untuk suku cadang
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSupplierModalOpen(false)}
+                className="text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer p-1 rounded-md transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveSupplier} className="p-5 space-y-3.5 text-xs">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Nama Supplier / Rekanan <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: PT Astra Honda Motor / Federal Oil"
+                  value={supplierName}
+                  onChange={(e) => setSupplierName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Nomor Telepon / WhatsApp
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: 081234567890 / 021-5551234"
+                  value={supplierPhone}
+                  onChange={(e) => setSupplierPhone(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Alamat Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="Contoh: sales@supplier.co.id"
+                  value={supplierEmail}
+                  onChange={(e) => setSupplierEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Alamat Lengkap Kantor / Gudang
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Contoh: Kawasan Industri Cikarang Blok B-12, Bekasi"
+                  value={supplierAddress}
+                  onChange={(e) => setSupplierAddress(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-slate-800 focus:bg-white resize-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2.5 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsSupplierModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-bold transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingSupplier}
+                  className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-bold transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {isSubmittingSupplier ? 'Menyimpan...' : 'Simpan Supplier'}
                 </button>
               </div>
             </form>

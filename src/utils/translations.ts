@@ -29,6 +29,7 @@ export const translations = {
       Mechanics: "Data Mekanik",
       Inventory: "Stok Sparepart",
       Reports: "Laporan Omzet",
+      Rekapan: "Rekapan Servis",
       Settings: "Pengaturan",
     },
 
@@ -251,6 +252,7 @@ export const translations = {
       Mechanics: "Mechanics",
       Inventory: "Spare Parts",
       Reports: "Revenue Reports",
+      Rekapan: "Service Summary",
       Settings: "Settings",
     },
 

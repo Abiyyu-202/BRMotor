@@ -29,7 +29,8 @@ import {
   X,
   Sparkles,
   CheckSquare,
-  Square
+  Square,
+  Calendar
 } from 'lucide-react';
 import { QuickCheckInModal } from '../components/QuickCheckInModal';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -64,6 +65,16 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMechanicFilter, setSelectedMechanicFilter] = useState<string>('all');
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const dateFilter = selectedDate;
+  const setDateFilter = setSelectedDate;
+  const [partSearchQuery, setPartSearchQuery] = useState('');
 
   // Confirmation modal state before advancing WO
   const [advancingWO, setAdvancingWO] = useState<{ id: string; targetStatus: WorkOrderStatus; label: string } | null>(null);
@@ -111,7 +122,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
   // Printable slip state
   const [printWO, setPrintWO] = useState<WorkOrder | null>(null);
 
-  // Kanban Columns Definition
+  // Kanban Columns Definition (Reordered: Antre Servis -> Pengerjaan -> Tunggu Part -> Uji Kelayakan -> Selesai)
   const columns: { status: WorkOrderStatus; label: string; desc: string }[] = [
     {
       status: 'waiting',
@@ -119,23 +130,23 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
       desc: 'Motor telah tiba, menunggu slot pit mekanik'
     },
     {
-      status: 'waiting_parts',
-      label: 'Tunggu Part / Oli',
-      desc: 'Menunggu konfirmasi pengambilan suku cadang'
-    },
-    {
       status: 'in_progress',
-      label: 'Sedang Dikerjakan',
+      label: 'Pengerjaan',
       desc: 'Mekanik sedang membongkar atau menyervis motor'
     },
     {
+      status: 'waiting_parts',
+      label: 'Tunggu Part',
+      desc: 'Menunggu konfirmasi pengambilan suku cadang'
+    },
+    {
       status: 'quality_control',
-      label: 'Uji Kelaikan (QC)',
+      label: 'Uji Kelayakan',
       desc: 'Pemeriksaan akhir & uji coba fungsi jalan'
     },
     {
       status: 'completed',
-      label: 'Selesai & Siap Diambil',
+      label: 'Selesai',
       desc: 'Pengerjaan tuntas, menunggu serah terima pelanggan'
     }
   ];
@@ -153,21 +164,25 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
         selectedMechanicFilter === 'all' ||
         String(wo.assignedMechanicId) === String(selectedMechanicFilter);
 
-      return matchSearch && matchMechanic;
+      const woDate = wo.createdAt ? wo.createdAt.slice(0, 10) : '';
+      const matchDate = dateFilter ? woDate === dateFilter : true;
+
+      return matchSearch && matchMechanic && matchDate;
     });
-  }, [workOrders, searchQuery, selectedMechanicFilter]);
+  }, [workOrders, searchQuery, selectedMechanicFilter, dateFilter]);
 
   // Handle open create modal
   const handleOpenCreateModal = () => {
     const firstActive = (customers || []).find((c) => c.status !== 'inactive');
     setSelectedCustomerId(firstActive ? firstActive.id : '');
     setSelectedVehicleId('');
-    setAssignedMechanicId((mechanics || []).length > 0 ? mechanics[0].id : '');
+    setAssignedMechanicId('');
     setComplaint('');
     setDiagnosis('');
     setNotes('');
-    setSelectedServices([(serviceItems || [])[0]?.id || 's1']);
+    setSelectedServices([]);
     setSelectedParts([]);
+    setPartSearchQuery('');
     setIsCreateWOOpen(true);
   };
 
@@ -263,6 +278,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
       return;
     }
 
+    if (!assignedMechanicId) {
+      showToast('Silakan pilih mekanik yang bertugas!', 'warning');
+      return;
+    }
+
     const customer = (customers || []).find((c) => c.id === selectedCustomerId);
     const vehicle = (vehicles || []).find((v) => v.id === selectedVehicleId);
     const mechanic = (mechanics || []).find((m) => m.id === assignedMechanicId);
@@ -302,7 +322,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
       vehicleId: vehicle.id,
       vehicleModel: `${vehicle.brand} ${vehicle.model}`,
       licensePlate: vehicle.licensePlate,
-      assignedMechanicId: mechanic?.id || '1',
+      assignedMechanicId: mechanic?.id || '',
       assignedMechanicName: mechanic?.name || 'Mekanik BR Motor',
       complaint: complaint.trim() || 'Servis berkala rutin',
       diagnosis: diagnosis.trim(),
@@ -372,23 +392,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     let nextStatus: WorkOrderStatus = currentStatus;
     let label = '';
 
-    const targetWO = workOrders.find((w) => w.id === woId);
-    const hasParts = targetWO && targetWO.sparePartsUsed && targetWO.sparePartsUsed.length > 0;
-
     if (currentStatus === 'waiting') {
-      if (!hasParts) {
-        nextStatus = 'waiting_parts';
-        label = 'Tunggu Part / Oli (Menunggu Alokasi Part)';
-      } else {
-        nextStatus = 'in_progress';
-        label = 'Sedang Dikerjakan Mekanik';
-      }
+      nextStatus = 'in_progress';
+      label = 'Pengerjaan (Mulai Dikerjakan Mekanik)';
     } else if (currentStatus === 'waiting_parts') {
       nextStatus = 'in_progress';
-      label = 'Sedang Dikerjakan Mekanik';
+      label = 'Pengerjaan (Lanjut Dikerjakan Mekanik)';
     } else if (currentStatus === 'in_progress') {
       nextStatus = 'quality_control';
-      label = 'Uji Kelaikan (Quality Control)';
+      label = 'Uji Kelayakan (Quality Control)';
     } else if (currentStatus === 'quality_control') {
       nextStatus = 'completed';
       label = 'Selesai & Siap Diambil Pelanggan';
@@ -404,7 +416,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     setAdvancingWO({
       id: woId,
       targetStatus: 'waiting_parts',
-      label: 'Tahan: Menunggu Suku Cadang'
+      label: 'Tunggu Part (Menunggu Suku Cadang)'
     });
   };
 
@@ -499,15 +511,39 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
 
       {/* Quick Search & Mechanic Filter Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs no-print">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Cari Plat Motor, No. SPK, Pelanggan..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:border-slate-800 transition-colors"
-          />
+        <div className="flex flex-col sm:flex-row items-center gap-2 flex-1">
+          <div className="relative flex-1 w-full max-w-sm">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Cari Plat Motor, No. SPK, Pelanggan..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:border-slate-800 transition-colors"
+            />
+          </div>
+
+          {/* Date filter with calendar icon and reset button */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-medium w-full sm:w-auto">
+            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="bg-transparent text-slate-800 text-xs focus:outline-none"
+              title="Filter tanggal SPK (default hari ini)"
+            />
+            {dateFilter && (
+              <button
+                type="button"
+                onClick={() => setDateFilter('')}
+                className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                title="Tampilkan semua tanggal"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Mechanic filter pills */}
@@ -651,14 +687,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                               >
                                 <span>
                                   {wo.status === 'waiting'
-                                    ? (!wo.sparePartsUsed || wo.sparePartsUsed.length === 0
-                                        ? 'Menunggu Part'
-                                        : 'Mulai Dikerjakan')
+                                    ? 'Mulai Pengerjaan'
+                                    : wo.status === 'in_progress'
+                                    ? 'Uji Kelayakan (QC)'
                                     : wo.status === 'waiting_parts'
                                     ? 'Lanjut Pengerjaan'
-                                    : wo.status === 'in_progress'
-                                    ? 'Uji Kelaikan (QC)'
-                                    : 'Selesai & Siap Ambil'}
+                                    : wo.status === 'quality_control'
+                                    ? 'Selesai'
+                                    : 'Selesai'}
                                 </span>
                                 <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                               </button>
@@ -893,11 +929,26 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                 </div>
               </div>
 
-              {/* Spare Parts Allocation with stock check */}
+              {/* Spare Parts Allocation with stock check & search */}
               <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Alokasi Suku Cadang & Oli</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Alokasi Suku Cadang</label>
+                  <span className="text-[10px] text-slate-400">Pilih suku cadang jika dibutuhkan</span>
+                </div>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Cari suku cadang..."
+                    value={partSearchQuery}
+                    onChange={(e) => setPartSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-2.5 py-1 text-[11px] bg-white border border-slate-200 rounded-md focus:outline-none focus:border-slate-800"
+                  />
+                </div>
                 <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                  {spareParts.map((part) => {
+                  {spareParts
+                    .filter((p) => p.name.toLowerCase().includes(partSearchQuery.toLowerCase()) || (p.code && p.code.toLowerCase().includes(partSearchQuery.toLowerCase())))
+                    .map((part) => {
                     const selectedItem = selectedParts.find((p) => p.partId === part.id);
 
                     return (
@@ -930,6 +981,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                       </div>
                     );
                   })}
+                  {spareParts.filter((p) => p.name.toLowerCase().includes(partSearchQuery.toLowerCase()) || (p.code && p.code.toLowerCase().includes(partSearchQuery.toLowerCase()))).length === 0 && (
+                    <p className="text-center text-slate-400 text-[10px] py-2">Tidak ada suku cadang yang cocok.</p>
+                  )}
                 </div>
               </div>
 
@@ -1093,11 +1147,26 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                 </div>
               </div>
 
-              {/* Spare Parts Selection */}
+              {/* Spare Parts Selection & Search */}
               <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Penggantian Suku Cadang & Oli</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Penggantian Suku Cadang</label>
+                  <span className="text-[10px] text-slate-400">Pilih suku cadang jika dibutuhkan</span>
+                </div>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Cari suku cadang..."
+                    value={partSearchQuery}
+                    onChange={(e) => setPartSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-2.5 py-1 text-[11px] bg-white border border-slate-200 rounded-md focus:outline-none focus:border-slate-800"
+                  />
+                </div>
                 <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                  {spareParts.map((part) => {
+                  {spareParts
+                    .filter((p) => p.name.toLowerCase().includes(partSearchQuery.toLowerCase()) || (p.code && p.code.toLowerCase().includes(partSearchQuery.toLowerCase())))
+                    .map((part) => {
                     const selectedItem = selectedParts.find((p) => p.partId === part.id);
 
                     return (
@@ -1130,6 +1199,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                       </div>
                     );
                   })}
+                  {spareParts.filter((p) => p.name.toLowerCase().includes(partSearchQuery.toLowerCase()) || (p.code && p.code.toLowerCase().includes(partSearchQuery.toLowerCase()))).length === 0 && (
+                    <p className="text-center text-slate-400 text-[10px] py-2">Tidak ada suku cadang yang cocok.</p>
+                  )}
                 </div>
               </div>
 

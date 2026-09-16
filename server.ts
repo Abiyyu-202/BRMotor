@@ -96,7 +96,7 @@ async function readWorkOrders() {
 }
 
 async function bootstrap() {
-  const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders, deletionRequests] = await Promise.all([
+  const [settingsRows, customers, vehicles, bookings, mechanics, services, parts, logs, salesHistory, workOrders, deletionRequests, suppliers] = await Promise.all([
     query('SELECT * FROM shop_settings WHERE id = 1'),
     query('SELECT id, name, phone, address, email, username, (password IS NOT NULL AND has_custom_password = 1) AS has_password, status, created_at FROM customers ORDER BY name'),
     query('SELECT v.*, c.name AS customer_name FROM vehicles v LEFT JOIN customers c ON c.id = v.customer_id ORDER BY v.id DESC'),
@@ -112,6 +112,7 @@ async function bootstrap() {
            FROM invoices WHERE payment_status='paid' GROUP BY DATE(updated_at) ORDER BY date`),
     readWorkOrders(),
     readDeletionRequests(),
+    query('SELECT * FROM suppliers ORDER BY name ASC'),
   ]);
   const settings: any = settingsRows[0] || { name: 'BR Motor', address: '', phone: '', email: '', tax_rate: 0, currency: 'IDR' };
   return {
@@ -131,11 +132,20 @@ async function bootstrap() {
     bookings: bookings.map((row: any) => ({ id: id(row.id), customerId: id(row.customer_id || 1), vehicleId: id(row.vehicle_id || 1), customerName: row.customer_name || 'Pelanggan Umum', licensePlate: row.plate_number || 'N/A', vehicleModel: `${row.brand || 'Motor'} ${row.model || ''}`.trim(), type: 'scheduled', date: String(row.scheduled_date || '').slice(0, 10), time: String(row.scheduled_time || '09:00').slice(0, 5), queueNumber: row.queue_number || row.booking_code || `Q-${row.id}`, status: row.status === 'confirmed' ? 'checked-in' : (row.status || 'pending'), notes: row.complaint || '', estimatedDurationMinutes: row.estimated_duration_minutes || 60, createdAt: row.created_at })),
     mechanics: mechanics.map((row: any) => ({ id: id(row.id), name: row.name, position: row.specialization || 'Mekanik', phone: row.phone, status: mechanicStatus(row.status), assignedJobsCount: Number(row.assigned_jobs_count), completedJobsCount: Number(row.completed_jobs_count), rating: 5 })),
     serviceItems: services.map((row: any) => ({ id: id(row.id), name: row.name, price: Number(row.price), estimatedMinutes: Number(row.estimated_duration) })),
-    spareParts: parts.map((row: any) => ({ id: id(row.id), name: row.name, sku: row.sku, category: 'Umum', purchasePrice: Number(row.purchase_price), sellingPrice: Number(row.sell_price), currentStock: Number(row.stock), minimumStock: Number(row.min_stock), supplier: row.supplier_name || '-' })),
+    spareParts: parts.map((row: any) => ({ id: id(row.id), name: row.name, sku: row.sku, category: row.category || 'Umum', purchasePrice: Number(row.purchase_price), sellingPrice: Number(row.sell_price), currentStock: Number(row.stock), minimumStock: Number(row.min_stock), supplier: row.supplier_name || '-' })),
     workOrders,
     salesHistory: salesHistory.map((row: any) => ({ id: `sale-${row.date}`, date: String(row.date).slice(0, 10), amount: Number(row.amount), count: Number(row.count) })),
     auditLogs: logs.map((row: any) => ({ id: id(row.id), action: row.activity, details: row.details || row.activity, timestamp: row.created_at, userRole: row.user_role || 'admin', category: row.category || 'work_order' })),
     deletionRequests,
+    suppliers: suppliers.map((row: any) => ({
+      id: id(row.id),
+      name: row.name,
+      phone: row.phone || '',
+      email: row.email || '',
+      address: row.address || '',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    })),
   };
 }
 
@@ -865,7 +875,7 @@ app.post('/api/work-orders', async (req, res, next) => {
   }
 });
 app.put('/api/work-orders/:id',async(req,res,next)=>{const c=await pool.getConnection();try{const w=req.body;await c.beginTransaction();await c.query('UPDATE work_orders SET mechanic_id=?,complaint=?,diagnosis=?,estimated_completion_time=?,notes=?,updated_at=NOW() WHERE id=?',[w.assignedMechanicId,w.complaint,w.diagnosis||'',w.estimatedCompletionTime,w.notes||'',req.params.id]);await replaceDetails(c,Number(req.params.id),w.services,w.sparePartsUsed);await c.commit();res.sendStatus(204);}catch(e){await c.rollback();next(e);}finally{c.release();}});
-app.patch('/api/work-orders/:id/status',async(req,res,next)=>{try{const status=dbWorkOrderStatus(req.body.status);const timestamps=status==='completed'?', completed_at=NOW(), end_time=NOW()':status==='picked_up'?', picked_up_at=NOW()':'';await query(`UPDATE work_orders SET status=?, updated_at=NOW()${timestamps} WHERE id=?`,[status,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
+app.patch('/api/work-orders/:id/status',async(req,res,next)=>{try{const status=dbWorkOrderStatus(req.body.status);const timestamps=status==='completed'?', completed_at=NOW(), end_time=NOW()':status==='picked_up'?', picked_up_at=NOW()':'';await query(`UPDATE work_orders SET status=?, updated_at=NOW()${timestamps} WHERE id=?`,[status,req.params.id]);if(status==='completed'||status==='picked_up'){await query('UPDATE bookings b JOIN work_orders w ON w.booking_id=b.id SET b.status=\'completed\',b.updated_at=NOW() WHERE w.id=?',[req.params.id]);}res.sendStatus(204);}catch(e){next(e);}});
 app.delete('/api/work-orders/:id', async (req, res, next) => {
   const c = await pool.getConnection();
   try {
@@ -921,6 +931,7 @@ app.post('/api/work-orders/:id/checkout', async (req, res, next) => {
       [req.params.id, cashierId, inv, serviceCost, partCost, discount, taxAmount, total, paymentMethod, cashTendered, changeAmount]
     );
     await c.query("UPDATE work_orders SET status='picked_up',picked_up_at=NOW(),updated_at=NOW() WHERE id=?", [req.params.id]);
+    await c.query("UPDATE bookings b JOIN work_orders w ON w.booking_id=b.id SET b.status='completed',b.updated_at=NOW() WHERE w.id=?", [req.params.id]);
     await log('Pembayaran Kasir Diterima', `Pelunasan SPK #${req.params.id} (${inv}) senilai Rp ${total.toLocaleString('id-ID')} via ${paymentMethod.toUpperCase()}`, 'payment');
     await c.commit();
     res.sendStatus(204);
@@ -947,9 +958,97 @@ app.delete('/api/mechanics/:id', async (req, res, next) => {
   }
 });
 
-app.post('/api/spare-parts',async(req,res,next)=>{try{const p=req.body;let suppliers:any=await query('SELECT id FROM suppliers WHERE name=?',[p.supplier]);let supplierId=suppliers[0]?.id;if(!supplierId){const r=await query<ResultSetHeader>('INSERT INTO suppliers (name,phone,address,created_at,updated_at) VALUES (?, \'-\', \'-\', NOW(), NOW())',[p.supplier]);supplierId=r.insertId;}const r=await query<ResultSetHeader>('INSERT INTO spareparts (supplier_id,sku,name,purchase_price,sell_price,stock,min_stock,unit,created_at,updated_at) VALUES (?,?,?,?,?,?,?,\'pcs\',NOW(),NOW())',[supplierId,p.sku,p.name,p.purchasePrice,p.sellingPrice,p.currentStock,p.minimumStock]);res.json({id:id(r.insertId)});}catch(e){next(e);}});
-app.put('/api/spare-parts/:id',async(req,res,next)=>{try{const p=req.body;await query('UPDATE spareparts SET sku=?,name=?,purchase_price=?,sell_price=?,stock=?,min_stock=?,updated_at=NOW() WHERE id=?',[p.sku,p.name,p.purchasePrice,p.sellingPrice,p.currentStock,p.minimumStock,req.params.id]);res.sendStatus(204);}catch(e){next(e);}});
-app.patch('/api/spare-parts/:id/restock',async(req,res,next)=>{try{const qty=Number(req.body.quantity||0);await query('UPDATE spareparts SET stock=stock+?,updated_at=NOW() WHERE id=?',[qty,req.params.id]);const parts:any=await query('SELECT supplier_id FROM spareparts WHERE id=?',[req.params.id]);const supplierId=parts[0]?.supplier_id||null;await query("INSERT INTO stock_transactions (sparepart_id,supplier_id,transaction_type,qty,reference_id,notes,created_at) VALUES (?,?,'stock_in',?,'MANUAL-RESTOCK','Penambahan stok manual',NOW())",[req.params.id,supplierId,qty]);res.sendStatus(204);}catch(e){next(e);}});
+app.get('/api/suppliers', async (_req, res, next) => {
+  try {
+    const rows: any = await query('SELECT * FROM suppliers ORDER BY name ASC');
+    res.json(rows.map((r: any) => ({
+      id: id(r.id),
+      name: r.name,
+      phone: r.phone || '',
+      email: r.email || '',
+      address: r.address || '',
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    })));
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.post('/api/suppliers', async (req, res, next) => {
+  try {
+    const { name, phone = '', email = '', address = '' } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Nama supplier wajib diisi.' });
+    }
+    const r = await query<ResultSetHeader>(
+      'INSERT INTO suppliers (name, phone, email, address, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+      [name.trim(), phone.trim(), email.trim(), address.trim()]
+    );
+    await log('Supplier Ditambahkan', `Supplier baru "${name.trim()}" didaftarkan ke sistem.`, 'inventory', 'admin');
+    res.status(201).json({
+      id: id(r.insertId),
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
+      address: address.trim()
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.post('/api/spare-parts', async (req, res, next) => {
+  try {
+    const p = req.body;
+    let suppliers: any = await query('SELECT id FROM suppliers WHERE name=?', [p.supplier]);
+    let supplierId = suppliers[0]?.id;
+    if (!supplierId) {
+      const r = await query<ResultSetHeader>(
+        'INSERT INTO suppliers (name, phone, address, created_at, updated_at) VALUES (?, \'-\', \'-\', NOW(), NOW())',
+        [p.supplier]
+      );
+      supplierId = r.insertId;
+    }
+    const r = await query<ResultSetHeader>(
+      'INSERT INTO spareparts (supplier_id, sku, name, category, purchase_price, sell_price, stock, min_stock, unit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, \'pcs\', NOW(), NOW())',
+      [supplierId, p.sku, p.name, p.category || 'Umum', p.purchasePrice, p.sellingPrice, p.currentStock, p.minimumStock]
+    );
+    res.json({ id: id(r.insertId) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.put('/api/spare-parts/:id', async (req, res, next) => {
+  try {
+    const p = req.body;
+    await query(
+      'UPDATE spareparts SET sku=?, name=?, category=?, purchase_price=?, sell_price=?, stock=?, min_stock=?, updated_at=NOW() WHERE id=?',
+      [p.sku, p.name, p.category || 'Umum', p.purchasePrice, p.sellingPrice, p.currentStock, p.minimumStock, req.params.id]
+    );
+    res.sendStatus(204);
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.patch('/api/spare-parts/:id/restock', async (req, res, next) => {
+  try {
+    const qty = Number(req.body.quantity || 0);
+    await query('UPDATE spareparts SET stock=stock+?, updated_at=NOW() WHERE id=?', [qty, req.params.id]);
+    const parts: any = await query('SELECT supplier_id FROM spareparts WHERE id=?', [req.params.id]);
+    const supplierId = parts[0]?.supplier_id || null;
+    await query(
+      "INSERT INTO stock_transactions (sparepart_id, supplier_id, transaction_type, qty, reference_id, notes, created_at) VALUES (?, ?, 'stock_in', ?, 'MANUAL-RESTOCK', 'Penambahan stok manual', NOW())",
+      [req.params.id, supplierId, qty]
+    );
+    res.sendStatus(204);
+  } catch (e) {
+    next(e);
+  }
+});
+
 app.delete('/api/spare-parts/:id', async (req, res, next) => {
   try {
     const used: any = await query('SELECT id FROM service_details WHERE sparepart_id=? LIMIT 1', [req.params.id]);

@@ -115,7 +115,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <div
-        className="w-full max-w-xl bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
+        className="w-full max-w-xl bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WorkOrder, ShopInfo } from '../types';
 import {
   Printer,
@@ -8,6 +8,11 @@ import {
   Receipt,
   FileCheck,
 } from 'lucide-react';
+import {
+  printThermalReceipt,
+  getSavedPaperWidth,
+  savePaperWidth,
+} from '../utils/printThermalReceipt';
 
 interface ThermalReceiptModalProps {
   isOpen: boolean;
@@ -24,8 +29,84 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
   shopInfo,
   formatRupiah,
 }) => {
-  const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm'>('58mm');
+  const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm'>(getSavedPaperWidth);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    savePaperWidth(paperWidth);
+  }, [paperWidth]);
+
+  // Inject exact @page dimension rule while modal is open for Ctrl+P support
+  useEffect(() => {
+    if (!isOpen) return;
+    const styleId = 'thermal-modal-print-override';
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+    const slipEl = document.querySelector('.thermal-slip-paper') as HTMLElement | null;
+    const slipHeight = slipEl ? slipEl.scrollHeight : 600;
+    const heightMm = Math.max(Math.ceil(slipHeight * (25.4 / 96)) + 10, 140);
+
+    styleEl.innerHTML = `
+      @media print {
+        @page {
+          size: ${paperWidth} ${heightMm}mm;
+          margin: 0mm;
+        }
+        html {
+          width: ${paperWidth} !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        body {
+          width: ${paperWidth} !important;
+          height: ${heightMm}mm !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+        }
+        .thermal-modal-backdrop {
+          position: static !important;
+          background: transparent !important;
+          padding: 0 !important;
+          display: block !important;
+          inset: auto !important;
+          z-index: auto !important;
+        }
+        .thermal-modal-card {
+          border: none !important;
+          box-shadow: none !important;
+          max-width: 100% !important;
+          max-height: none !important;
+          background: transparent !important;
+          border-radius: 0 !important;
+          overflow: visible !important;
+        }
+        .thermal-preview-container {
+          padding: 0 !important;
+          background: transparent !important;
+          display: block !important;
+          overflow: visible !important;
+        }
+        .thermal-slip-paper {
+          box-shadow: none !important;
+          border: none !important;
+          margin: 0 auto !important;
+          padding: ${paperWidth === '58mm' ? '3mm 2.5mm 5mm 2.5mm' : '4mm 4mm 6mm 4mm'} !important;
+          width: ${paperWidth} !important;
+          max-width: ${paperWidth} !important;
+          background-image: none !important;
+        }
+      }
+    `;
+    return () => {
+      const el = document.getElementById(styleId);
+      if (el) el.remove();
+    };
+  }, [isOpen, paperWidth]);
 
   if (!isOpen) return null;
 
@@ -89,14 +170,19 @@ Terima Kasih atas Kunjungan Anda
   };
 
   const handlePrint = () => {
-    window.print();
+    printThermalReceipt({
+      workOrder,
+      shopInfo,
+      paperWidth,
+      formatRupiah,
+    });
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 animate-fade-in no-print">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] animate-scale-in">
+    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 animate-fade-in thermal-modal-backdrop">
+      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] animate-scale-in thermal-modal-card">
         {/* Header Controls */}
-        <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 text-white">
+        <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 text-white no-print">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-amber-400/10 text-amber-400 rounded-lg border border-amber-400/20">
               <Receipt className="w-5 h-5" />
@@ -141,10 +227,10 @@ Terima Kasih atas Kunjungan Anda
         </div>
 
         {/* Scrollable Receipt Preview Container */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-950/50 flex justify-center items-start">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-950/50 flex justify-center items-start thermal-preview-container">
           {/* Simulated Thermal Paper Slip */}
           <div
-            className={`bg-white text-slate-900 shadow-2xl p-5 sm:p-6 font-mono text-xs transition-all border border-slate-200 relative ${
+            className={`bg-white text-slate-900 shadow-2xl p-5 sm:p-6 font-mono text-xs transition-all border border-slate-200 relative thermal-slip-paper ${
               paperWidth === '58mm' ? 'w-[290px]' : 'w-[360px]'
             }`}
             style={{
@@ -153,7 +239,7 @@ Terima Kasih atas Kunjungan Anda
             }}
           >
             {/* Top Serrated Edge Decoration */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-repeat-x flex overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-repeat-x flex overflow-hidden no-print">
               {Array.from({ length: 40 }).map((_, i) => (
                 <span key={i} className="inline-block w-2 h-2 bg-slate-900 -mt-1 rotate-45 shrink-0" />
               ))}
@@ -298,7 +384,7 @@ Terima Kasih atas Kunjungan Anda
             </div>
 
             {/* Bottom Serrated Edge Decoration */}
-            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-repeat-x flex overflow-hidden">
+            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-repeat-x flex overflow-hidden no-print">
               {Array.from({ length: 40 }).map((_, i) => (
                 <span key={i} className="inline-block w-2 h-2 bg-slate-900 mt-1 rotate-45 shrink-0" />
               ))}
@@ -307,7 +393,7 @@ Terima Kasih atas Kunjungan Anda
         </div>
 
         {/* Action Buttons Footer */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
+        <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0 no-print">
           <button
             type="button"
             onClick={handleCopyText}

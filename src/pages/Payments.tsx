@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { ThermalReceiptModal } from '../components/ThermalReceiptModal';
 import { formatCurrencyInput, parseCurrencyInput } from '../utils/inputFormatters';
+import { printThermalReceipt, getSavedPaperWidth } from '../utils/printThermalReceipt';
 
 export const Payments: React.FC = () => {
   const {
@@ -106,7 +107,17 @@ export const Payments: React.FC = () => {
   };
 
   const handlePrint = () => {
-    window.print();
+    if (selectedWO) {
+      const paperWidth = getSavedPaperWidth();
+      printThermalReceipt({
+        workOrder: selectedWO,
+        shopInfo,
+        paperWidth,
+        formatRupiah,
+      });
+    } else {
+      window.print();
+    }
   };
 
   const handleSendWhatsAppInvoice = () => {
@@ -596,19 +607,11 @@ export const Payments: React.FC = () => {
             </div>
 
             <div className="space-y-2.5">
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowThermalModal(true)}
-                  className="py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-98"
-                >
-                  <Receipt className="w-4 h-4 shrink-0" />
-                  Struk POS
-                </button>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-98"
+                  className="py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-98"
                 >
                   <Printer className="w-4 h-4 shrink-0" />
                   Cetak
@@ -616,7 +619,7 @@ export const Payments: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSendWhatsAppInvoice}
-                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-98"
+                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-98"
                 >
                   <MessageCircle className="w-4 h-4 shrink-0" />
                   Kirim WA
@@ -635,9 +638,9 @@ export const Payments: React.FC = () => {
         </div>
       )}
 
-      {/* PRINT-ONLY THERMAL SLIP DEDICATED VIEW */}
-      {selectedWO && (
-        <div className="hidden print:block font-mono text-black text-xs p-2 max-w-[80mm] mx-auto">
+      {/* PRINT-ONLY THERMAL SLIP DEDICATED VIEW (Only active if modal is closed) */}
+      {!showThermalModal && selectedWO && (
+        <div className="hidden print:block font-mono text-black text-xs p-1 w-[80mm] max-w-full">
           <div className="text-center space-y-1 mb-3">
             <h2 className="font-black text-sm uppercase">{shopInfo.name}</h2>
             <p className="text-[10px]">{shopInfo.address}</p>

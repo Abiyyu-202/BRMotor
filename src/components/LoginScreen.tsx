@@ -394,7 +394,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBackToLanding }) => 
           </div>
 
           <div className="text-xs font-mono font-medium tracking-wider text-slate-400 flex items-center gap-2 mt-8">
-            <span className={`w-2.5 h-2.5 rounded-full inline-block ${serverOnline === null ? 'bg-yellow-400 animate-pulse' : serverOnline ? 'bg-emerald-400' : 'bg-red-400'}`} />
+            <span className={`w-2.5 h-2.5 rounded-full inline-block ${serverOnline === null ? 'bg-yellow-400' : serverOnline ? 'bg-emerald-400' : 'bg-red-400'}`} />
             Server Database: {serverOnline === null ? 'CHECKING...' : serverOnline ? 'ONLINE' : 'OFFLINE'}
           </div>
         </div>

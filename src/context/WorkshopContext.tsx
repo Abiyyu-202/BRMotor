@@ -22,7 +22,8 @@ import {
   AuditLogCategory,
   DeletionRequest,
   DeletableEntityType,
-  NotificationHistoryItem
+  NotificationHistoryItem,
+  Supplier
 } from '../types';
 import { canDirectDelete } from '../utils/permissions';
 import { Language, translations } from '../utils/translations';
@@ -51,6 +52,7 @@ interface WorkshopContextType {
   bookings: Booking[];
   workOrders: WorkOrder[];
   spareParts: SparePart[];
+  suppliers: Supplier[];
   mechanics: Mechanic[];
   serviceItems: ServiceItem[];
   services: ServiceItem[];
@@ -111,11 +113,12 @@ interface WorkshopContextType {
   checkoutWorkOrder: (id: string, discount: number, paymentMethod?: WorkOrder['paymentMethod'], cashTendered?: number, changeAmount?: number) => void;
   processPayment: (id: string, paymentMethod?: WorkOrder['paymentMethod'], discount?: number, cashTendered?: number, changeAmount?: number) => void;
 
-  // Spare Parts
+  // Spare Parts & Suppliers
   addSparePart: (part: Omit<SparePart, 'id'>) => void;
   updateSparePart: (id: string, updated: Omit<SparePart, 'id'>) => void;
   deleteSparePart: (id: string) => Promise<void> | void;
   restockSparePart: (id: string, quantity: number) => void;
+  addSupplier: (supplier: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Supplier>;
 
   // Mechanics
   addMechanic: (mechanic: Omit<Mechanic, 'id' | 'assignedJobsCount' | 'completedJobsCount' | 'rating'>) => void;
@@ -244,6 +247,7 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [spareParts, setSpareParts] = useState<SparePart[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [mechanics, setMechanics] = useState<Mechanic[]>([]);
   const [serviceItems, setServiceItems] = useState<ServiceItem[]>([]);
   const [salesHistory, setSalesHistory] = useState<{ id: string; date: string; amount: number; count: number }[]>([]);
@@ -257,9 +261,11 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       workOrders: WorkOrder[]; spareParts: SparePart[]; mechanics: Mechanic[];
       serviceItems: ServiceItem[]; salesHistory: { id: string; date: string; amount: number; count: number }[]; auditLogs: AuditLog[];
       deletionRequests?: DeletionRequest[];
+      suppliers?: Supplier[];
     }>('/api/bootstrap');
     setShopInfoState(data.shopInfo); setCustomers(data.customers); setVehicles(data.vehicles);
     setBookings(data.bookings); setWorkOrders(data.workOrders); setSpareParts(data.spareParts);
+    setSuppliers(data.suppliers || []);
     setMechanics(data.mechanics); setServiceItems(data.serviceItems); setSalesHistory(data.salesHistory); setAuditLogs(data.auditLogs);
     setDeletionRequests(data.deletionRequests || []);
 
@@ -701,10 +707,10 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       })
     );
 
-    // If completed, mechanic becomes available
-    if (status === 'completed') {
+    // If completed, mechanic becomes available and associated booking is completed
+    if (status === 'completed' || status === 'picked_up') {
       const targetWo = workOrders.find((w) => w.id === id);
-      if (targetWo && targetWo.assignedMechanicId) {
+      if (targetWo && targetWo.assignedMechanicId && status === 'completed') {
         setMechanics((prev) =>
           prev.map((m) =>
             m.id === targetWo.assignedMechanicId
@@ -716,6 +722,11 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 }
               : m
           )
+        );
+      }
+      if (targetWo?.bookingId) {
+        setBookings((prev) =>
+          prev.map((b) => (String(b.id) === String(targetWo.bookingId) ? { ...b, status: 'completed' } : b))
         );
       }
     }
@@ -833,6 +844,12 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return wo;
       })
     );
+    if (targetWo.bookingId) {
+      setBookings((prev) =>
+        prev.map((b) => (String(b.id) === String(targetWo.bookingId) ? { ...b, status: 'completed' } : b))
+      );
+    }
+
     void api(`/api/work-orders/${id}/checkout`, {
       method: 'POST', body: JSON.stringify({ discount, paymentMethod, cashTendered, changeAmount })
     }).then(refreshDatabase).catch((error) => showToast(error.message, 'error'));
@@ -928,6 +945,23 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const target = spareParts.find((p) => p.id === id);
     showToast(`Added +${quantity} units to ${target?.name || 'item'}`, 'success');
     addAuditLog("Inventory Restocked", `Restocked +${quantity} units for "${target?.name || id}"`, 'inventory');
+  };
+
+  const addSupplier = async (supplier: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>): Promise<Supplier> => {
+    try {
+      const created = await api<Supplier>('/api/suppliers', {
+        method: 'POST',
+        body: JSON.stringify(supplier),
+      });
+      setSuppliers((prev) => [...prev, created]);
+      await refreshDatabase();
+      showToast(`Supplier "${supplier.name}" berhasil didaftarkan!`, 'success');
+      addAuditLog("Supplier Registered", `Added supplier "${supplier.name}" to database`, 'inventory');
+      return created;
+    } catch (error: any) {
+      showToast(error.message || 'Gagal menambahkan supplier.', 'error');
+      throw error;
+    }
   };
 
   // --- MECHANICS MANAGEMENT ---
@@ -1122,6 +1156,8 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateSparePart,
         deleteSparePart,
         restockSparePart,
+        suppliers,
+        addSupplier,
         addMechanic,
         updateMechanic,
         deleteMechanic,
