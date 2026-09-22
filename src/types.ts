@@ -91,6 +91,7 @@ export interface WorkOrder {
   sparePartsUsed: WorkOrderSparePart[];
   estimatedCompletionTime: string;
   notes: string;
+  mileage?: number;
   status: WorkOrderStatus;
   paymentStatus: 'unpaid' | 'paid';
   paymentMethod?: 'cash' | 'transfer' | 'qris' | 'card';

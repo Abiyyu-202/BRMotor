@@ -20,7 +20,11 @@ import {
   DollarSign,
   CheckCircle2,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Gauge,
+  Eye,
+  Activity,
+  Check
 } from 'lucide-react';
 
 export const Rekapan: React.FC = () => {
@@ -39,6 +43,160 @@ export const Rekapan: React.FC = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedWoId, setExpandedWoId] = useState<string | null>(null);
+  const [selectedDetailWo, setSelectedDetailWo] = useState<WorkOrder | null>(null);
+
+  // Deep Vehicle Health Record & Maintenance Analysis for Selected SPK
+  const detailAnalysis = useMemo(() => {
+    if (!selectedDetailWo) return null;
+    const currentWo = selectedDetailWo;
+
+    // Previous work orders for this same vehicle before this current work order
+    const prevOrders = (workOrders || [])
+      .filter((w) => {
+        const isSameVeh =
+          (w.vehicleId && currentWo.vehicleId && String(w.vehicleId) === String(currentWo.vehicleId)) ||
+          (w.licensePlate &&
+            currentWo.licensePlate &&
+            w.licensePlate.toUpperCase().replace(/\s+/g, '') === currentWo.licensePlate.toUpperCase().replace(/\s+/g, ''));
+        const isPrior = new Date(w.createdAt).getTime() < new Date(currentWo.createdAt).getTime();
+        return isSameVeh && isPrior && w.id !== currentWo.id;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const lastOrder = prevOrders[0] || null;
+    const lastMileage = lastOrder?.mileage ?? null;
+    const kmDelta =
+      currentWo.mileage != null && lastMileage != null
+        ? currentWo.mileage - lastMileage
+        : null;
+
+    // Recurring issue detection (Puskesmas vs Bengkel logic)
+    const keywords = ['brebet', 'karbu', 'injeksi', 'mati', 'mogok', 'berat', 'getar', 'rem', 'oli', 'panas', 'aki', 'asap', 'cvt', 'roller', 'v-belt'];
+    const currentText = `${currentWo.complaint || ''} ${currentWo.diagnosis || ''}`.toLowerCase();
+    const matchedKeywords = keywords.filter((k) => currentText.includes(k));
+
+    const recurringAlerts: {
+      keyword: string;
+      prevOrder: WorkOrder;
+      note: string;
+    }[] = [];
+
+    if (matchedKeywords.length > 0) {
+      for (const prev of prevOrders) {
+        const prevText = `${prev.complaint || ''} ${prev.diagnosis || ''} ${(prev.services || []).map((s) => s.name).join(' ')} ${(prev.sparePartsUsed || []).map((p) => p.name).join(' ')}`.toLowerCase();
+        for (const kw of matchedKeywords) {
+          if (prevText.includes(kw)) {
+            const prevDate = prev.createdAt ? new Date(prev.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+            let specificAdvice = 'Hindari penggantian komponen yang sama secara berulang tanpa evaluasi menyeluruh.';
+            if (kw === 'brebet' || kw === 'karbu') {
+              specificAdvice = 'Kendaraan pernah ditangani terkait karburator/brebet. Jika keluhan kambuh, jangan langsung mengganti karburator lagi. Lakukan evaluasi pada sistem pengapian (busi/koil), spuyer, intake manifold, atau setelan klep.';
+            } else if (kw === 'mati' || kw === 'mogok') {
+              specificAdvice = 'Kendaraan pernah mengalami mogok/mati sebelumnya. Periksa jalur pengisian strum aki, spul kelistrikan, dan kompresi mesin selain busi.';
+            } else if (kw === 'cvt' || kw === 'roller' || kw === 'berat') {
+              specificAdvice = 'Keluhan tarikan berat/CVT berulang. Cek kondisi per CVT, sliding sheave, mangkok ganda, dan kebersihan filter transmisi.';
+            } else if (kw === 'rem') {
+              specificAdvice = 'Keluhan pengereman berulang. Cek piringan cakram atau tromol apakah bergelombang, serta kuras minyak rem.';
+            }
+
+            recurringAlerts.push({
+              keyword: kw,
+              prevOrder: prev,
+              note: `${specificAdvice} (Tercatat pada servis ${prev.id} tanggal ${prevDate})`
+            });
+            break;
+          }
+        }
+        if (recurringAlerts.length >= 2) break;
+      }
+    }
+
+    // Parts Lifespan Recommendations
+    const LIFESPAN_LIMITS: { [key: string]: { label: string; limitKm: number } } = {
+      'oli mesin': { label: 'Oli Mesin', limitKm: 2500 },
+      'oli gardan': { label: 'Oli Gardan', limitKm: 8000 },
+      'roller': { label: 'Roller CVT', limitKm: 10000 },
+      'v-belt': { label: 'V-Belt', limitKm: 20000 },
+      'vanbelt': { label: 'V-Belt', limitKm: 20000 },
+      'busi': { label: 'Busi', limitKm: 8000 },
+      'kampas rem': { label: 'Kampas Rem', limitKm: 15000 },
+      'kampas ganda': { label: 'Kampas Ganda', limitKm: 20000 },
+      'filter udara': { label: 'Filter Udara', limitKm: 12000 },
+    };
+
+    // 1. Current parts installed in this order: next service prediction
+    const currentPartsSchedule = (currentWo.sparePartsUsed || []).map((p) => {
+      const pLower = p.name.toLowerCase();
+      let matchedRule: { label: string; limitKm: number } | null = null;
+      for (const [key, rule] of Object.entries(LIFESPAN_LIMITS)) {
+        if (pLower.includes(key)) {
+          matchedRule = rule;
+          break;
+        }
+      }
+      const limitKm = matchedRule ? matchedRule.limitKm : 10000;
+      const nextKm = currentWo.mileage != null ? currentWo.mileage + limitKm : null;
+      return {
+        partName: p.name,
+        qty: p.quantity,
+        price: p.totalPrice,
+        limitKm,
+        nextKm
+      };
+    });
+
+    // 2. Past replaced parts reaching expiration
+    const pastPartsDue: {
+      partName: string;
+      installedAtWo: string;
+      installedAtKm: number;
+      limitKm: number;
+      kmUsed: number;
+      status: 'due' | 'warning';
+      message: string;
+    }[] = [];
+
+    if (currentWo.mileage != null) {
+      for (const prev of prevOrders) {
+        if (prev.mileage != null && (prev.sparePartsUsed || []).length > 0) {
+          for (const pastPart of prev.sparePartsUsed) {
+            const pastLower = pastPart.name.toLowerCase();
+            for (const [key, rule] of Object.entries(LIFESPAN_LIMITS)) {
+              if (pastLower.includes(key)) {
+                const kmUsed = currentWo.mileage - prev.mileage;
+                if (kmUsed >= rule.limitKm * 0.8) {
+                  const isDue = kmUsed >= rule.limitKm;
+                  const replacedInCurrent = (currentWo.sparePartsUsed || []).some((cp) => cp.name.toLowerCase().includes(key));
+                  if (!replacedInCurrent && !pastPartsDue.some((pd) => pd.partName === rule.label)) {
+                    pastPartsDue.push({
+                      partName: rule.label,
+                      installedAtWo: prev.id,
+                      installedAtKm: prev.mileage,
+                      limitKm: rule.limitKm,
+                      kmUsed,
+                      status: isDue ? 'due' : 'warning',
+                      message: isDue
+                        ? `Sudah menempuh ${kmUsed.toLocaleString('id-ID')} km (melebihi batas rekomendasi ${rule.limitKm.toLocaleString('id-ID')} km sejak servis ${prev.id}). Disarankan ganti.`
+                        : `Sudah menempuh ${kmUsed.toLocaleString('id-ID')} km (mendekati batas rekomendasi ${rule.limitKm.toLocaleString('id-ID')} km sejak servis ${prev.id}). Siapkan penggantian berkala.`
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      lastOrder,
+      lastMileage,
+      kmDelta,
+      prevOrdersCount: prevOrders.length,
+      recurringAlerts,
+      currentPartsSchedule,
+      pastPartsDue
+    };
+  }, [selectedDetailWo, workOrders]);
 
   // Scoping if regular client user
   const scopedWorkOrders = useMemo(() => {
@@ -289,9 +447,13 @@ export const Rekapan: React.FC = () => {
 
                   return (
                     <React.Fragment key={wo.id}>
-                      <tr className="hover:bg-slate-50/80 transition-colors">
+                      <tr
+                        onClick={() => setSelectedDetailWo(wo)}
+                        className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                        title="Klik untuk melihat Rekam Medis & Rincian Lengkap"
+                      >
                         <td className="py-3 px-4 align-top">
-                          <span className="font-mono font-bold text-slate-900 block">{wo.id}</span>
+                          <span className="font-mono font-bold text-slate-900 block group-hover:text-indigo-600 transition-colors">{wo.id}</span>
                           <span className="text-[10px] text-slate-400 block mt-0.5">{woDate}</span>
                         </td>
 
@@ -301,6 +463,12 @@ export const Rekapan: React.FC = () => {
                             {wo.licensePlate}
                           </span>
                           <span className="text-[10px] text-slate-500 block">{wo.vehicleModel}</span>
+                          {wo.mileage != null && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-1.5 py-0.5 rounded mt-1">
+                              <Gauge className="w-3 h-3 text-indigo-600" />
+                              {wo.mileage.toLocaleString('id-ID')} KM
+                            </span>
+                          )}
                         </td>
 
                         <td className="py-3 px-4 align-top">
@@ -360,14 +528,31 @@ export const Rekapan: React.FC = () => {
                         </td>
 
                         <td className="py-3 px-4 align-top text-center no-print">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedWoId(isExpanded ? null : wo.id)}
-                            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
-                            title="Tampilkan rincian"
-                          >
-                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedDetailWo(wo);
+                              }}
+                              className="px-2 py-1 rounded-md text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 cursor-pointer transition-colors flex items-center gap-1"
+                              title="Buka Rekam Medis & Detail"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-slate-600" />
+                              <span>Detail</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedWoId(isExpanded ? null : wo.id);
+                              }}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
+                              title="Tampilkan catatan cepat"
+                            >
+                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+                          </div>
                         </td>
                       </tr>
 
@@ -475,6 +660,332 @@ export const Rekapan: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Modal Detail Rekam Medis Kendaraan & Rincian Servis */}
+      {selectedDetailWo && detailAnalysis && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in no-print">
+          <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-scale-in">
+            {/* Header Modal */}
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-bold shadow-2xs">
+                  <Activity className="w-5 h-5 text-slate-900" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-extrabold uppercase tracking-wide">
+                      Rekam Medis & Rincian Servis
+                    </h2>
+                    <span className="font-mono text-xs font-bold bg-white/15 text-amber-300 px-2 py-0.5 rounded">
+                      {selectedDetailWo.id}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    Analisis riwayat pengerjaan, pemakaian kilometer, dan monitoring suku cadang
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDetailWo(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Tutup"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 text-slate-900 text-xs">
+              {/* Card 1: Identitas Pasien (Motor & Pemilik) & Status Odometer */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Identitas Kendaraan</span>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-slate-900 text-white font-mono font-bold text-xs px-2.5 py-1 rounded-md">
+                      {selectedDetailWo.licensePlate}
+                    </span>
+                    <span className="font-bold text-slate-800 text-xs">{selectedDetailWo.vehicleModel}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 pt-1">
+                    Pemilik: <strong className="text-slate-800">{selectedDetailWo.customerName}</strong> {selectedDetailWo.customerPhone ? `(${selectedDetailWo.customerPhone})` : ''}
+                  </p>
+                </div>
+
+                <div className="space-y-1 border-t md:border-t-0 md:border-l border-slate-200 pt-2 md:pt-0 md:pl-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Waktu & Teknisi</span>
+                  <p className="font-bold text-slate-800">
+                    {selectedDetailWo.createdAt
+                      ? new Date(selectedDetailWo.createdAt).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })
+                      : '-'}
+                  </p>
+                  <p className="text-[11px] text-slate-600">
+                    Teknisi: <strong className="text-slate-800">{selectedDetailWo.assignedMechanicName || 'Mekanik BR Motor'}</strong>
+                  </p>
+                  <div className="pt-1">
+                    {getStatusBadge(selectedDetailWo.status)}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 border-t md:border-t-0 md:border-l border-slate-200 pt-2 md:pt-0 md:pl-3.5 bg-white p-3 rounded-lg border border-slate-200/80">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                      <Gauge className="w-3.5 h-3.5 text-indigo-600" />
+                      Status Odometer (KM)
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-base font-black font-mono text-slate-900">
+                      {selectedDetailWo.mileage != null ? `${selectedDetailWo.mileage.toLocaleString('id-ID')} KM` : 'Belum diisi'}
+                    </span>
+                  </div>
+                  {detailAnalysis.kmDelta != null ? (
+                    <p className="text-[10px] text-emerald-700 font-bold">
+                      +{detailAnalysis.kmDelta.toLocaleString('id-ID')} KM sejak servis sebelumnya
+                    </p>
+                  ) : detailAnalysis.lastMileage != null ? (
+                    <p className="text-[10px] text-slate-400">
+                      Servis sebelumnya di KM {detailAnalysis.lastMileage.toLocaleString('id-ID')}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 italic">
+                      Riwayat KM servis terdahulu belum tercatat
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Card 2: Pertimbangan Rekam Medis (Clinical Decision Support) */}
+              {detailAnalysis.recurringAlerts.length > 0 ? (
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+                  <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wide text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Pertimbangan Diagnosa Masalah Berulang (Evaluasi Riwayat)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Sistem mendeteksi riwayat pengerjaan serupa pada motor ini sebelumnya:
+                  </p>
+                  <div className="space-y-2 pt-1">
+                    {detailAnalysis.recurringAlerts.map((alert, idx) => (
+                      <div key={idx} className="p-2.5 rounded-lg bg-white/90 border border-amber-200 text-[11px] space-y-1">
+                        <div className="flex items-center justify-between font-bold text-amber-900">
+                          <span>Keluhan / Topik Terkait: {alert.keyword.toUpperCase()}</span>
+                          <span className="font-mono text-[10px] text-amber-700">{alert.prevOrder.id}</span>
+                        </div>
+                        <p className="text-slate-700 leading-normal">
+                          {alert.note}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-amber-700 font-medium italic pt-1">
+                    Catatan puskesmas / bengkel: Jika komponen yang sama sudah pernah diganti baru-baru ini, hindari penggantian ulang dan prioritaskan pengecekan komponen penunjang terkait.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 font-medium">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Tidak terdeteksi keluhan berulang yang janggal dari riwayat servis sebelumnya.</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                    Kondisi Normal
+                  </span>
+                </div>
+              )}
+
+              {/* Card 3: Peringatan Komponen Masa Pakai Lewat (Jika Ada Part Lama yang Expired) */}
+              {detailAnalysis.pastPartsDue.length > 0 && (
+                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-2">
+                  <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wide text-rose-800">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>Peringatan Masa Pakai Komponen Terdahulu (Berdasarkan KM Sekarang)</span>
+                  </div>
+                  <div className="space-y-1.5 pt-1">
+                    {detailAnalysis.pastPartsDue.map((due, idx) => (
+                      <div key={idx} className="p-2.5 rounded-lg bg-white border border-rose-200 text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <strong className="text-slate-900 font-bold block">{due.partName}</strong>
+                          <span className="text-slate-600 text-[10px]">{due.message}</span>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
+                          due.status === 'due' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {due.status === 'due' ? 'Wajib Periksa / Ganti' : 'Mendekati Batas'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Card 4: Suku Cadang Terpasang & Estimasi Servis Berikutnya */}
+              <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2 font-bold text-slate-900 uppercase tracking-wider text-xs">
+                    <Package className="w-4 h-4 text-indigo-600" />
+                    <span>Suku Cadang yang Diganti pada Servis Ini</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                    {(selectedDetailWo.sparePartsUsed || []).length} Item
+                  </span>
+                </div>
+
+                {(selectedDetailWo.sparePartsUsed || []).length > 0 ? (
+                  <div className="space-y-2">
+                    {detailAnalysis.currentPartsSchedule.map((part, idx) => (
+                      <div key={idx} className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900">{part.partName}</span>
+                            <span className="text-[10px] font-bold text-slate-500 bg-white px-1.5 py-0.2 rounded border border-slate-200">
+                              x{part.qty}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 flex flex-wrap items-center gap-2">
+                            <span>Harga: {formatRupiah(part.price)}</span>
+                            <span>•</span>
+                            <span>Batas interval pemakaian: {part.limitKm.toLocaleString('id-ID')} KM</span>
+                          </div>
+                        </div>
+
+                        <div className="text-left sm:text-right font-mono">
+                          <span className="block text-[10px] font-bold text-slate-400 uppercase">Estimasi Ganti Berikutnya</span>
+                          {part.nextKm != null ? (
+                            <span className="text-xs font-black text-indigo-700">
+                              di KM {part.nextKm.toLocaleString('id-ID')}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 italic">
+                              Ikuti jadwal berkala (+{part.limitKm.toLocaleString('id-ID')} KM)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic text-[11px] py-1">
+                    Tidak ada penggantian suku cadang pada pengerjaan ini (hanya jasa servis / pemeriksaan).
+                  </p>
+                )}
+              </div>
+
+              {/* Card 5: Tindakan & Jasa Servis */}
+              <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2 font-bold text-slate-900 uppercase tracking-wider text-xs">
+                    <Wrench className="w-4 h-4 text-emerald-600" />
+                    <span>Tindakan & Jasa Servis yang Dilakukan</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                    {(selectedDetailWo.services || []).length} Tindakan
+                  </span>
+                </div>
+
+                {(selectedDetailWo.services || []).length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedDetailWo.services.map((svc, idx) => (
+                      <div key={idx} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between">
+                        <span className="font-bold text-slate-800 truncate pr-2">{svc.name}</span>
+                        <span className="font-mono text-xs font-bold text-slate-700 shrink-0">
+                          {formatRupiah(svc.price)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic text-[11px] py-1">Pemeriksaan umum dan pengecekan standar.</p>
+                )}
+              </div>
+
+              {/* Card 6: Keluhan, Diagnosa & Catatan Servis */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div>
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    Keluhan Pelanggan
+                  </span>
+                  <p className="text-slate-800 font-medium bg-white p-2.5 rounded-lg border border-slate-200 min-h-[50px]">
+                    {selectedDetailWo.complaint || '-'}
+                  </p>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    Diagnosa Teknisi
+                  </span>
+                  <p className="text-slate-800 font-medium bg-white p-2.5 rounded-lg border border-slate-200 min-h-[50px]">
+                    {selectedDetailWo.diagnosis || '-'}
+                  </p>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    Catatan Tambahan
+                  </span>
+                  <p className="text-slate-800 font-medium bg-white p-2.5 rounded-lg border border-slate-200 min-h-[50px]">
+                    {selectedDetailWo.notes || '-'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 7: Rincian Biaya & Pembayaran */}
+              <div className="p-4 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Status Pembayaran
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono ${
+                      selectedDetailWo.paymentStatus === 'paid'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    }`}>
+                      {selectedDetailWo.paymentStatus === 'paid' ? 'Lunas' : 'Belum Dibayar'}
+                    </span>
+                    {selectedDetailWo.paymentMethod && (
+                      <span className="text-[10px] text-slate-400 uppercase font-mono">
+                        Metode: {selectedDetailWo.paymentMethod}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-left sm:text-right font-mono text-xs">
+                  <div className="text-slate-400 text-[11px]">
+                    Jasa: {formatRupiah(selectedDetailWo.costs?.serviceCost || 0)} | Part: {formatRupiah(selectedDetailWo.costs?.sparePartCost || 0)}
+                  </div>
+                  <div className="text-base sm:text-lg font-black text-emerald-400">
+                    Grand Total: {formatRupiah(selectedDetailWo.costs?.total || 0)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-slate-500" />
+                <span>Cetak Rekam Medis</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDetailWo(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+              >
+                Tutup Rincian
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

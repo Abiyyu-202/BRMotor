@@ -4,12 +4,11 @@ import {
   Wrench,
   X,
   Bike,
-  Clock,
   Package,
-  Trash2,
   Sparkles,
   Check,
-  AlertCircle
+  AlertCircle,
+  ChevronDown
 } from 'lucide-react';
 
 interface QuickCheckInModalProps {
@@ -44,7 +43,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
     vehicles,
     customers,
     mechanics,
-    spareParts,
+    workOrders,
     quickCheckIn,
     showToast,
     formatRupiah
@@ -59,13 +58,24 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [complaintNotes, setComplaintNotes] = useState('');
   const [mechanicId, setMechanicId] = useState('');
-  const [estCompletion, setEstCompletion] = useState('14:30');
-  const [notes, setNotes] = useState('');
+  const [mileage, setMileage] = useState('');
+  const [notes] = useState('');
   const [matchedVehicle, setMatchedVehicle] = useState<any | null>(null);
 
-  // Selected Services & Parts
+  const previousMileage = React.useMemo(() => {
+    const clean = plateNumber.trim().toUpperCase().replace(/\s+/g, '');
+    if (!clean) return null;
+    const prev = (workOrders || [])
+      .filter((wo) => wo.licensePlate && wo.licensePlate.toUpperCase().replace(/\s+/g, '') === clean && wo.mileage != null)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    return prev?.mileage ?? null;
+  }, [plateNumber, workOrders]);
+
+  // Hidden/Optional Service Section Toggle
+  const [showServicesSection, setShowServicesSection] = useState(false);
+
+  // Selected Services
   const [selectedServices, setSelectedServices] = useState<QuickServiceOption[]>([]);
-  const [selectedParts, setSelectedParts] = useState<{ partId: string; quantity: number }[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const lastAutoFilledPlate = React.useRef<string>('');
@@ -79,17 +89,6 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
       setMechanicId(available?.id || activeMechanics[0]?.id || '1');
     }
   }, [activeMechanics, mechanicId]);
-
-  // Set default target completion time to now + 45 minutes
-  useEffect(() => {
-    if (isOpen) {
-      const now = new Date();
-      now.setMinutes(now.getMinutes() + 45);
-      const hours = String(now.getHours()).padStart(2, '0');
-      const mins = String(now.getMinutes()).padStart(2, '0');
-      setEstCompletion(`${hours}:${mins}`);
-    }
-  }, [isOpen]);
 
   // Plate lookup auto-fill
   useEffect(() => {
@@ -141,29 +140,15 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
     }
   };
 
-  const handleAddPart = (partId: string) => {
-    const existing = (selectedParts || []).find((p) => p.partId === partId);
-    if (existing) {
-      setSelectedParts(
-        (selectedParts || []).map((p) => (p.partId === partId ? { ...p, quantity: p.quantity + 1 } : p))
-      );
-    } else {
-      setSelectedParts([...(selectedParts || []), { partId, quantity: 1 }]);
-    }
-  };
-
-  const handleRemovePart = (partId: string) => {
-    setSelectedParts((selectedParts || []).filter((p) => p.partId !== partId));
-  };
-
   const resetForm = () => {
     setPlateNumber('');
     setCustomerName('');
     setPhone('');
     setModel('');
     setComplaintNotes('');
+    setMileage('');
     setSelectedServices([]);
-    setSelectedParts([]);
+    setShowServicesSection(false);
     setMatchedVehicle(null);
     lastAutoFilledPlate.current = '';
   };
@@ -171,14 +156,6 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
   const handleClose = () => {
     resetForm();
     onClose();
-  };
-
-  const handleAddMinutes = (mins: number) => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() + mins);
-    const newHours = String(d.getHours()).padStart(2, '0');
-    const newMins = String(d.getMinutes()).padStart(2, '0');
-    setEstCompletion(`${newHours}:${newMins}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -199,11 +176,6 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
       return;
     }
 
-    if (selectedServices.length === 0 && !complaintNotes.trim()) {
-      showToast('Harap pilih minimal satu opsi jasa servis atau tuliskan keluhan!', 'warning');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const servicesPayload = (selectedServices || []).map((s) => ({
@@ -212,25 +184,16 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
         price: s.price
       }));
 
-      const partsPayload = (selectedParts || []).map((item) => {
-        const part = (spareParts || []).find((p) => p.id === item.partId);
-        return {
-          partId: item.partId,
-          quantity: item.quantity,
-          pricePerUnit: part?.sellingPrice || 0
-        };
-      });
-
       const serviceNames = (selectedServices || []).map((s) => s.name).join(', ');
       const finalComplaint = serviceNames
         ? complaintNotes.trim()
           ? `${serviceNames} (Catatan: ${complaintNotes.trim()})`
           : serviceNames
-        : complaintNotes.trim() || 'Servis berkala';
+        : complaintNotes.trim() || 'Servis Umum / Rutin';
 
       await quickCheckIn({
         plateNumber: plateNumber.trim().toUpperCase(),
-        customerName: customerName.trim() || 'Pelanggan Umum',
+        customerName: customerName.trim() || 'Pelanggan Walk-in',
         phone: phone.trim(),
         brand,
         model: model.trim(),
@@ -238,9 +201,9 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
         complaint: finalComplaint,
         mechanicId,
         services: servicesPayload,
-        spareParts: partsPayload,
-        estimatedCompletionTime: estCompletion,
-        notes: notes.trim()
+        spareParts: [],
+        notes: notes.trim(),
+        mileage: mileage ? Number(mileage) : undefined
       });
 
       showToast(`Motor ${plateNumber} berhasil didaftarkan ke antrean!`, 'success');
@@ -255,15 +218,10 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
 
   // Live Calculations
   const servicesTotal = (selectedServices || []).reduce((sum, s) => sum + s.price, 0);
-  const partsTotal = (selectedParts || []).reduce((sum, item) => {
-    const p = (spareParts || []).find((part) => part.id === item.partId);
-    return sum + (p ? p.sellingPrice * item.quantity : 0);
-  }, 0);
-  const totalEstimate = servicesTotal + partsTotal;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in no-print">
-      <div className="bg-white rounded-xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[94vh] flex flex-col animate-scale-in">
+      <div className="bg-white rounded-xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[94vh] flex flex-col animate-scale-in">
         {/* Header */}
         <div className="px-5 py-4 sm:px-6 sm:py-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -290,7 +248,7 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
-          {/* Section 1: Kendaraan & Pelanggan */}
+          {/* Section 1: Kendaraan, Pelanggan & Mekanik */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-800 border-b border-slate-100 pb-1.5">
               <Bike className="w-4 h-4 text-amber-500" />
@@ -399,76 +357,9 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
                 />
               </div>
             </div>
-          </div>
 
-          {/* Section 2: Pilihan Opsi Jasa & Servis Terpadu */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-800">
-                <Package className="w-4 h-4 text-emerald-500" />
-                Pilih Jasa & Keluhan Servis
-              </div>
-              <span className="text-[10px] text-slate-500 font-semibold">
-                {selectedServices.length} opsi dipilih
-              </span>
-            </div>
-
-            {/* Grid of selectable service items */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {QUICK_SERVICE_OPTIONS.map((item) => {
-                const isSelected = selectedServices.some((s) => s.id === item.id);
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleToggleService(item)}
-                    className={`p-2.5 sm:p-3 rounded-lg border text-left flex items-center justify-between transition-all cursor-pointer ${
-                      isSelected
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-950 shadow-2xs ring-1 ring-emerald-400'
-                        : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-base shrink-0">{item.icon}</span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold leading-tight truncate">{item.name}</p>
-                        <p className="text-[10px] text-slate-500 font-medium truncate">{item.desc}</p>
-                        <p className="text-[11px] font-mono font-extrabold text-emerald-700 mt-0.5">
-                          {formatRupiah(item.price)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all ${
-                        isSelected
-                          ? 'bg-emerald-600 text-white shadow-2xs'
-                          : 'border-2 border-slate-300 bg-white'
-                      }`}
-                    >
-                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Optional custom notes */}
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                Catatan Keluhan / Permintaan Khusus (Opsional)
-              </label>
-              <textarea
-                rows={2}
-                placeholder="Misal: Rem agak keras saat ditekan, tolong sekalian cek lampu sen kiri..."
-                value={complaintNotes}
-                onChange={(e) => setComplaintNotes(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none resize-none"
-              />
-            </div>
-
-            {/* Mechanic & Time Target */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* Mekanik Penanggung Jawab & Odometer KM */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
                   Pilih Mekanik Penanggung Jawab
@@ -487,107 +378,129 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                    Target Selesai Jam
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleAddMinutes(30)}
-                      className="text-[9px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded cursor-pointer"
-                    >
-                      +30m
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddMinutes(45)}
-                      className="text-[9px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded cursor-pointer"
-                    >
-                      +45m
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddMinutes(60)}
-                      className="text-[9px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded cursor-pointer"
-                    >
-                      +1 Jam
-                    </button>
-                  </div>
-                </div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Odometer / KM Masuk
+                  {previousMileage != null && (
+                    <span className="text-slate-400 font-normal ml-1 lowercase">
+                      (terakhir: {previousMileage.toLocaleString('id-ID')} km)
+                    </span>
+                  )}
+                </label>
                 <input
-                  type="time"
-                  value={estCompletion}
-                  onChange={(e) => setEstCompletion(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none"
+                  type="number"
+                  min="0"
+                  placeholder={previousMileage != null ? `Terakhir: ${previousMileage}` : 'Contoh: 15400'}
+                  value={mileage}
+                  onChange={(e) => setMileage(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-mono font-medium text-slate-900 focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 3: Sparepart / Oli Tambahan */}
-          <div className="space-y-2 pt-1 border-t border-slate-100">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              + Tambah Suku Cadang / Oli dari Gudang (Opsional)
-            </label>
-            <select
-              onChange={(e) => {
-                if (e.target.value) {
-                  handleAddPart(e.target.value);
-                  e.target.value = '';
-                }
-              }}
-              className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
+          {/* Section 2: Opsi Jasa & Keluhan Servis (Hidden / Opsional Accordion) */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+            <button
+              type="button"
+              onClick={() => setShowServicesSection(!showServicesSection)}
+              className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100 flex items-center justify-between transition-colors cursor-pointer text-left"
             >
-              <option value="">-- Pilih Sparepart / Oli dari Stok --</option>
-              {spareParts.map((part) => (
-                <option key={part.id} value={part.id} disabled={part.currentStock <= 0}>
-                  {part.name} - {formatRupiah(part.sellingPrice)} (Stok: {part.currentStock})
-                </option>
-              ))}
-            </select>
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Pilih Jasa & Keluhan Servis
+                </span>
+                <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-full">
+                  Opsional
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
+                <span>
+                  {selectedServices.length > 0
+                    ? `${selectedServices.length} opsi dipilih`
+                    : showServicesSection
+                    ? 'Tutup'
+                    : 'Buka'}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform duration-200 ${
+                    showServicesSection ? 'rotate-180' : ''
+                  }`}
+                />
+              </div>
+            </button>
 
-            {/* Selected parts list */}
-            {selectedParts.length > 0 && (
-              <div className="mt-2 space-y-1.5">
-                {(selectedParts || []).map((item) => {
-                  const part = (spareParts || []).find((p) => p.id === item.partId);
-                  if (!part) return null;
-                  return (
-                    <div
-                      key={item.partId}
-                      className="flex items-center justify-between p-2 bg-slate-100 rounded-lg text-xs"
-                    >
-                      <span className="font-semibold text-slate-800">
-                        {part.name} x {item.quantity}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-slate-900">
-                          {formatRupiah(part.sellingPrice * item.quantity)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePart(item.partId)}
-                          className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+            {showServicesSection && (
+              <div className="p-4 space-y-3 border-t border-slate-100 animate-fade-in">
+                {/* Grid of selectable service items */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {QUICK_SERVICE_OPTIONS.map((item) => {
+                    const isSelected = selectedServices.some((s) => s.id === item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleToggleService(item)}
+                        className={`p-2.5 rounded-lg border text-left flex items-center justify-between transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-950 shadow-2xs ring-1 ring-emerald-400'
+                            : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-base shrink-0">{item.icon}</span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold leading-tight truncate">{item.name}</p>
+                            <p className="text-[10px] text-slate-500 font-medium truncate">{item.desc}</p>
+                            <p className="text-[11px] font-mono font-extrabold text-emerald-700 mt-0.5">
+                              {formatRupiah(item.price)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all ${
+                            isSelected
+                              ? 'bg-emerald-600 text-white shadow-2xs'
+                              : 'border-2 border-slate-300 bg-white'
+                          }`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Optional custom notes */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Catatan Keluhan / Permintaan Khusus (Opsional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Misal: Rem agak keras saat ditekan, tolong sekalian cek lampu sen kiri..."
+                    value={complaintNotes}
+                    onChange={(e) => setComplaintNotes(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none resize-none"
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          {/* Section 4: Estimasi Total & Submit */}
+          {/* Bottom Summary & Actions */}
           <div className="p-4 bg-slate-900 text-white rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
               <p className="text-[10px] uppercase font-mono font-bold text-slate-400">
-                Estimasi Total Awal ({selectedServices.length} Jasa + {selectedParts.length} Part)
+                {selectedServices.length > 0
+                  ? `Estimasi Biaya Jasa (${selectedServices.length} Jasa Dipilih)`
+                  : 'Pendaftaran Cepat Motor Walk-in'}
               </p>
               <p className="text-xl font-black text-amber-400 font-mono">
-                {formatRupiah(totalEstimate)}
+                {selectedServices.length > 0
+                  ? formatRupiah(servicesTotal)
+                  : 'Sesuai Pengerjaan'}
               </p>
             </div>
 

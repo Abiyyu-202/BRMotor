@@ -86,7 +86,9 @@ async function readWorkOrders() {
       complaint: row.complaint || '', diagnosis: row.diagnosis || '', assignedMechanicId: id(row.mechanic_id || 1),
       assignedMechanicName: row.mechanic_name || 'Mekanik BR Motor', services, sparePartsUsed,
       estimatedCompletionTime: row.estimated_completion_time ? String(row.estimated_completion_time).slice(0, 5) : '13:30',
-      notes: row.notes || '', status: uiWorkOrderStatus(row.status), paymentStatus: row.payment_status || 'unpaid',
+      notes: row.notes || '',
+      mileage: row.mileage != null ? Number(row.mileage) : undefined,
+      status: uiWorkOrderStatus(row.status), paymentStatus: row.payment_status || 'unpaid',
       paymentMethod: row.payment_method || undefined, cashTendered: row.cash_tendered ?? undefined,
       changeAmount: row.change_amount ?? undefined, createdAt: row.created_at, completedAt: row.completed_at || undefined,
       pickedUpAt: row.picked_up_at || undefined,
@@ -757,7 +759,7 @@ async function replaceDetails(connection: mysql.PoolConnection, orderId: number,
 app.post('/api/quick-checkin', async (req, res, next) => {
   const c = await pool.getConnection();
   try {
-    const { plateNumber, customerName, phone, brand, model, year, complaint, mechanicId, services = [], spareParts = [], estimatedCompletionTime = '13:30', notes = '' } = req.body;
+    const { plateNumber, customerName, phone, brand, model, year, complaint, mechanicId, services = [], spareParts = [], estimatedCompletionTime = '13:30', notes = '', mileage = null } = req.body;
     await c.beginTransaction();
 
     const cleanName = String(customerName || '').trim();
@@ -811,8 +813,8 @@ app.post('/api/quick-checkin', async (req, res, next) => {
 
     const number = `WO-${Date.now()}`;
     const [woRes]: any = await c.query(
-      'INSERT INTO work_orders (customer_id, vehicle_id, mechanic_id, wo_number, complaint, diagnosis, estimated_completion_time, notes, status, priority, start_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, \'\', ?, ?, \'waiting\', \'normal\', NOW(), NOW(), NOW())',
-      [customerId || 1, vehicleId, mechanicId || 1, number, complaint || 'Servis rutin', estimatedCompletionTime, notes]
+      'INSERT INTO work_orders (customer_id, vehicle_id, mechanic_id, wo_number, complaint, diagnosis, estimated_completion_time, notes, mileage, status, priority, start_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, \'\', ?, ?, ?, \'waiting\', \'normal\', NOW(), NOW(), NOW())',
+      [customerId || 1, vehicleId, mechanicId || 1, number, complaint || 'Servis rutin', estimatedCompletionTime, notes, mileage ? Number(mileage) : null]
     );
     const workOrderId = woRes.insertId;
 
@@ -860,8 +862,8 @@ app.post('/api/work-orders', async (req, res, next) => {
     await c.beginTransaction();
     const number = `WO-${Date.now()}`;
     const [r]: any = await c.query(
-      'INSERT INTO work_orders (customer_id,vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',
-      [customerId || 1, vehicleId, mechanicId || 1, w.bookingId || null, number, w.complaint || 'Servis rutin', w.diagnosis || '', w.estimatedCompletionTime || '14:00', w.notes || '']
+      'INSERT INTO work_orders (customer_id,vehicle_id,mechanic_id,booking_id,wo_number,complaint,diagnosis,estimated_completion_time,notes,mileage,status,priority,start_time,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,\'waiting\',\'normal\',NOW(),NOW(),NOW())',
+      [customerId || 1, vehicleId, mechanicId || 1, w.bookingId || null, number, w.complaint || 'Servis rutin', w.diagnosis || '', w.estimatedCompletionTime || '14:00', w.notes || '', w.mileage ? Number(w.mileage) : null]
     );
     await replaceDetails(c, r.insertId, w.services, w.sparePartsUsed);
     if (w.bookingId) await c.query("UPDATE bookings SET status='confirmed',updated_at=NOW() WHERE id=?", [w.bookingId]);
@@ -874,7 +876,7 @@ app.post('/api/work-orders', async (req, res, next) => {
     c.release();
   }
 });
-app.put('/api/work-orders/:id',async(req,res,next)=>{const c=await pool.getConnection();try{const w=req.body;await c.beginTransaction();await c.query('UPDATE work_orders SET mechanic_id=?,complaint=?,diagnosis=?,estimated_completion_time=?,notes=?,updated_at=NOW() WHERE id=?',[w.assignedMechanicId,w.complaint,w.diagnosis||'',w.estimatedCompletionTime,w.notes||'',req.params.id]);await replaceDetails(c,Number(req.params.id),w.services,w.sparePartsUsed);await c.commit();res.sendStatus(204);}catch(e){await c.rollback();next(e);}finally{c.release();}});
+app.put('/api/work-orders/:id',async(req,res,next)=>{const c=await pool.getConnection();try{const w=req.body;await c.beginTransaction();await c.query('UPDATE work_orders SET mechanic_id=?,complaint=?,diagnosis=?,estimated_completion_time=?,notes=?,mileage=?,updated_at=NOW() WHERE id=?',[w.assignedMechanicId,w.complaint,w.diagnosis||'',w.estimatedCompletionTime,w.notes||'',w.mileage ? Number(w.mileage) : null,req.params.id]);await replaceDetails(c,Number(req.params.id),w.services,w.sparePartsUsed);await c.commit();res.sendStatus(204);}catch(e){await c.rollback();next(e);}finally{c.release();}});
 app.patch('/api/work-orders/:id/status',async(req,res,next)=>{try{const status=dbWorkOrderStatus(req.body.status);const timestamps=status==='completed'?', completed_at=NOW(), end_time=NOW()':status==='picked_up'?', picked_up_at=NOW()':'';await query(`UPDATE work_orders SET status=?, updated_at=NOW()${timestamps} WHERE id=?`,[status,req.params.id]);if(status==='completed'||status==='picked_up'){await query('UPDATE bookings b JOIN work_orders w ON w.booking_id=b.id SET b.status=\'completed\',b.updated_at=NOW() WHERE w.id=?',[req.params.id]);}res.sendStatus(204);}catch(e){next(e);}});
 app.delete('/api/work-orders/:id', async (req, res, next) => {
   const c = await pool.getConnection();

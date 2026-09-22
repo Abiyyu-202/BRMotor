@@ -105,6 +105,7 @@ interface WorkshopContextType {
     spareParts?: { partId: string; quantity: number; pricePerUnit: number }[];
     estimatedCompletionTime?: string;
     notes?: string;
+    mileage?: number;
   }) => Promise<{ id: string }>;
   createWorkOrder: (wo: Omit<WorkOrder, 'id' | 'status' | 'paymentStatus' | 'createdAt' | 'costs'>) => WorkOrder;
   updateWorkOrderStatus: (id: string, status: WorkOrderStatus) => void;
@@ -612,6 +613,7 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     spareParts?: { partId: string; quantity: number; pricePerUnit: number }[];
     estimatedCompletionTime?: string;
     notes?: string;
+    mileage?: number;
   }) => {
     try {
       const res = await api<{ id: string }>('/api/quick-checkin', {

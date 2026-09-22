@@ -87,8 +87,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
   const [complaint, setComplaint] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
+  const [mileage, setMileage] = useState('');
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedParts, setSelectedParts] = useState<{ partId: string; qty: number }[]>([]);
+
+  const prevVehicleMileage = useMemo(() => {
+    if (!selectedVehicleId) return null;
+    const prev = (workOrders || [])
+      .filter((w) => String(w.vehicleId) === String(selectedVehicleId) && w.mileage != null)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    return prev?.mileage ?? null;
+  }, [selectedVehicleId, workOrders]);
 
   // Modal 2: Edit Work Order
   const [isEditWOOpen, setIsEditWOOpen] = useState(false);
@@ -206,6 +215,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     setComplaint(wo.complaint || '');
     setDiagnosis(wo.diagnosis || '');
     setNotes(wo.notes || '');
+    setMileage(wo.mileage != null ? String(wo.mileage) : '');
     setSelectedServices((wo.services || []).map((s) => s.serviceId));
     setSelectedParts(
       (wo.sparePartsUsed || []).map((p) => ({
@@ -327,12 +337,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
       complaint: complaint.trim() || 'Servis berkala rutin',
       diagnosis: diagnosis.trim(),
       notes: notes.trim(),
+      mileage: mileage ? Number(mileage) : undefined,
       services: finalServices,
       sparePartsUsed: finalParts,
       estimatedCompletionTime: '14:30'
     });
 
     showToast(`SPK baru untuk ${vehicle.licensePlate} berhasil dibuat!`, 'success');
+    setMileage('');
     setIsCreateWOOpen(false);
   };
 
@@ -373,6 +385,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
       complaint,
       diagnosis,
       notes,
+      mileage: mileage ? Number(mileage) : undefined,
       services: finalServices,
       sparePartsUsed: finalParts,
       costs: {
@@ -384,6 +397,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     });
 
     showToast(`Data SPK ${editingWO.id} berhasil diperbarui!`, 'success');
+    setMileage('');
     setIsEditWOOpen(false);
   };
 
@@ -395,10 +409,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     if (currentStatus === 'waiting') {
       nextStatus = 'in_progress';
       label = 'Pengerjaan (Mulai Dikerjakan Mekanik)';
-    } else if (currentStatus === 'waiting_parts') {
-      nextStatus = 'in_progress';
-      label = 'Pengerjaan (Lanjut Dikerjakan Mekanik)';
     } else if (currentStatus === 'in_progress') {
+      nextStatus = 'waiting_parts';
+      label = 'Tunggu Part (Pilih & Tunggu Suku Cadang)';
+    } else if (currentStatus === 'waiting_parts') {
       nextStatus = 'quality_control';
       label = 'Uji Kelayakan (Quality Control)';
     } else if (currentStatus === 'quality_control') {
@@ -658,7 +672,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                         {/* Advance / Next Status Primary Button */}
                         {wo.status !== 'completed' ? (
                           <>
-                            {/* If in waiting_parts stage and NO parts allocated yet, show quick add parts button & disable next */}
+                            {/* If in waiting_parts stage and NO parts allocated yet, show quick add parts button and allow QC skip */}
                             {wo.status === 'waiting_parts' && (!wo.sparePartsUsed || wo.sparePartsUsed.length === 0) ? (
                               <div className="space-y-1.5">
                                 <button
@@ -671,12 +685,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                                 </button>
                                 <button
                                   type="button"
-                                  disabled
-                                  className="w-full py-2 px-3 bg-slate-100 border border-slate-200 text-slate-400 font-bold text-[10px] rounded-lg flex items-center justify-center gap-1.5 cursor-not-allowed uppercase tracking-wider"
-                                  title="Tambahkan suku cadang terlebih dahulu untuk melanjutkan pengerjaan"
+                                  onClick={() => promptNextStatus(wo.id, wo.status)}
+                                  className="w-full py-1.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 font-bold text-[10px] rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all uppercase tracking-wider"
+                                  title="Lanjut ke Uji Kelayakan tanpa suku cadang tambahan"
                                 >
-                                  <span>Lanjut Pengerjaan (Terkunci)</span>
-                                  <ArrowRight className="w-3.5 h-3.5 shrink-0 opacity-40" />
+                                  <span>Lanjut ke Uji Kelayakan</span>
+                                  <ArrowRight className="w-3.5 h-3.5 shrink-0 text-slate-500" />
                                 </button>
                               </div>
                             ) : (
@@ -689,9 +703,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                                   {wo.status === 'waiting'
                                     ? 'Mulai Pengerjaan'
                                     : wo.status === 'in_progress'
-                                    ? 'Uji Kelayakan (QC)'
+                                    ? 'Tunggu Part'
                                     : wo.status === 'waiting_parts'
-                                    ? 'Lanjut Pengerjaan'
+                                    ? 'Uji Kelayakan (QC)'
                                     : wo.status === 'quality_control'
                                     ? 'Selesai'
                                     : 'Selesai'}
@@ -861,21 +875,42 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                 )}
               </div>
 
-              {/* Assign Mechanic */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Tugaskan Teknisi (Mekanik)</label>
-                <select
-                  value={assignedMechanicId}
-                  onChange={(e) => setAssignedMechanicId(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
-                >
-                  <option value="">-- Belum Ditugaskan --</option>
-                  {mechanics.filter((m) => m.status !== 'inactive').map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.position}) - {m.assignedJobsCount ?? 0} tugas aktif
-                    </option>
-                  ))}
-                </select>
+              {/* Assign Mechanic & Odometer KM */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Tugaskan Teknisi (Mekanik)</label>
+                  <select
+                    value={assignedMechanicId}
+                    onChange={(e) => setAssignedMechanicId(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
+                  >
+                    <option value="">-- Belum Ditugaskan --</option>
+                    {mechanics.filter((m) => m.status !== 'inactive').map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.position}) - {m.assignedJobsCount ?? 0} tugas aktif
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Kilometer (KM) Odometer
+                    {prevVehicleMileage != null && (
+                      <span className="text-slate-400 font-normal ml-1 lowercase">
+                        (terakhir: {prevVehicleMileage.toLocaleString('id-ID')} km)
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder={prevVehicleMileage != null ? `Terakhir: ${prevVehicleMileage}` : 'Contoh: 15400'}
+                    value={mileage}
+                    onChange={(e) => setMileage(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono font-medium focus:outline-none focus:border-slate-800"
+                  />
+                </div>
               </div>
 
               {/* Complaint & Diagnosis */}
@@ -1081,21 +1116,37 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                 </div>
               </div>
 
-              {/* Assign Mechanic */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Ganti Teknisi Bertanggung Jawab</label>
-                <select
-                  value={assignedMechanicId}
-                  onChange={(e) => setAssignedMechanicId(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
-                >
-                  <option value="">-- Belum Ditugaskan --</option>
-                  {mechanics.filter((m) => m.status !== 'inactive' || String(m.id) === String(assignedMechanicId)).map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.position})
-                    </option>
-                  ))}
-                </select>
+              {/* Assign Mechanic & Odometer KM */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Ganti Teknisi Bertanggung Jawab</label>
+                  <select
+                    value={assignedMechanicId}
+                    onChange={(e) => setAssignedMechanicId(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-slate-800"
+                  >
+                    <option value="">-- Belum Ditugaskan --</option>
+                    {mechanics.filter((m) => m.status !== 'inactive' || String(m.id) === String(assignedMechanicId)).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.position})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Kilometer (KM) Odometer
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Contoh: 15400"
+                    value={mileage}
+                    onChange={(e) => setMileage(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono font-medium focus:outline-none focus:border-slate-800"
+                  />
+                </div>
               </div>
 
               {/* Complaint & Diagnosis */}
