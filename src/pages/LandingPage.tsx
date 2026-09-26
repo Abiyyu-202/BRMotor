@@ -39,7 +39,7 @@ import {
   Check,
   Cpu
 } from 'lucide-react';
-import { FirewatchParallaxHero } from '../components/FirewatchParallaxHero';
+import { WorkshopParallaxHero } from '../components/WorkshopParallaxHero';
 
 interface LandingPageProps {
   onOpenLogin: () => void;
@@ -536,9 +536,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </header>
       </div>
 
-      {/* 1. FIREWATCH PARALLAX HERO SECTION */}
+      {/* 1. WORKSHOP JOURNEY PARALLAX HERO SECTION */}
       <section id="beranda" className="relative">
-        <FirewatchParallaxHero
+        <WorkshopParallaxHero
           onBookingClick={() => {
             const el = document.getElementById('booking');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
