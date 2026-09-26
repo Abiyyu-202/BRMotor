@@ -425,7 +425,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Desktop Nav Links */}
             <nav className="hidden lg:flex items-center gap-3 xl:gap-5 text-xs font-semibold text-slate-600 whitespace-nowrap shrink-0">
               <a href="#beranda" className="hover:text-slate-900 transition-colors">Beranda</a>
-              <a href="#pit-bengkel" className="hover:text-amber-600 text-amber-700 font-bold transition-colors">Pit Servis</a>
+              <a href="#pit-bengkel" className="hover:text-slate-900 text-slate-900 font-bold transition-colors">Pit Servis</a>
               <a href="#lacak" className="hover:text-slate-900 transition-colors">Lacak Motor</a>
               <a href="#layanan" className="hover:text-slate-900 transition-colors">Layanan & Harga</a>
               <a href="#booking" className="hover:text-slate-900 transition-colors">Booking Online</a>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ClipboardCheck,
   Cpu,
@@ -7,12 +7,7 @@ import {
   ChevronDown,
   Check,
   ArrowRight,
-  Gauge,
-  Sparkles,
-  Zap,
-  Activity,
-  Layers,
-  Bike
+  Activity
 } from 'lucide-react';
 
 interface WorkshopParallaxHeroProps {
@@ -189,7 +184,7 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
   // Percentage for horizontal track translation (from 0% to -75% since there are 4 panels)
   const trackTranslateX = scrollProgress * ((STATIONS.length - 1) / STATIONS.length) * 100;
 
-  // Motorcycle horizontal position across the viewport runway (20% to 75% viewport width)
+  // Motorcycle horizontal position across the viewport runway (15% to 80% viewport width)
   const bikeRunwayPercent = 15 + scrollProgress * 65;
 
   // Wheel rotation angle in degrees
@@ -203,7 +198,7 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
       {/* STICKY VIEWPORT CONTAINER */}
       <div className="sticky top-0 h-screen w-full overflow-hidden flex flex-col justify-between bg-slate-950">
         
-        {/* Background Workshop Grid & Ambiance */}
+        {/* Background Workshop Grid & Subtle Ambiance */}
         <div className="absolute inset-0 pointer-events-none opacity-20">
           <div
             className="w-full h-full"
@@ -215,18 +210,18 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
           />
         </div>
 
-        {/* Ambient Top Glow */}
-        <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-amber-500/10 via-transparent to-transparent pointer-events-none" />
+        {/* Ambient Top Glow (Clean Monochrome White Vignette) */}
+        <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none" />
 
         {/* ========================================================================= */}
         {/* TOP BAR: HUD Header, Current Bay Indicator & Station Stepper Navigation   */}
         {/* ========================================================================= */}
         <div className="relative z-30 pt-4 sm:pt-6 px-4 sm:px-8 max-w-7xl mx-auto w-full">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
             
             {/* Left: Brand Identity & Active Bay Badge */}
             <div className="flex items-center gap-3">
-              <div className="px-2.5 py-1 rounded bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider font-mono flex items-center gap-1.5">
+              <div className="px-2.5 py-1 rounded bg-white text-slate-950 font-black text-xs uppercase tracking-wider font-mono flex items-center gap-1.5 shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-slate-950 animate-pulse" />
                 <span>BR MOTOR PIT-LANE</span>
               </div>
@@ -248,9 +243,9 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                     onClick={() => jumpToStation(idx)}
                     className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded text-xs font-mono transition-all cursor-pointer border ${
                       isActive
-                        ? 'bg-amber-400 text-slate-950 font-black border-amber-300 shadow-md'
+                        ? 'bg-white text-slate-950 font-black border-white shadow-md'
                         : isPassed
-                        ? 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                        ? 'bg-slate-900 text-slate-200 border-slate-700 hover:border-slate-500'
                         : 'bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-400'
                     }`}
                   >
@@ -258,17 +253,17 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                     <span className="hidden md:inline font-sans font-medium text-[11px]">
                       {station.stepCode}
                     </span>
-                    {isPassed && <Check className="w-3 h-3 text-emerald-400" />}
+                    {isPassed && <Check className="w-3 h-3 text-slate-300" />}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Real-time Progress Bar */}
+          {/* Real-time Monochrome Progress Bar */}
           <div className="w-full bg-slate-900 h-1 mt-2 rounded-full overflow-hidden">
             <div
-              className="bg-amber-400 h-full transition-all duration-75"
+              className="bg-white h-full transition-all duration-75"
               style={{ width: `${Math.round(scrollProgress * 100)}%` }}
             />
           </div>
@@ -299,7 +294,7 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                       
                       {/* Bay Pill Header */}
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs font-bold text-amber-400 tracking-widest bg-amber-400/10 border border-amber-400/30 px-3 py-1 rounded">
+                        <span className="font-mono text-xs font-bold text-white tracking-widest bg-white/10 border border-white/20 px-3 py-1 rounded">
                           {station.bayNumber}
                         </span>
                         <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
@@ -345,14 +340,14 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                       <div
                         className={`w-full max-w-md bg-slate-900/95 border rounded-xl p-5 sm:p-6 backdrop-blur-md shadow-2xl transition-all duration-300 ${
                           isCurrent
-                            ? 'border-amber-400/60 shadow-[0_0_40px_rgba(245,158,11,0.15)] ring-1 ring-amber-400/30'
+                            ? 'border-white/40 shadow-[0_0_40px_rgba(255,255,255,0.06)] ring-1 ring-white/20'
                             : 'border-slate-800 opacity-60'
                         }`}
                       >
                         {/* Card Header */}
                         <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded bg-amber-400/10 border border-amber-400/40 flex items-center justify-center text-amber-400">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded bg-white/10 border border-white/20 flex items-center justify-center text-white">
                               {idx === 0 && <ClipboardCheck className="w-4 h-4" />}
                               {idx === 1 && <Cpu className="w-4 h-4" />}
                               {idx === 2 && <Wrench className="w-4 h-4" />}
@@ -362,7 +357,7 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                               <h3 className="text-xs font-black text-white uppercase tracking-wider">
                                 Checklist Pos 0{idx + 1}
                               </h3>
-                              <p className="text-[10px] font-mono text-amber-400">
+                              <p className="text-[10px] font-mono text-slate-400">
                                 PROSEDUR STANDAR BR MOTOR
                               </p>
                             </div>
@@ -383,7 +378,7 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                               <div
                                 className={`w-4 h-4 rounded mt-0.5 flex items-center justify-center text-xs shrink-0 ${
                                   isCurrent
-                                    ? 'bg-amber-400 text-slate-950 font-bold'
+                                    ? 'bg-white text-slate-950 font-bold'
                                     : 'bg-slate-800 text-slate-500'
                                 }`}
                               >
@@ -399,10 +394,10 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                         {/* Telemetry Footer */}
                         <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
                           <div className="flex items-center gap-1.5">
-                            <Activity className="w-3 h-3 text-emerald-400" />
+                            <Activity className="w-3 h-3 text-slate-300" />
                             <span>STANDAR MEKANIK: CERTIFIED</span>
                           </div>
-                          <span className="text-amber-400 font-bold">100% SOP VALID</span>
+                          <span className="text-white font-bold">100% SOP VALID</span>
                         </div>
                       </div>
                     </div>
@@ -427,16 +422,16 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                 transform: 'translateX(-50%)'
               }}
             >
-              {/* Headlight Beam Illuminating the Floor Ahead */}
-              <div className="absolute top-5 -right-32 w-48 h-12 bg-gradient-to-r from-amber-300/60 via-amber-400/20 to-transparent transform -rotate-3 blur-xs pointer-events-none" />
+              {/* Headlight Beam Illuminating the Floor Ahead (Crisp White Glow) */}
+              <div className="absolute top-5 -right-32 w-48 h-12 bg-gradient-to-r from-white/40 via-white/10 to-transparent transform -rotate-3 blur-xs pointer-events-none" />
 
               {/* Spotlight Glow Under Motorcycle */}
-              <div className="absolute -bottom-2 -left-6 w-52 h-6 bg-amber-400/20 blur-md rounded-full pointer-events-none" />
+              <div className="absolute -bottom-2 -left-6 w-52 h-6 bg-white/10 blur-md rounded-full pointer-events-none" />
 
-              {/* Tail Light Flare */}
-              <div className="absolute top-4 left-0 w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,1)] animate-pulse pointer-events-none" />
+              {/* Tail Light Lens */}
+              <div className="absolute top-4 left-0 w-2.5 h-2.5 rounded-full bg-slate-300 shadow-[0_0_10px_rgba(255,255,255,0.7)] animate-pulse pointer-events-none" />
 
-              {/* Vector Motorcycle SVG */}
+              {/* Vector Motorcycle SVG - Pure Monochrome Precision */}
               <svg
                 width="160"
                 height="85"
@@ -446,25 +441,25 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
               >
                 {/* Rear Wheel with Rotating Spokes */}
                 <g transform="translate(42, 92)">
-                  <circle cx="0" cy="0" r="28" fill="#0f172a" stroke="#cbd5e1" strokeWidth="4" />
+                  <circle cx="0" cy="0" r="28" fill="#0f172a" stroke="#e2e8f0" strokeWidth="3.5" />
                   <circle cx="0" cy="0" r="18" fill="#1e293b" />
-                  <circle cx="0" cy="0" r="6" fill="#f59e0b" />
+                  <circle cx="0" cy="0" r="6" fill="#f8fafc" />
                   {/* Rotating Spokes Illusion */}
                   <g style={{ transform: `rotate(${wheelRotationDeg}deg)`, transformOrigin: '0 0' }}>
-                    <line x1="-18" y1="0" x2="18" y2="0" stroke="#94a3b8" strokeWidth="2" />
-                    <line x1="0" y1="-18" x2="0" y2="18" stroke="#94a3b8" strokeWidth="2" />
+                    <line x1="-18" y1="0" x2="18" y2="0" stroke="#cbd5e1" strokeWidth="2" />
+                    <line x1="0" y1="-18" x2="0" y2="18" stroke="#cbd5e1" strokeWidth="2" />
                   </g>
                 </g>
 
                 {/* Front Wheel with Rotating Spokes */}
                 <g transform="translate(196, 92)">
-                  <circle cx="0" cy="0" r="28" fill="#0f172a" stroke="#cbd5e1" strokeWidth="4" />
+                  <circle cx="0" cy="0" r="28" fill="#0f172a" stroke="#e2e8f0" strokeWidth="3.5" />
                   <circle cx="0" cy="0" r="18" fill="#1e293b" />
-                  <circle cx="0" cy="0" r="6" fill="#f59e0b" />
+                  <circle cx="0" cy="0" r="6" fill="#f8fafc" />
                   {/* Rotating Spokes Illusion */}
                   <g style={{ transform: `rotate(${wheelRotationDeg}deg)`, transformOrigin: '0 0' }}>
-                    <line x1="-18" y1="0" x2="18" y2="0" stroke="#94a3b8" strokeWidth="2" />
-                    <line x1="0" y1="-18" x2="0" y2="18" stroke="#94a3b8" strokeWidth="2" />
+                    <line x1="-18" y1="0" x2="18" y2="0" stroke="#cbd5e1" strokeWidth="2" />
+                    <line x1="0" y1="-18" x2="0" y2="18" stroke="#cbd5e1" strokeWidth="2" />
                   </g>
                 </g>
 
@@ -474,35 +469,35 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
                 <line x1="155" y1="36" x2="196" y2="92" stroke="#94a3b8" strokeWidth="7" />
 
                 {/* Engine Cylinder Block & Exhaust Pipe */}
-                <rect x="90" y="70" width="35" height="26" rx="3" fill="#1e293b" stroke="#f59e0b" strokeWidth="1.5" />
+                <rect x="90" y="70" width="35" height="26" rx="3" fill="#1e293b" stroke="#cbd5e1" strokeWidth="1.5" />
                 <path d="M125,92 Q115,110 70,105 L52,98" stroke="#64748b" strokeWidth="5" fill="none" />
 
-                {/* Sport Fuel Tank & Cowling Bodywork */}
+                {/* Sport Fuel Tank & Cowling Bodywork - Clean Silver White */}
                 <path
                   d="M68,58 Q105,52 125,38 Q155,34 172,46 Q180,55 162,64 Q130,70 96,68 Z"
-                  fill="#f59e0b"
+                  fill="#f1f5f9"
                 />
 
                 {/* Aerodynamic Front Fairing & Windscreen */}
                 <polygon points="160,36 182,24 192,42 172,52" fill="#0f172a" />
-                <polygon points="178,32 195,24 186,40" fill="#fef08a" opacity="0.9" />
+                <polygon points="178,32 195,24 186,40" fill="#94a3b8" opacity="0.6" />
 
                 {/* Handlebars */}
                 <line x1="145" y1="30" x2="162" y2="35" stroke="#f8fafc" strokeWidth="4" />
               </svg>
 
               {/* Status Badge Attached to Moving Bike */}
-              <div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap bg-slate-900/90 border border-amber-400 text-amber-300 text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow-lg">
+              <div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap bg-white text-slate-950 text-[9px] font-mono font-black px-2 py-0.5 rounded shadow-lg border border-slate-200">
                 RUNWAY POS: {activeStation.bayNumber}
               </div>
             </div>
           </div>
 
-          {/* Workshop Floor Track with Caution Markings & Distance Ticks */}
+          {/* Workshop Floor Track with Markings & Distance Ticks */}
           <div className="max-w-7xl mx-auto w-full">
             <div className="h-2 w-full bg-slate-800 rounded relative overflow-hidden flex">
               <div
-                className="h-full bg-amber-400/90 transition-all duration-75"
+                className="h-full bg-white transition-all duration-75"
                 style={{ width: `${Math.round(scrollProgress * 100)}%` }}
               />
             </div>
@@ -521,11 +516,11 @@ export const WorkshopParallaxHero: React.FC<WorkshopParallaxHeroProps> = ({
           {/* ========================================================================= */}
           <div className="mt-4 flex items-center justify-between max-w-7xl mx-auto text-xs text-slate-400 font-mono">
             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
               <span>GULIR UNTUK MELANJUTKAN KE TAHAPAN BERIKUTNYA</span>
             </div>
 
-            <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+            <div className="flex items-center gap-1.5 text-white font-bold">
               {scrollProgress >= 0.95 ? (
                 <div className="flex items-center gap-1 animate-bounce">
                   <span>LANJUT KE LAYANAN LENGKAP</span>
