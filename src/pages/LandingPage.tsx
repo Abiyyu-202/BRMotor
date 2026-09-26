@@ -59,6 +59,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   // Mobile menu state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Visibility state for top bar (hidden during parallax hero section)
+  const [showStickyNav, setShowStickyNav] = useState(false);
+
+  useEffect(() => {
+    const checkNavVisibility = () => {
+      const heroEl = document.getElementById('beranda');
+      if (!heroEl) {
+        setShowStickyNav(true);
+        return;
+      }
+      const rect = heroEl.getBoundingClientRect();
+      setShowStickyNav(rect.bottom <= 100);
+    };
+
+    window.addEventListener('scroll', checkNavVisibility, { passive: true });
+    checkNavVisibility();
+    return () => window.removeEventListener('scroll', checkNavVisibility);
+  }, []);
+
   // Live Service Tracker State
   const [trackQuery, setTrackQuery] = useState('');
   const [isTracking, setIsTracking] = useState(false);
@@ -385,7 +404,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-900 selection:text-white relative overflow-x-clip">
       
       {/* 1. TOP ANNOUNCEMENT STRIP & STICKY NAVBAR */}
-      <div className="sticky top-0 z-50 bg-white border-b border-slate-200">
+      <div
+        className={`fixed top-0 inset-x-0 z-50 bg-white border-b border-slate-200 transition-all duration-300 ease-in-out ${
+          showStickyNav
+            ? 'translate-y-0 opacity-100 pointer-events-auto shadow-sm'
+            : '-translate-y-full opacity-0 pointer-events-none'
+        }`}
+      >
         
         {/* Top Announcement Strip */}
         <div className="bg-slate-900 text-slate-200 py-2 px-4 text-xs font-semibold text-center tracking-wide flex items-center justify-center gap-2">
@@ -551,7 +576,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* 2. LIVE WORKSHOP BAY & TRUST SECTION (Transisi Nyata ke Bengkel) */}
-      <section id="pit-bengkel" className="relative py-14 sm:py-20 bg-slate-900 text-white overflow-hidden border-b border-slate-800 scroll-mt-16">
+      <section id="pit-bengkel" className="relative py-14 sm:py-20 bg-white text-slate-900 overflow-hidden border-b border-slate-200 scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-12 items-center">
             
@@ -559,21 +584,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="lg:col-span-7 space-y-6">
               
               {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-slate-800 border border-slate-700 text-xs font-semibold text-amber-400 shadow-2xs">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-slate-900 animate-pulse" />
                 <span>Bengkel Motor Terakreditasi & Dilengkapi Sistem Digital</span>
               </div>
 
               {/* Title */}
-              <h2 className="text-3xl sm:text-5xl lg:text-5xl font-black tracking-tight text-white leading-[1.15] uppercase">
+              <h2 className="text-3xl sm:text-5xl lg:text-5xl font-black tracking-tight text-slate-950 leading-[1.15] uppercase">
                 Perawatan Motor Berkualitas. <br />
-                <span className="text-amber-400 underline decoration-slate-600 underline-offset-8">
+                <span className="text-slate-900 underline decoration-slate-300 underline-offset-8">
                   Servis Terpercaya Tanpa Cemas.
                 </span>
               </h2>
 
               {/* Subtitle */}
-              <p className="text-slate-300 text-sm sm:text-base max-w-xl font-normal leading-relaxed">
+              <p className="text-slate-600 text-sm sm:text-base max-w-xl font-normal leading-relaxed">
                 Standar servis sepeda motor profesional dengan teknisi berpengalaman, suku cadang 100% original, estimasi biaya transparan, serta pemantauan pengerjaan motor langsung secara online.
               </p>
 
@@ -581,62 +606,62 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <a
                   href="#booking"
-                  className="px-6 py-3 rounded-lg text-xs sm:text-sm font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 shadow-xs hover:scale-[1.01] active:scale-98 transition-all cursor-pointer flex items-center gap-2"
+                  className="px-6 py-3 rounded-lg text-xs sm:text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm hover:scale-[1.01] active:scale-98 transition-all cursor-pointer flex items-center gap-2"
                 >
-                  <Calendar className="w-4 h-4 text-slate-950" />
+                  <Calendar className="w-4 h-4 text-white" />
                   <span>Booking Servis Cepat</span>
-                  <ArrowRight className="w-4 h-4 text-slate-950" />
+                  <ArrowRight className="w-4 h-4 text-white" />
                 </a>
 
                 <a
                   href="#lacak"
-                  className="px-5 py-3 rounded-lg text-xs sm:text-sm font-bold text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
+                  className="px-5 py-3 rounded-lg text-xs sm:text-sm font-bold text-slate-700 hover:text-slate-950 bg-white hover:bg-slate-50 border border-slate-300 transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
                 >
-                  <Search className="w-4 h-4 text-amber-400" />
+                  <Search className="w-4 h-4 text-slate-600" />
                   <span>Lacak Motor Saya</span>
                 </a>
               </div>
 
               {/* Trust Indicators */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5 border-t border-slate-800">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5 border-t border-slate-200">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-1 text-amber-400">
-                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    <span className="font-extrabold text-white text-base">4.9 / 5.0</span>
+                  <div className="flex items-center gap-1 text-slate-900">
+                    <Star className="w-4 h-4 fill-slate-900 text-slate-900" />
+                    <span className="font-extrabold text-slate-950 text-base">4.9 / 5.0</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">1,500+ Ulasan Puas</p>
+                  <p className="text-[11px] text-slate-500">1,500+ Ulasan Puas</p>
                 </div>
 
                 <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-slate-200">
-                    <Shield className="w-4 h-4 text-emerald-400" />
-                    <span className="font-extrabold text-white text-base">14 Hari</span>
+                  <div className="flex items-center gap-1.5 text-slate-900">
+                    <Shield className="w-4 h-4 text-slate-700" />
+                    <span className="font-extrabold text-slate-950 text-base">14 Hari</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">Garansi Servis Penuh</p>
+                  <p className="text-[11px] text-slate-500">Garansi Servis Penuh</p>
                 </div>
 
                 <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-slate-200">
-                    <Zap className="w-4 h-4 text-amber-400" />
-                    <span className="font-extrabold text-white text-base">15 Menit</span>
+                  <div className="flex items-center gap-1.5 text-slate-900">
+                    <Zap className="w-4 h-4 text-slate-700" />
+                    <span className="font-extrabold text-slate-950 text-base">15 Menit</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">Pitstop Ganti Oli</p>
+                  <p className="text-[11px] text-slate-500">Pitstop Ganti Oli</p>
                 </div>
 
                 <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-slate-200">
-                    <Award className="w-4 h-4 text-amber-400" />
-                    <span className="font-extrabold text-white text-base">100% Asli</span>
+                  <div className="flex items-center gap-1.5 text-slate-900">
+                    <Award className="w-4 h-4 text-slate-700" />
+                    <span className="font-extrabold text-slate-950 text-base">100% Asli</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">Original Spareparts</p>
+                  <p className="text-[11px] text-slate-500">Original Spareparts</p>
                 </div>
               </div>
             </div>
 
             {/* Right Column: Hero Visual Card with Live Pit Bay Status */}
             <div className="lg:col-span-5 relative">
-              <div className="relative rounded-xl p-1 bg-slate-800 border border-slate-700 shadow-xl overflow-hidden group">
-                <div className="relative rounded-lg overflow-hidden bg-slate-950">
+              <div className="relative rounded-xl p-1 bg-slate-100 border border-slate-200 shadow-xl overflow-hidden group">
+                <div className="relative rounded-lg overflow-hidden bg-slate-900">
                   <img
                     src="/hero_workshop.jpg"
                     alt="BR Motor Workshop Bay"
@@ -644,40 +669,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   />
                   
                   {/* Subtle Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
 
                   {/* Floating Overlay Badge: Live Service Bay Status */}
-                  <div className="absolute top-3 left-3 right-3 flex items-center justify-between bg-slate-900/95 backdrop-blur-md border border-slate-700 p-2.5 rounded-lg shadow-sm">
+                  <div className="absolute top-3 left-3 right-3 flex items-center justify-between bg-white/95 backdrop-blur-md border border-slate-200 p-2.5 rounded-lg shadow-sm">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-900 animate-pulse" />
                       <div>
-                        <p className="text-xs font-bold text-white">Pit Servis Aktif (Real-Time)</p>
-                        <p className="text-[10px] text-slate-400 font-mono">3 Motor Sedang Dikerjakan</p>
+                        <p className="text-xs font-bold text-slate-900">Pit Servis Aktif (Real-Time)</p>
+                        <p className="text-[10px] text-slate-500 font-mono">3 Motor Sedang Dikerjakan</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-800">
+                    <span className="text-[10px] font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                       LIVE BAY
                     </span>
                   </div>
 
                   {/* Floating Card at Bottom */}
-                  <div className="absolute bottom-3 left-3 right-3 bg-slate-900/95 backdrop-blur-md border border-slate-700 p-3 rounded-lg shadow-md space-y-2 text-white">
+                  <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur-md border border-slate-200 p-3 rounded-lg shadow-md space-y-2 text-slate-900">
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5">
-                        <Bike className="w-4 h-4 text-amber-400" />
-                        <span className="font-bold text-white text-xs">Honda CBR650R [B 1234 BKM]</span>
+                        <Bike className="w-4 h-4 text-slate-900" />
+                        <span className="font-bold text-slate-900 text-xs">Honda CBR650R [B 1234 BKM]</span>
                       </div>
-                      <span className="text-[10px] font-mono font-bold bg-slate-800 text-amber-300 px-1.5 py-0.5 rounded-md border border-slate-700">
+                      <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-900 px-1.5 py-0.5 rounded-md border border-slate-200">
                         QC & Tes Jalan
                       </span>
                     </div>
 
                     {/* Progress indicator */}
-                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden border border-slate-700">
-                      <div className="bg-amber-400 h-full w-[85%] rounded-full" />
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200">
+                      <div className="bg-slate-900 h-full w-[85%] rounded-full" />
                     </div>
 
-                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
                       <span>Mekanik: Alex</span>
                       <span>Estimasi: 14:15 WIB</span>
                     </div>
@@ -686,13 +711,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
 
               {/* Decorative Inspection Widget */}
-              <div className="absolute -bottom-4 -left-4 bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-xl hidden sm:flex items-center gap-2.5 max-w-[210px]">
-                <div className="w-9 h-9 rounded-md bg-slate-900 text-white flex items-center justify-center shrink-0 border border-slate-700">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              <div className="absolute -bottom-4 -left-4 bg-white border border-slate-200 p-3 rounded-lg shadow-xl hidden sm:flex items-center gap-2.5 max-w-[210px]">
+                <div className="w-9 h-9 rounded-md bg-slate-900 text-white flex items-center justify-center shrink-0 border border-slate-900">
+                  <CheckCircle2 className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-white leading-tight">18 Titik Cek</p>
-                  <p className="text-[10px] text-slate-400">Gratis di setiap servis</p>
+                  <p className="text-xs font-bold text-slate-900 leading-tight">18 Titik Cek</p>
+                  <p className="text-[10px] text-slate-500">Gratis di setiap servis</p>
                 </div>
               </div>
             </div>

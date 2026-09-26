@@ -81,25 +81,29 @@
     box-shadow: 0 2px 8px -2px rgba(220, 38, 38, 0.12);
   }
 
-  /* Sleek & Aesthetic Scrollbars */
+  /* Hide scrollbars globally across all browsers while preserving scroll functionality */
   * {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
-  ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
-  ::-webkit-scrollbar-track {
-    background: transparent;
+
+  html,
+  body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
-  ::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.25);
-    border-radius: 9999px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(100, 116, 139, 0.5);
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 }
 
