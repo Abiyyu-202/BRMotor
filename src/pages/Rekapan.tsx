@@ -70,7 +70,7 @@ export const Rekapan: React.FC = () => {
         ? currentWo.mileage - lastMileage
         : null;
 
-    // Recurring issue detection (Puskesmas vs Bengkel logic)
+    // Recurring issue detection & diagnosis consideration
     const keywords = ['brebet', 'karbu', 'injeksi', 'mati', 'mogok', 'berat', 'getar', 'rem', 'oli', 'panas', 'aki', 'asap', 'cvt', 'roller', 'v-belt'];
     const currentText = `${currentWo.complaint || ''} ${currentWo.diagnosis || ''}`.toLowerCase();
     const matchedKeywords = keywords.filter((k) => currentText.includes(k));
@@ -450,7 +450,7 @@ export const Rekapan: React.FC = () => {
                       <tr
                         onClick={() => setSelectedDetailWo(wo)}
                         className="hover:bg-slate-50 transition-colors cursor-pointer group"
-                        title="Klik untuk melihat Rekam Medis & Rincian Lengkap"
+                        title="Klik untuk melihat Riwayat & Rincian Servis"
                       >
                         <td className="py-3 px-4 align-top">
                           <span className="font-mono font-bold text-slate-900 block group-hover:text-indigo-600 transition-colors">{wo.id}</span>
@@ -536,7 +536,7 @@ export const Rekapan: React.FC = () => {
                                 setSelectedDetailWo(wo);
                               }}
                               className="px-2 py-1 rounded-md text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 cursor-pointer transition-colors flex items-center gap-1"
-                              title="Buka Rekam Medis & Detail"
+                              title="Buka Riwayat & Rincian Servis"
                             >
                               <Eye className="w-3.5 h-3.5 text-slate-600" />
                               <span>Detail</span>
@@ -661,7 +661,7 @@ export const Rekapan: React.FC = () => {
         )}
       </div>
 
-      {/* Modal Detail Rekam Medis Kendaraan & Rincian Servis */}
+      {/* Modal Riwayat & Diagnosa Servis Kendaraan */}
       {selectedDetailWo && detailAnalysis && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in no-print">
           <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-scale-in">
@@ -674,7 +674,7 @@ export const Rekapan: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-extrabold uppercase tracking-wide">
-                      Rekam Medis & Rincian Servis
+                      Riwayat & Diagnosa Servis
                     </h2>
                     <span className="font-mono text-xs font-bold bg-white/15 text-amber-300 px-2 py-0.5 rounded">
                       {selectedDetailWo.id}
@@ -697,7 +697,7 @@ export const Rekapan: React.FC = () => {
 
             {/* Scrollable Body */}
             <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 text-slate-900 text-xs">
-              {/* Card 1: Identitas Pasien (Motor & Pemilik) & Status Odometer */}
+              {/* Card 1: Identitas Motor, Pemilik & Status Odometer */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Identitas Kendaraan</span>
@@ -759,7 +759,7 @@ export const Rekapan: React.FC = () => {
                 </div>
               </div>
 
-              {/* Card 2: Pertimbangan Rekam Medis (Clinical Decision Support) */}
+              {/* Card 2: Pertimbangan Diagnosa & Evaluasi Riwayat Servis */}
               {detailAnalysis.recurringAlerts.length > 0 ? (
                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
                   <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wide text-amber-900">
@@ -783,7 +783,7 @@ export const Rekapan: React.FC = () => {
                     ))}
                   </div>
                   <p className="text-[10px] text-amber-700 font-medium italic pt-1">
-                    Catatan puskesmas / bengkel: Jika komponen yang sama sudah pernah diganti baru-baru ini, hindari penggantian ulang dan prioritaskan pengecekan komponen penunjang terkait.
+                    Catatan teknisi: Jika komponen yang sama sudah pernah diganti baru-baru ini, hindari penggantian ulang dan prioritaskan pengecekan komponen penunjang terkait.
                   </p>
                 </div>
               ) : (
@@ -972,7 +972,7 @@ export const Rekapan: React.FC = () => {
                 className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Printer className="w-4 h-4 text-slate-500" />
-                <span>Cetak Rekam Medis</span>
+                <span>Cetak Riwayat Servis</span>
               </button>
 
               <button

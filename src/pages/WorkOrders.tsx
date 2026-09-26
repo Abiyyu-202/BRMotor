@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { QuickCheckInModal } from '../components/QuickCheckInModal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { detectRecurringIssue } from '../utils/serviceHistoryAlerts';
 
 export const WorkOrders: React.FC<WorkOrdersProps> = ({
   prefilledBooking,
@@ -99,9 +100,22 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
     return prev?.mileage ?? null;
   }, [selectedVehicleId, workOrders]);
 
+  // Real-time recurring issue alert for Create Modal
+  const createModalAlert = useMemo(() => {
+    if (!selectedVehicleId && !complaint.trim()) return null;
+    const selectedVeh = (vehicles || []).find((v) => String(v.id) === String(selectedVehicleId));
+    return detectRecurringIssue(selectedVeh?.licensePlate, selectedVehicleId, complaint, workOrders);
+  }, [selectedVehicleId, complaint, vehicles, workOrders]);
+
   // Modal 2: Edit Work Order
   const [isEditWOOpen, setIsEditWOOpen] = useState(false);
   const [editingWO, setEditingWO] = useState<WorkOrder | null>(null);
+
+  // Real-time recurring issue alert for Edit Modal
+  const editModalAlert = useMemo(() => {
+    if (!editingWO) return null;
+    return detectRecurringIssue(editingWO.licensePlate, editingWO.vehicleId, complaint, workOrders, editingWO.id);
+  }, [editingWO, complaint, workOrders]);
 
   // Modal 3: Quick Check In for walk-ins
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
@@ -623,7 +637,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                     Tidak ada motor di tahap ini
                   </div>
                 ) : (
-                  colWOrders.map((wo) => (
+                  colWOrders.map((wo) => {
+                    const cardAlert = detectRecurringIssue(wo.licensePlate, wo.vehicleId, wo.complaint, workOrders, wo.id);
+                    return (
                     <div
                       key={wo.id}
                       className="p-3.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50/80 shadow-2xs transition-all flex flex-col justify-between min-h-[170px]"
@@ -653,6 +669,19 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                             "{wo.complaint || 'Servis berkala'}"
                           </p>
                         </div>
+
+                        {/* Warning Masalah Berulang pada Kartu Kanban */}
+                        {cardAlert && (
+                          <div className="mt-2 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-950 text-[10px] space-y-0.5">
+                            <div className="flex items-center gap-1 font-bold text-amber-900">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span className="uppercase tracking-tight text-[9px]">Peringatan Masalah Berulang</span>
+                            </div>
+                            <p className="text-[10px] text-amber-800 leading-snug line-clamp-2">
+                              {cardAlert.advice}
+                            </p>
+                          </div>
+                        )}
 
                         {/* Parts / Oil Counter Badge */}
                         {wo.sparePartsUsed && wo.sparePartsUsed.length > 0 && (
@@ -770,7 +799,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                         </div>
                       </div>
                     </div>
-                  ))
+                  );
+                })
                 )}
               </div>
             </div>
@@ -936,6 +966,19 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Peringatan Masalah Berulang (Create WO) */}
+              {createModalAlert && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="uppercase tracking-wide text-[10px]">Peringatan Riwayat: Masalah Serupa Pernah Ditangani</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    {createModalAlert.advice}
+                  </p>
+                </div>
+              )}
 
               {/* Service Selection Grid */}
               <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
@@ -1170,6 +1213,19 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Peringatan Masalah Berulang (Edit WO) */}
+              {editModalAlert && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="uppercase tracking-wide text-[10px]">Peringatan Riwayat: Masalah Serupa Pernah Ditangani</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    {editModalAlert.advice}
+                  </p>
+                </div>
+              )}
 
               {/* Service Selection */}
               <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">

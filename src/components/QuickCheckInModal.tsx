@@ -8,8 +8,10 @@ import {
   Sparkles,
   Check,
   AlertCircle,
+  AlertTriangle,
   ChevronDown
 } from 'lucide-react';
+import { detectRecurringIssue } from '../utils/serviceHistoryAlerts';
 
 interface QuickCheckInModalProps {
   isOpen: boolean;
@@ -76,6 +78,17 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
 
   // Selected Services
   const [selectedServices, setSelectedServices] = useState<QuickServiceOption[]>([]);
+
+  // Real-time recurring issue alert for Quick Check-In
+  const recurringAlert = React.useMemo(() => {
+    const combinedComplaint = [
+      complaintNotes,
+      (selectedServices || []).map((s) => s.name).join(' ')
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return detectRecurringIssue(plateNumber, matchedVehicle?.id, combinedComplaint, workOrders);
+  }, [plateNumber, matchedVehicle, complaintNotes, selectedServices, workOrders]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const lastAutoFilledPlate = React.useRef<string>('');
@@ -397,6 +410,19 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ isOpen, on
               </div>
             </div>
           </div>
+
+          {/* Warning Masalah Berulang (Quick Check-In) */}
+          {recurringAlert && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1 animate-fade-in">
+              <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="uppercase tracking-wide text-[10px]">Peringatan Riwayat: Masalah Serupa Pernah Ditangani</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                {recurringAlert.advice}
+              </p>
+            </div>
+          )}
 
           {/* Section 2: Opsi Jasa & Keluhan Servis (Hidden / Opsional Accordion) */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
