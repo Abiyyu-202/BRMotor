@@ -58,8 +58,8 @@ const STATIONS: StationData[] = [
   {
     id: 'bay-02',
     bayNumber: 'BAY 02',
-    stepCode: 'DIAGNOSTIK ECU',
-    title: 'Pembongkaran & Analisis OBD-II',
+    stepCode: 'DIAGNOSIS MASALAH',
+    title: 'Pembongkaran dan Analisis Masalah',
     subtitle: 'Deteksi malfungsi sistem injeksi via scanner komputer',
     badge: 'Tahap 2 dari 4',
     description:
